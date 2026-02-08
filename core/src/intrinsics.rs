@@ -56,9 +56,14 @@ fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, EvalError> {
     };
 
     // Construct path to bridge script (relative to binary or absolute)
-    let bridge_path = "C:\\Users\\Stran\\.gemini\\antigravity\\brain\\87a06051-a8dc-48c3-9d36-cf0f67b80b77\\ark_bridge.py";
+    // PATCH (Glenn Feedback): Use ENV VAR for flexibility, fallback to CWD
+    let bridge_path =
+        std::env::var("ARK_NEURO_BRIDGE").unwrap_or_else(|_| "ark_bridge.py".to_string());
 
-    println!("[Neuro-Link] Transmitting thought to Gemini 3.0 Pro...");
+    println!(
+        "[Neuro-Link] Transmitting thought to Gemini 3.0 Pro via: {}",
+        bridge_path
+    );
 
     let output = std::process::Command::new("python")
         .arg(bridge_path)
