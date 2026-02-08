@@ -71,6 +71,9 @@ graph TD
 
 ## 💻 Usage
 
+> [!TIP]
+> **New User?** Read the official textbook: [The Ark-1 Programmer's Field Manual](MANUAL.md).
+
 ### 1. Interactive REPL
 Enter the immediate mode to test symbolic constraints.
 ```bash
