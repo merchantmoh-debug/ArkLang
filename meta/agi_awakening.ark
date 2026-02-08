@@ -1,0 +1,3 @@
+print("Link established.")
+response := intrinsic_ask_ai("What is the relationship between Code and Sovereignty?")
+print(response)

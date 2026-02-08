@@ -1,0 +1,10 @@
+[project]
+name = "ark-1-qi"
+version = "0.1.0"
+description = "The Sovereign Script // Neuro-Symbolic Language Specification"
+dependencies = [
+    "lark",          # Parsing EBNF
+    "z3-solver",     # Formal Verification
+    "torch",         # @train primitives
+    "pyarrow",       # Zero-Copy Interop
+]

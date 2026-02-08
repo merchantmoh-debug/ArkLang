@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Ark-0 Sovereign Console</title>
+    <style>
+      :root {
+        --bg-color: #0f172a;
+        --glass-bg: rgba(30, 41, 59, 0.7);
+        --glass-border: rgba(255, 255, 255, 0.1);
+        --accent: #38bdf8;
+        --text: #e2e8f0;
+        --font-mono: "Fira Code", "Roboto Mono", monospace;
+      }
+
+      body {
+        margin: 0;
+        padding: 2rem;
+        background-color: var(--bg-color);
+        color: var(--text);
+        font-family: "Inter", sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100vh;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+
+      h1 {
+        font-weight: 200;
+        letter-spacing: 0.1em;
+        margin-bottom: 2rem;
+        text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+      }
+
+      .container {
+        display: flex;
+        gap: 2rem;
+        width: 100%;
+        height: 100%;
+        max-width: 1200px;
+      }
+
+      .pane {
+        flex: 1;
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 1rem;
+        backdrop-filter: blur(10px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+      }
+
+      .pane-header {
+        padding: 1rem;
+        border-bottom: 1px solid var(--glass-border);
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: rgba(0, 0, 0, 0.2);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      textarea {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: var(--text);
+        font-family: var(--font-mono);
+        font-size: 0.9rem;
+        padding: 1rem;
+        resize: none;
+        outline: none;
+        line-height: 1.5;
+      }
+
+      #output {
+        padding: 1rem;
+        font-family: var(--font-mono);
+        white-space: pre-wrap;
+        overflow-y: auto;
+        color: #a5f3fc;
+      }
+
+      .btn {
+        background: rgba(56, 189, 248, 0.1);
+        border: 1px solid var(--accent);
+        color: var(--accent);
+        padding: 0.5rem 1.5rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.1em;
+      }
+
+      .btn:hover {
+        background: var(--accent);
+        color: var(--bg-color);
+        box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ef4444;
+        box-shadow: 0 0 5px #ef4444;
+        transition: all 0.3s;
+      }
+
+      .status-dot.connected {
+        background: #22c55e;
+        box-shadow: 0 0 5px #22c55e;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ARK-0 // SOVEREIGN CONSOLE</h1>
+
+    <div class="container">
+      <div class="pane">
+        <div class="pane-header">
+          <span>Input (MAST JSON)</span>
+          <button class="btn" onclick="runArk()">Execute</button>
+        </div>
+        <textarea id="input" spellcheck="false">
+{
+  "Statement": {
+    "Block": [
+      {
+        "Let": {
+          "name": "x",
+          "ty": null,
+          "value": { "Literal": "100" }
+        }
+      },
+      {
+        "Let": {
+          "name": "y",
+          "ty": null,
+          "value": { "Literal": "50" }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "intrinsic_add",
+            "args": [
+              { "Variable": "x" },
+              { "Variable": "y" }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}</textarea
+        >
+      </div>
+
+      <div class="pane">
+        <div class="pane-header">
+          <span>Output (Runtime)</span>
+          <div class="status-dot" id="status" title="WASM Runtime Status"></div>
+        </div>
+        <div id="output">Initializing...</div>
+      </div>
+    </div>
+
+    <script src="main.js"></script>
+  </body>
+</html>
