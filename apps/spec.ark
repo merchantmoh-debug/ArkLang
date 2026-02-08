@@ -1,0 +1,41 @@
+# Ark Spec Engine v2.0 (Infix Verified)
+
+print("Ark Spec v2.0: Operation Omega-Point (Infix)")
+
+# 1. Context
+task_context := "Task: Write a Python script called 'recursive_factorial.py' that calculates the factorial of 10 recursively. Print the result."
+
+# 2. Prompting
+prompt := "You are the Ark Architect. Write code for: " + task_context + "\nCRITICAL: Use format ```python:filename.py ... ```"
+
+print("Consulting Intelligence...")
+blueprint := intrinsic_ask_ai(prompt)
+
+# 3. Extraction
+print("Parsing Blueprint...")
+blocks := intrinsic_extract_code(blueprint)
+count := len(blocks)
+
+print("Found Code Blocks:")
+print(count)
+
+# 4. Enforcement Loop
+i := 0
+while i < count {
+    block := get(blocks, i)
+    filename := get(block, 0)
+    content := get(block, 1)
+    
+    print("Writing File: " + filename)
+    sys.fs.write(filename, content)
+    
+    i := i + 1
+}
+
+# 5. Execution
+print("Executing Generated Code...")
+result := sys.exec("python recursive_factorial.py")
+print("Result:")
+print(result)
+
+print("Mission Complete.")

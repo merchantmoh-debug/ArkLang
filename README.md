@@ -63,7 +63,7 @@ graph TD
 *   **Sovereign API:** No SDKs. No telemetry. Raw HTTP/1.1 requests signed by *your* keys.
 
 ### 3. The Ark Language (.ark) 📜
-*   **Lisp-Like Purity:** Code is Data. Data is Code.
+*   **Kinetic Syntax:** Algol-style infix notation for maximum readability.
 *   **Intrinsic Power:** Direct access to `intrinsic_ask_ai` for thought generation.
 *   **Self-Modifying:** The system can rewrite its own capabilities in real-time.
 
@@ -77,26 +77,29 @@ graph TD
 ### 1. Interactive REPL
 Enter the immediate mode to test symbolic constraints.
 ```bash
-$ cargo run --release --bin ark
-> (print "Hello Sovereign World")
-"Hello Sovereign World"
+$ python meta/ark.py run apps/example.ark
+```
+```ark
+print("Hello Sovereign World")
 ```
 
 ### 2. Running Verification Scripts
 Execute the verified `factorial` benchmark.
 ```bash
-$ ./target/release/ark meta/factorial.ark
+$ python meta/ark.py run meta/factorial.ark
 [Ark] Result: 3628800
 ```
 
 ### 3. Neuro-Symbolic Awakening
 Invoke the AI directly from the language.
-```lisp
-;; meta/agi_awakening.ark
-(let response 
-    (intrinsic_ask_ai "Define Sovereignty in one sentence."))
-
-(print response)
+```ark
+// meta/agi_awakening.ark
+response := intrinsic_ask_ai("Define Sovereignty in one sentence.")
+print(response)
+```
+*Output:*
+```
+"Sovereignty is the exclusive right to exercise supreme authority..."
 ```
 *Output:*
 ```
