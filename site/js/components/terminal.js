@@ -30,6 +30,18 @@ export class TerminalElement extends HTMLElement {
             this.log(`[Runtime] Executing WASM Kernel...`);
             
             if (window.ark_eval) {
+                // Signal Listener
+                window.addEventListener('ark-signal', (e) => {
+                    const msg = e.detail;
+                    if (msg) {
+                        this.addLine(`[Signal] ${msg.user}: ${msg.text}`, 'signal-msg');
+                    }
+                });
+
+                window.addEventListener('ark-signal-ready', (e) => {
+                   this.addLine(`[Signal] Uplink Established. PeerID: ${e.detail.peerId}`, 'system-msg');
+                });
+
                 try {
                     const json = JSON.stringify(mast);
                     const res = window.ark_eval(json);

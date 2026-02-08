@@ -163,5 +163,10 @@ If you value independence from the cloud, support the mission:
 
 ---
 
+## 🙏 Credits
+- **TeslaSolar (Thomas Frumkin)**: For the [kp2p](https://github.com/teslasolar/kp2p) library, powering the Sovereign Signal layer.
+
+---
+
 *"We do not ask for freedom. We build it."*
 — **Mohamad Al-Zawahreh**, Architect of Ark.
