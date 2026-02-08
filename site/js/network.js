@@ -1,4 +1,4 @@
-import { injectP2P } from 'https://unpkg.com/konomi-p2p@1.0.1/dist/konomi-p2p.min.js';
+import { injectP2P } from 'https://esm.sh/konomi-p2p@1.0.1';
 
 export class Network {
     constructor() {

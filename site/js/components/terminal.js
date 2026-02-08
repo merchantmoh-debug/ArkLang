@@ -7,7 +7,17 @@ export class TerminalElement extends HTMLElement {
     }
     // ... connectedCallback stays same ...
 
-    // ... log stays same ...
+    addLine(text, className = '') {
+        const line = document.createElement('div');
+        line.className = 'line ' + className;
+        line.textContent = text;
+        this.output.appendChild(line);
+        this.scrollTop = this.scrollHeight;
+    }
+
+    log(text) {
+        this.addLine(text, 'system-msg');
+    }
 
     async handleCommand(cmd) {
         if (cmd === '(help)') {
