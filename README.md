@@ -11,6 +11,16 @@
 
 ---
 
+## 🚦 Status Interface
+
+| Component | Version | Status | Access |
+| :--- | :--- | :--- | :--- |
+| **Ark Core (.rs)** | **v1.0.0** | **STABLE** | [Open Source (AGPLv3)](./LICENSE) |
+| **Neuro-Bridge (.py)** | **v1.0.0** | **ACTIVE** | [Open Source (AGPLv3)](./meta/bridge/ark_bridge.py) |
+| **Standard Lib** | **v0.9.0** | **BETA** | [Open Source](./core/src/intrinsics.rs) |
+
+---
+
 ## 🏛️ The Manifesto
 We are building the **Ark** to survive the coming flood of probabilistic noise.
 In an age where AI hallucinates reality and software creates dependency, **Ark** stands as the fortress of **Deterministic Sovereignty**.
@@ -57,58 +67,45 @@ graph TD
 
 ---
 
-## 🚀 Quick Start: Ignite the Engine
+## 💻 Usage
 
-### Prerequisites
-*   **Rust:** `1.85+` (Nightly recommended for full power)
-*   **Python:** `3.12+` (For the Neuro-Bridge)
-*   **API Key:** Google Cloud Vertex AI / Gemini API Key
-
-### 1. Clone the Fortress
+### 1. Interactive REPL
+Enter the immediate mode to test symbolic constraints.
 ```bash
-git clone https://github.com/merchantmoh-debug/ark-compiler.git
-cd ark-compiler
+$ cargo run --release --bin ark
+> (print "Hello Sovereign World")
+"Hello Sovereign World"
 ```
 
-### 2. Build the Core
+### 2. Running Verification Scripts
+Execute the verified `factorial` benchmark.
 ```bash
-cd core
-cargo build --release
+$ ./target/release/ark meta/factorial.ark
+[Ark] Result: 3628800
 ```
 
-### 3. awaken the AGI (Example)
-```bash
-# Set your API Key first!
-$env:API_KEY="your_sovereign_key_here"
+### 3. Neuro-Symbolic Awakening
+Invoke the AI directly from the language.
+```lisp
+;; meta/agi_awakening.ark
+(let response 
+    (intrinsic_ask_ai "Define Sovereignty in one sentence."))
 
-# Run the Awakening Script
-../target/release/ark ../meta/agi_awakening.ark
+(print response)
 ```
-
 *Output:*
 ```
-[Ark] Loading AGI script...
-[Neuro-Link] Transmitting thought to Gemini 2.5...
-[Ark] AI Response: "I am ready to serve the Sovereign protocol."
+"Sovereignty is the exclusive right to exercise supreme authority over a geographic region, group of people, or oneself."
 ```
 
 ---
 
-## ⚠️ Legal Notice: The Iron Perimeter
-This repository is strictly governed under a **Dual-License Model**:
+## ⚙️ Version Compatibility
 
-1.  **GNU AGPL v3.0 (The Viral Shield):**
-    *   For open-source, community, and non-profit use.
-    *   **Condition:** If you use Ark, you *must* open-source your entire application.
-
-2.  **Commercial License (The Sovereign Grant):**
-    *   For proprietary, closed-source, or enterprise use.
-    *   Includes Patent Indemnification and Priority Support.
-    *   **Contact:** [merchantmoh@sovereign-systems.ca](mailto:merchantmoh@sovereign-systems.ca)
-
-**Patents Pending:**
-This technology is protected by **US Patent Application #63/935,467**. 
-*Unauthorized commercial use constitutes patent infringement.*
+| Ark Version | Rust Toolchain | Python Bridge | Google Model |
+| :--- | :--- | :--- | :--- |
+| **v1.0 (Current)** | `1.85+` | `3.12+` | `gemini-2.5-flash-lite` |
+| **v0.9 (Legacy)** | `1.80+` | `3.10+` | `gemini-1.5-flash` |
 
 ---
 
@@ -134,7 +131,24 @@ Ark does not defeat Moonlight; it **commands** it.
 
 ---
 
-## 🤝 Support the Architect
+## 🤝 Contribution & Governance
+
+**We welcome Sovereign Engineers.**
+
+1.  **The Code:** Licensed under **AGPLv3**. You are free to fork, modify, and deploy, provided you share your improvements.
+2.  **The Protocol:** Changes to the `core/` must pass the **Merkle Integrity Test**. We do not merge code that breaks determinism.
+3.  **The AI:** We optimize for `gemini-2.5-flash-lite` but accept PRs for local inference (Llama-3/DeepSeek-R1) via the `ark_bridge.py`.
+
+**To Contribute:**
+1.  Fork the repository.
+2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4.  Push to the branch (`git push origin feature/AmazingFeature`).
+5.  Open a Pull Request.
+
+---
+
+## 💸 Support the Architect
 
 This infrastructure is built by **one person** for the sovereign individual.
 If you value independence from the cloud, support the mission:
