@@ -31,6 +31,8 @@ It is not just a language; it is a **Neuro-Symbolic Treaty** between:
 
 Ark rejects the "Black Box." We build **Glass Cathedrals** where every thought is traced, every execution is Merkle-ized, and every output is owned by the user, not the cloud.
 
+> 🎼 **Official Theme Song:** [The Signal](https://www.youtube.com/watch?v=_NgowwoWCec)
+
 ---
 
 ## ⚡ Core Architecture: The Trinity
