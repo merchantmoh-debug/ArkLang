@@ -28,23 +28,31 @@ body {
 
 /* Glassmorphism Classes */
 .glass-panel {
-  background: var(--glass-bg);
-  backdrop-filter: blur(10px);
-  border: var(--glass-border);
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 0 15px rgba(0, 255, 65, 0.1);
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border: var(--glass-border);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 0 15px rgba(0, 255, 65, 0.1);
+}
+
+/* Force Terminal Visibility */
+ark-terminal {
+    display: block;
+    width: 100%;
+    min-height: 400px;
 }
 
 h1 {
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  text-shadow: 0 0 10px var(--text-color);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px var(--text-color);
 }
 
 a {
-  color: var(--text-color);
-  text-decoration: none;
-  border-bottom: 1px dashed var(--text-color);
+    color: var(--text-color);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--text-color);
+    cursor: pointer;
 }
