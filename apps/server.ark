@@ -1,0 +1,18 @@
+func handler(req) {
+    print("Ark Server: Received request for " + req)
+    
+    if req == "/health" {
+        return "OK"
+    }
+    
+    return "<h1>Hello from Ark Sovereign Node</h1><p>Path: " + req + "</p>"
+}
+
+port := 8087
+print("Starting server on 8087...")
+sys.net.http.serve(port, handler)
+
+print("Server is running. Press Ctrl+C to stop.")
+while 1 {
+    sys.time.sleep(1)
+}

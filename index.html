@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ark: Sovereign Runtime</title>
+    <link rel="stylesheet" href="site/css/style.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦀</text></svg>"
+    />
+    <script type="importmap">
+      {
+        "imports": {
+          "yjs": "https://esm.sh/yjs@13.6.0",
+          "trystero": "https://esm.sh/trystero@0.19.2",
+          "tweetnacl": "https://esm.sh/tweetnacl@1.0.3",
+          "ws": "https://esm.sh/ws"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <!-- Components injected by app.js -->
+      <ark-hero></ark-hero>
+      <ark-terminal></ark-terminal>
+    </div>
+
+    <!-- Core Modules -->
+    <script type="module" src="site/js/programs.js"></script>
+    <script type="module" src="site/js/compiler.js"></script>
+    <script type="module" src="site/js/network.js"></script>
+    <script type="module" src="site/js/runtime.js"></script>
+
+    <!-- App Entry Point -->
+    <script type="module" src="site/js/app.js"></script>
+  </body>
+</html>

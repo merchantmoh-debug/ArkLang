@@ -1,0 +1,34 @@
+print("Testing Classes...")
+
+class Counter {
+    func init() {
+        this.count := 0
+        print("Counter Initialized")
+    }
+    
+    func increment() {
+        this.count := this.count + 1
+        print("Incremented")
+    }
+    
+    func get_count() {
+        return this.count
+    }
+}
+
+print("Instantiating...")
+c := Counter()
+c.init()
+
+c.increment()
+c.increment()
+
+val := c.get_count()
+print("Counter Value (Should be 2):")
+print(val)
+
+if val == 2 {
+    print("SUCCESS")
+} else {
+    print("FAILURE")
+}

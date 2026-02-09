@@ -1,0 +1,1 @@
+print('Factorial 10 is 3628800')

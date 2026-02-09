@@ -1,0 +1,15 @@
+print("Testing Functions...")
+
+func add(a, b) {
+    return a + b
+}
+
+res := add(10, 20)
+print("Result (Should be 30):")
+print(res)
+
+if res == 30 {
+    print("SUCCESS")
+} else {
+    print("FAILURE")
+}

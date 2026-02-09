@@ -1,64 +1,64 @@
-// Ark-1: The Kinetic Grammar (Lark EBNF)
-// "Words are vectors. Syntax is geometry."
+// Ark-1: The Kinetic Grammar (Infix/Algol)
+// Matches meta/factorial.ark
 
-start: statement+
+start: (statement | function_def | class_def)+
 
-statement: assignment
-         | function_def
-         | flow_statement
-         | expression
-         | neuro_block
-         | if_stmt
-         | while_stmt
+?statement: assignment
+          | flow_stmt
+          | expression
 
-// 5. Control Flow
+// --- Definitions ---
+function_def: "func" IDENTIFIER "(" [param_list] ")" "{" block "}"
+param_list: IDENTIFIER ("," IDENTIFIER)*
+class_def: "class" IDENTIFIER "{" function_def* "}"
+
+// --- Control Flow ---
+flow_stmt: if_stmt | while_stmt | return_stmt
+return_stmt: "return" expression
+
 if_stmt: "if" expression "{" block "}" ["else" "{" block "}"]
 while_stmt: "while" expression "{" block "}"
 
-// 1. Kinetic Assignment: "Target := Value"
-assignment: IDENTIFIER ":=" expression
-
-// 2. Flow Typing: "Variable :: Type"
-flow_statement: IDENTIFIER "::" type_expr
-
-// 3. Function Definition: "fn Name(args) -> Ret { ... }"
-function_def: "fn" IDENTIFIER "(" [arg_list] ")" "->" type_expr "{" block "}"
-
-// 4. Neuro-Symbolic Block (The Dreaming)
-neuro_block: "@train" "(" IDENTIFIER ")" "{" block "}"
-           | "@freeze" "(" IDENTIFIER ")"
-
-// Primitives
 block: statement*
 
-expression: term
-          | term "+" term -> add
-          | term "-" term -> sub
-          | term "*" term -> mul
-          | term ">" term -> gt
-          | term "<" term -> lt
-          | term "==" term -> eq
-          | "???"         -> hole  // Hole-Driven Development
+// --- Assignments ---
+?assignment: assign_var | assign_attr
+assign_var: IDENTIFIER ":=" expression
+assign_attr: atom "." IDENTIFIER ":=" expression
 
-term: IDENTIFIER    -> var
-    | NUMBER        -> number
-    | STRING        -> string
-    | call_expr
-    | "(" expression ")"
+// --- Expressions ---
+?expression: comparison
 
-call_expr: IDENTIFIER "(" [expr_list] ")"
+?comparison: sum
+           | comparison ">" sum -> gt
+           | comparison "<" sum -> lt
+           | comparison "==" sum -> eq
+
+?sum: product
+    | sum "+" product -> add
+    | sum "-" product -> sub
+
+?product: atom
+        | product "*" atom -> mul
+        | product "/" atom -> div
+
+?atom: primary
+     | atom "." IDENTIFIER -> get_attr
+     | atom "(" [expr_list] ")" -> call_expr
+
+?primary: NUMBER -> number
+        | STRING -> string
+        | IDENTIFIER -> var
+        | "(" expression ")"
+
 expr_list: expression ("," expression)*
-
-arg_list: arg ("," arg)*
-arg: IDENTIFIER ["::" type_expr]
-
-type_expr: IDENTIFIER              // Basic Type (Int, Str)
-         | "Linear" "<" IDENTIFIER ">" // Linear<T>
 
 // Tokens
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_]*/
-NUMBER: /\d+/
+NUMBER: /-?\d+/
 STRING: /".*?"/
 
 %import common.WS
+%import common.SH_COMMENT
 %ignore WS
+%ignore SH_COMMENT
