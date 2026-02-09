@@ -59,6 +59,6 @@ NUMBER: /-?\d+/
 STRING: /".*?"/
 
 %import common.WS
-%import common.SH_COMMENT
+%import common.CPP_COMMENT
 %ignore WS
-%ignore SH_COMMENT
+%ignore CPP_COMMENT
