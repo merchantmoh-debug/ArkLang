@@ -16,8 +16,31 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
-use ark_0_zheng::repl;
+use ark_0_zheng::{eval, loader, repl, runtime};
+use std::env;
+use std::fs;
 
 fn main() {
-    repl::start();
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 1 {
+        let filename = &args[1];
+        // println!("Loading Ark Program: {}", filename);
+
+        match fs::read_to_string(filename) {
+            Ok(json_content) => match loader::load_ark_program(&json_content) {
+                Ok(node) => {
+                    let mut scope = runtime::Scope::new();
+                    match eval::Interpreter::eval(&node, &mut scope) {
+                        Ok(_) => {} // Success
+                        Err(e) => println!("Runtime Error: {}", e),
+                    }
+                }
+                Err(e) => println!("Failed to load program: {}", e),
+            },
+            Err(e) => println!("Failed to read file: {}", e),
+        }
+    } else {
+        repl::start();
+    }
 }

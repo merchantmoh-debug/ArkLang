@@ -54,56 +54,68 @@ class ArkCompiler:
         return json.dumps(root, indent=2)
 
     def compile_stmt(self, stmt):
-        kind = stmt.get("type")
-        if kind == "assignment":
-            # Statement::Let { name, ty: None, value: ... }
+        kind = stmt.data if hasattr(stmt, 'data') else stmt.get("type")
+        
+        if kind == "assign_var":
+            # Rule: assign_var: NAME ":=" expr
+            name = stmt.children[0].value
+            value_node = stmt.children[1]
             return {
                 "Let": {
-                    "name": stmt["target"],
+                    "name": name,
                     "ty": None,
-                    "value": self.compile_expr(stmt["value"])
+                    "value": self.compile_expr(value_node)
                 }
             }
-        elif kind == "flow":
-            return None 
-        elif kind == "if":
-            # {"If": { condition, then_block, else_block }}
-            then_stmts = [self.compile_stmt(s) for s in stmt["then_block"]]
-            then_stmts = [s for s in then_stmts if s] # Filter None
+        elif kind == "flow_stmt":
+            # Wrapper rule, recurse
+            return self.compile_stmt(stmt.children[0])
+            
+        elif kind == "if_stmt":
+            # Rule: if_stmt: "if" expr block ("else" block)?
+            condition = stmt.children[0]
+            then_block = stmt.children[1].children # block -> children
+            
+            then_stmts = [self.compile_stmt(s) for s in then_block]
+            then_stmts = [s for s in then_stmts if s]
             
             else_stmts = None
-            if stmt["else_block"]:
-                else_compiled = [self.compile_stmt(s) for s in stmt["else_block"]]
-                else_stmts = [s for s in else_compiled if s]
+            if len(stmt.children) > 2 and stmt.children[2]:
+                else_block_node = stmt.children[2]
+                else_stmts_raw = [self.compile_stmt(s) for s in else_block_node.children]
+                else_stmts = [s for s in else_stmts_raw if s]
 
             return {
                 "If": {
-                    "condition": self.compile_expr(stmt["condition"]),
+                    "condition": self.compile_expr(condition),
                     "then_block": then_stmts,
                     "else_block": else_stmts
                 }
             }
         elif kind == "function_def":
-            # Statement::Function(FunctionDef)
-            # FunctionDef { name, inputs, output, body: MastNode }
-            body_stmts = [self.compile_stmt(s) for s in stmt["body"]]
+            # Rule: function_def: "func" NAME ["(" param_list ")"] block
+            # Children: [NAME, (optional param_list), block]
+            name = stmt.children[0].value
+            params = []
+            body_idx = 1
+            if len(stmt.children) > 1 and hasattr(stmt.children[1], "data") and stmt.children[1].data == "param_list":
+                params = [t.value for t in stmt.children[1].children]
+                body_idx = 2
+            
+            body_node = stmt.children[body_idx]
+            body_stmts = [self.compile_stmt(s) for s in body_node.children]
             body_stmts = [s for s in body_stmts if s]
             
-            # Create MastNode for body (Simplified: Just verify structure, hash is done in Rust if Native, 
-            # here we cheat and just emit the structure, Runtime will likely re-hash or we just emit content)
-            # Actually, `FunctionDef` expects `body: Box<MastNode>`. 
-            # In JSON, we can represent it as the struct fields.
-            
-            # Transform inputs from (name, type) to (name, ArkType)
+            # Map params
             inputs = []
-            for arg_name, arg_type in stmt["inputs"]:
-                inputs.append([arg_name, {"Linear": "Integer"}]) # Hack: defaulting types for now
+            for arg_name in params:
+                inputs.append([arg_name, {"Linear": "Integer"}]) 
             
             return {
                 "Function": {
-                    "name": stmt["name"],
+                    "name": name,
                     "inputs": inputs,
-                    "output": {"Linear": "Integer"}, # Hack
+                    "output": {"Linear": "Integer"}, 
                     "body": {
                         "hash": "todo_hash", 
                         "content": {
@@ -114,61 +126,93 @@ class ArkCompiler:
                     }
                 }
             }
-        elif kind == "while":
-            body_stmts = [self.compile_stmt(s) for s in stmt["body"]]
+        elif kind == "while_stmt":
+            # Rule: while_stmt: "while" expr block
+            condition = stmt.children[0]
+            body_node = stmt.children[1]
+            body_stmts = [self.compile_stmt(s) for s in body_node.children]
             body_stmts = [s for s in body_stmts if s]
 
             return {
                 "While": {
-                    "condition": self.compile_expr(stmt["condition"]),
+                    "condition": self.compile_expr(condition),
                     "body": body_stmts
                 }
             }
         elif kind == "neuro_block":
              return None
         
-        # Check if it's an expression (dict with no 'type' or type='var'/'string' or op=...)
-        # We can try to compile it as an expression and wrap in Statement::Expression
+        # Check if it's an expression (call_expr usually appears as a statement)
+        if kind == "call_expr":
+             expr_obj = self.compile_expr(stmt)
+             return {"Expression": expr_obj}
+
+        # Fallback for untyped dicts (if any) or unknown tree nodes
         try:
             expr_obj = self.compile_expr(stmt)
             return {"Expression": expr_obj}
         except:
+            print(f"Unknown Statement Kind: {kind}")
             return None
 
     def compile_expr(self, expr):
-        if isinstance(expr, int):
-            return {"Literal": str(expr)}
-        
-        if isinstance(expr, dict):
-            start_type = expr.get("type")
-            if start_type == "var":
-                return {"Variable": expr["name"]}
-            if start_type == "string":
-                return {"Literal": expr["val"]}
-            if start_type == "call":
+        # Handle Token (Literal values)
+        if hasattr(expr, 'type'): # Token
+            if expr.type == "NUMBER":
+                return {"Literal": str(expr.value)}
+            if expr.type == "STRING":
+                 # Remove quotes
+                return {"Literal": expr.value[1:-1]}
+            if expr.type == "NAME":
+                 return {"Variable": expr.value}
+
+        # Handle Tree (Complex expressions)
+        if hasattr(expr, 'data'):
+            kind = expr.data
+            
+            if kind == "number":
+                return {"Literal": str(expr.children[0].value)}
+            if kind == "string":
+                 return {"Literal": expr.children[0].value[1:-1]}
+            if kind == "var":
+                 return {"Variable": expr.children[0].value}
+                 
+            if kind == "call_expr":
+                # Rule: call_expr: expr "(" [arg_list] ")"
+                func_expr = self.compile_expr(expr.children[0])
+                
+                # Extract function name hash if it's a variable
+                func_hash = "unknown"
+                if "Variable" in func_expr:
+                    func_hash = func_expr["Variable"]
+                
+                args = []
+                if len(expr.children) > 1:
+                    arg_list = expr.children[1]
+                    if hasattr(arg_list, 'data') and arg_list.data == 'arg_list':
+                        args = [self.compile_expr(c) for c in arg_list.children]
+                
                 return {
                     "Call": {
-                        "function_hash": expr["function"],
-                        "args": [self.compile_expr(arg) for arg in expr["args"]]
+                        "function_hash": func_hash,
+                        "args": args
                     }
                 }
+                
+            # Binary Ops
+            if kind in ["add", "sub", "mul", "gt", "lt", "eq"]:
+                left = expr.children[0]
+                right = expr.children[1]
+                op_map = {
+                    "add": "intrinsic_add", "sub": "intrinsic_sub", 
+                    "mul": "intrinsic_mul", "gt": "intrinsic_gt", 
+                    "lt": "intrinsic_lt", "eq": "intrinsic_eq"
+                }
+                return self.compile_binop(op_map[kind], left, right)
+
+        if isinstance(expr, int):
+            return {"Literal": str(expr)}
             
-            op = expr.get("op")
-            if op == "add":
-                return self.compile_binop("intrinsic_add", expr["left"], expr["right"])
-            elif op == "sub":
-                return self.compile_binop("intrinsic_sub", expr["left"], expr["right"])
-            elif op == "mul":
-                return self.compile_binop("intrinsic_mul", expr["left"], expr["right"])
-            elif op == "gt":
-                return self.compile_binop("intrinsic_gt", expr["left"], expr["right"])
-            elif op == "lt":
-                return self.compile_binop("intrinsic_lt", expr["left"], expr["right"])
-            elif op == "eq":
-                return self.compile_binop("intrinsic_eq", expr["left"], expr["right"])
-            elif op == "hole":
-                return {"Literal": "HOLE"} # Placeholder
-        
         return {"Literal": str(expr)}
 
     def compile_binop(self, intrinsic, left, right):
