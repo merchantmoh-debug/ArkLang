@@ -1,6 +1,5 @@
 # The Ark-1 Programmer's Field Manual (Infix Edition)
 **Version:** 1.0 (True-Code Edition)
-**Status:** VERIFIED
 **Syntax:** Kinetic Infix (Algol-style)
 
 ---
