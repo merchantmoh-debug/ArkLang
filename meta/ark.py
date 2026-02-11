@@ -642,7 +642,6 @@ def eval_binop(op, left, right):
     if op == "sub": return ArkValue(l - r, "Integer")
     if op == "mul": return ArkValue(l * r, "Integer")
     if op == "div": return ArkValue(l // r, "Integer")
-    if op == "div": return ArkValue(l // r, "Integer")
     if op == "lt": return ArkValue(l < r, "Boolean")
     if op == "gt": return ArkValue(l > r, "Boolean")
     if op == "le": return ArkValue(l <= r, "Boolean")
