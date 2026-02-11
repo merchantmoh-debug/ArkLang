@@ -426,4 +426,36 @@ mod tests {
         let result = checker.check_function(&func);
         assert!(result.is_ok(), "Valid shadowing (after consumption) should be allowed");
     }
+
+    #[test]
+    fn test_linear_let_binding_state() {
+        let stmt = Statement::Let {
+            name: "x".to_string(),
+            ty: Some(ArkType::Linear("Resource".to_string())),
+            value: Expression::Literal("dummy".to_string()),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_statement(&stmt);
+
+        assert!(result.is_ok());
+        assert!(checker.active_linears.contains("x"));
+        assert!(checker.declared_linears.contains("x"));
+    }
+
+    #[test]
+    fn test_shared_let_binding_state() {
+        let stmt = Statement::Let {
+            name: "y".to_string(),
+            ty: Some(ArkType::Shared("Int".to_string())),
+            value: Expression::Literal("42".to_string()),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_statement(&stmt);
+
+        assert!(result.is_ok());
+        assert!(!checker.active_linears.contains("y"));
+        assert!(!checker.declared_linears.contains("y"));
+    }
 }
