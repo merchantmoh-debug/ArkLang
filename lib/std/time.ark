@@ -1,0 +1,9 @@
+// Standard Library: Time
+
+func _time_now_wrapper() {
+    return intrinsic_time_now()
+}
+
+time := {
+    now: _time_now_wrapper
+}
