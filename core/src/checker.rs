@@ -426,4 +426,26 @@ mod tests {
         let result = checker.check_function(&func);
         assert!(result.is_ok(), "Valid shadowing (after consumption) should be allowed");
     }
+
+    #[test]
+    fn test_linear_argument_unused() {
+        let func = FunctionDef {
+            name: "unused_arg".to_string(),
+            inputs: vec![("x".to_string(), ArkType::Linear("Resource".to_string()))],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                    Statement::Return(Expression::Literal("void".to_string())),
+                ])))
+                .unwrap(),
+            ),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        match result {
+            Err(LinearError::UnusedResource(name)) => assert_eq!(name, "x"),
+            _ => panic!("Expected UnusedResource error, got {:?}", result),
+        }
+    }
 }
