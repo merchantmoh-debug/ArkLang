@@ -7,3 +7,5 @@ __pycache__/
 .vscode/
 *.swp
 *.swo
+.memory_key
+*.enc

@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     )
 
     # Memory Configuration
-    MEMORY_FILE: str = "agent_memory.json"
+    MEMORY_FILE: str = "agent_memory.enc"
 
     # MCP Configuration
     MCP_ENABLED: bool = Field(default=False, description="Enable MCP integration")
