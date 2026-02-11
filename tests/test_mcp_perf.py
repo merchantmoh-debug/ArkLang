@@ -1,6 +1,7 @@
 import unittest
 import asyncio
 import json
+import time
 from unittest.mock import MagicMock, AsyncMock
 from src.mcp_client import MCPClientManager, MCPServerConnection, MCPServerConfig, MCPTool
 from src.config import settings
@@ -130,6 +131,53 @@ class TestMCPClient(unittest.TestCase):
             loop.run_until_complete(run_test())
         finally:
             loop.close()
+
+    def test_initialize_parallelism(self):
+        """
+        Verify that multiple MCP servers connect in parallel using asyncio.gather.
+        """
+        original_enabled = settings.MCP_ENABLED
+        try:
+            async def run_test():
+                # Enable MCP
+                settings.MCP_ENABLED = True
+
+                manager = MCPClientManager()
+
+                # Create 5 configs
+                configs = [
+                    MCPServerConfig(name=f"s{i}", transport="stdio", command="echo")
+                    for i in range(5)
+                ]
+                manager._load_server_configs = MagicMock(return_value=configs)
+
+                # Mock delay: 0.2s
+                async def mock_connect(config):
+                    await asyncio.sleep(0.2)
+
+                # IMPORTANT: Patch the instance method directly before calling initialize
+                manager._connect_server = AsyncMock(side_effect=mock_connect)
+
+                start = time.perf_counter()
+                await manager.initialize()
+                end = time.perf_counter()
+
+                duration = end - start
+
+                # Sequential: 5 * 0.2 = 1.0s
+                # Parallel: ~0.2s + overhead
+                # Allow up to 0.6s to account for setup/teardown and overhead
+                self.assertLess(duration, 0.6, f"MCP initialization took {duration:.4f}s, expected < 0.6s (Parallel)")
+                self.assertEqual(manager._connect_server.call_count, 5)
+
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(run_test())
+            finally:
+                loop.close()
+        finally:
+            settings.MCP_ENABLED = original_enabled
 
 if __name__ == '__main__':
     unittest.main()
