@@ -1,0 +1,113 @@
+// Define boolean constants
+true := 1 == 1
+false := 1 == 0
+
+// Helper function for assertions
+func assert(condition, message) {
+    if condition {
+        print("PASS: " + message)
+    } else {
+        print("FAIL: " + message)
+        // Force a runtime error (division by zero) to stop execution and signal failure
+        1 / 0
+    }
+}
+
+// 1. Test If-Else
+func test_if_else() {
+    print("--- Testing If-Else ---")
+
+    if true {
+        assert(true, "True condition entered if block")
+    } else {
+        assert(false, "True condition entered else block (FAIL)")
+    }
+
+    if false {
+        assert(false, "False condition entered if block (FAIL)")
+    } else {
+        assert(true, "False condition entered else block")
+    }
+
+    x := 10
+    if x > 5 {
+        assert(true, "10 > 5 is true")
+    } else {
+        assert(false, "10 > 5 failed")
+    }
+
+    if x < 5 {
+        assert(false, "10 < 5 failed")
+    } else {
+        assert(true, "10 < 5 is false (else block)")
+    }
+}
+
+// 2. Test While Loop
+func test_while() {
+    print("--- Testing While Loop ---")
+
+    i := 0
+    sum := 0
+    while i < 5 {
+        sum := sum + i
+        i := i + 1
+    }
+    // sum should be 0 + 1 + 2 + 3 + 4 = 10
+    assert(sum == 10, "Sum of 0..4 should be 10")
+    assert(i == 5, "Counter i should be 5")
+}
+
+// 3. Test Function Calls
+func add(a, b) {
+    return a + b
+}
+
+func subtract(a, b) {
+    return a - b
+}
+
+func test_functions() {
+    print("--- Testing Function Calls ---")
+
+    res_add := add(3, 4)
+    assert(res_add == 7, "add(3, 4) should be 7")
+
+    res_sub := subtract(10, 4)
+    assert(res_sub == 6, "subtract(10, 4) should be 6")
+}
+
+// 4. Test Recursion
+func fib(n) {
+    if n < 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+func factorial(n) {
+    if n < 2 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+func test_recursion() {
+    print("--- Testing Recursion ---")
+
+    // Fibonacci: 0, 1, 1, 2, 3, 5, 8
+    f := fib(6)
+    assert(f == 8, "fib(6) should be 8")
+
+    // Factorial: 5! = 120
+    fact := factorial(5)
+    assert(fact == 120, "factorial(5) should be 120")
+}
+
+// Run All Tests
+test_if_else()
+test_while()
+test_functions()
+test_recursion()
+
+print("ALL TESTS COMPLETED")
