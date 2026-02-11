@@ -1,13 +1,17 @@
 :root {
   --bg-color: #050505;
   --text-color: #00ff41;
-  --glass-bg: rgba(20, 20, 20, 0.7);
-  --glass-border: 1px solid rgba(0, 255, 65, 0.2);
-  --font-mono: "Courier New", Courier, monospace;
+  --text-dim: #008f11;
+  --accent-cyan: #00ffff;
+  --glass-bg: rgba(10, 15, 20, 0.65);
+  --glass-border: 1px solid rgba(0, 255, 65, 0.15);
+  --font-mono: 'JetBrains Mono', monospace;
+  --shadow-glow: 0 0 20px rgba(0, 255, 65, 0.1);
 }
 
 body {
   background-color: var(--bg-color);
+  background: radial-gradient(circle at center, #0a0f14 0%, #000000 100%);
   color: var(--text-color);
   font-family: var(--font-mono);
   margin: 0;
@@ -18,41 +22,76 @@ body {
   overflow: hidden;
 }
 
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.3);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 255, 65, 0.3);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 255, 65, 0.6);
+}
+
 #app {
   width: 90%;
   max-width: 1000px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  z-index: 1;
 }
 
 /* Glassmorphism Classes */
 .glass-panel {
     background: var(--glass-bg);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: var(--glass-border);
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 0 15px rgba(0, 255, 65, 0.1);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--shadow-glow);
+    transition: all 0.3s ease;
+}
+
+.glass-panel:hover {
+    box-shadow: 0 0 30px rgba(0, 255, 65, 0.2);
+    border-color: rgba(0, 255, 65, 0.3);
 }
 
 /* Force Terminal Visibility */
 ark-terminal {
     display: block;
     width: 100%;
-    min-height: 400px;
+    min-height: 450px;
 }
 
 h1 {
     margin: 0;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    text-shadow: 0 0 10px var(--text-color);
+    letter-spacing: 3px;
+    font-weight: 700;
+    text-shadow: 0 0 15px rgba(0, 255, 65, 0.5);
+    border-bottom: 1px solid rgba(0, 255, 65, 0.2);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
 }
 
 a {
-    color: var(--text-color);
+    color: var(--accent-cyan);
     text-decoration: none;
-    border-bottom: 1px dashed var(--text-color);
+    border-bottom: 1px dashed var(--accent-cyan);
     cursor: pointer;
+    transition: all 0.2s;
+}
+
+a:hover {
+    color: #fff;
+    border-bottom-style: solid;
+    text-shadow: 0 0 8px var(--accent-cyan);
 }
