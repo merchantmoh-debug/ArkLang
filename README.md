@@ -1,4 +1,4 @@
-# Ark: The God-Mode Runtime (v112.0)
+# Ark: The Programming Language
 
 > **"Python is a Toy. Rust is a Handcuff. Ark is a Weapon."**
 
