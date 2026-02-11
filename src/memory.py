@@ -28,7 +28,7 @@ class MemoryManager:
                     with open(key_file, "rb") as f:
                         key = f.read().strip()
                 except Exception as e:
-                    print(f"Warning: Could not read memory key from {key_file}: {e}")
+                    raise RuntimeError(f"Could not read memory key from {key_file}: {e}")
 
             if not key:
                 print("Generating new encryption key for memory...")
@@ -45,7 +45,8 @@ class MemoryManager:
                             f.write(key)
                 except Exception as e:
                     print(f"Warning: Could not save memory key to {key_file}: {e}")
-                    # In-memory key only if we can't save (risky for persistence)
+                    # We continue with in-memory key, which is secure for this session but not persistent.
+                    # This is acceptable (better than crashing if FS is read-only).
 
         if isinstance(key, str):
             key = key.encode()
@@ -53,8 +54,8 @@ class MemoryManager:
         try:
             self._fernet = Fernet(key)
         except Exception as e:
-            print(f"Error initializing encryption: {e}")
-            self._fernet = None
+            # FAIL CLOSED: Do not continue without valid encryption
+            raise ValueError(f"Error initializing encryption: {e}")
 
     def _load_memory(self):
         """Loads memory from the encrypted file (or legacy JSON if present)."""
@@ -101,12 +102,9 @@ class MemoryManager:
                             print(f"Error: Could not decrypt or decode memory file {self.memory_file}.")
                             data = None
                 else:
-                    # No encryption key? Try plain load
-                    try:
-                        data = json.loads(file_content.decode('utf-8'))
-                    except Exception:
-                        print("Error: No encryption key available and file is not plain JSON.")
-                        data = None
+                    # Should be unreachable if _init_encryption works correctly,
+                    # but defensively handle it.
+                    raise RuntimeError("Encryption not initialized.")
 
                 if data is not None:
                     self._process_loaded_data(data)
@@ -139,22 +137,24 @@ class MemoryManager:
             "history": self._memory,
         }
 
+        # FAIL CLOSED: Ensure encryption is available
+        if not self._fernet:
+            raise RuntimeError("Encryption not initialized. Cannot save memory securely.")
+
         try:
             json_str = json.dumps(payload, indent=2, ensure_ascii=False)
             data_bytes = json_str.encode('utf-8')
 
-            if self._fernet:
-                encrypted_data = self._fernet.encrypt(data_bytes)
-                with open(self.memory_file, 'wb') as f:
-                    f.write(encrypted_data)
-            else:
-                # Fallback if encryption failed init (should warn user)
-                print("Warning: Saving memory in PLAINTEXT (Encryption unavailable)")
-                with open(self.memory_file, 'w', encoding='utf-8') as f:
-                    f.write(json_str)
+            # Strictly encrypt
+            encrypted_data = self._fernet.encrypt(data_bytes)
+            with open(self.memory_file, 'wb') as f:
+                f.write(encrypted_data)
 
         except Exception as e:
             print(f"Error saving memory: {e}")
+            # For save operations, logging is preferred to crashing the agent loop,
+            # but we ensure no plaintext is written by failing closed above.
+            pass
 
     def add_entry(self, role: str, content: str, metadata: Optional[Dict[str, Any]] = None):
         """Adds a new interaction to memory."""
