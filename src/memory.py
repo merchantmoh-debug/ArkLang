@@ -1,6 +1,8 @@
 import json
 import os
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
+from cryptography.fernet import Fernet
 from src.config import settings
 
 
@@ -11,39 +13,148 @@ class MemoryManager:
         self.memory_file = memory_file
         self.summary: str = ""
         self._memory: List[Dict[str, Any]] = []
+        self._fernet: Optional[Fernet] = None
+        self._init_encryption()
         self._load_memory()
 
+    def _init_encryption(self):
+        """Initializes the encryption key and Fernet instance."""
+        key = os.environ.get("MEMORY_ENCRYPTION_KEY")
+        key_file = Path(".memory_key")
+
+        if not key:
+            if key_file.exists():
+                try:
+                    with open(key_file, "rb") as f:
+                        key = f.read().strip()
+                except Exception as e:
+                    print(f"Warning: Could not read memory key from {key_file}: {e}")
+
+            if not key:
+                print("Generating new encryption key for memory...")
+                key = Fernet.generate_key()
+                try:
+                    # restrictive permissions (0o600) only work on POSIX, but harmless on Windows
+                    if os.name == 'posix':
+                        # Atomic creation with restricted permissions
+                        fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                        with os.fdopen(fd, "wb") as f:
+                            f.write(key)
+                    else:
+                        with open(key_file, "wb") as f:
+                            f.write(key)
+                except Exception as e:
+                    print(f"Warning: Could not save memory key to {key_file}: {e}")
+                    # In-memory key only if we can't save (risky for persistence)
+
+        if isinstance(key, str):
+            key = key.encode()
+
+        try:
+            self._fernet = Fernet(key)
+        except Exception as e:
+            print(f"Error initializing encryption: {e}")
+            self._fernet = None
+
     def _load_memory(self):
-        """Loads memory from the JSON file if it exists."""
+        """Loads memory from the encrypted file (or legacy JSON if present)."""
         self.summary = ""
+
+        # Check for legacy plaintext file first if we are using the new default extension
+        legacy_file = "agent_memory.json"
+        if not os.path.exists(self.memory_file) and os.path.exists(legacy_file):
+            print(f"Found legacy memory file: {legacy_file}. Migrating to encrypted storage...")
+            try:
+                with open(legacy_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                self._process_loaded_data(data)
+                # If successful, save immediately to encrypted file
+                self.save_memory()
+                # Rename legacy file to .bak
+                os.rename(legacy_file, legacy_file + ".bak")
+                print(f"Migration complete. Legacy file moved to {legacy_file}.bak")
+                return
+            except Exception as e:
+                print(f"Error migrating legacy memory: {e}")
+                # Fall through to normal load attempt
+
         if os.path.exists(self.memory_file):
             try:
-                with open(self.memory_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                if isinstance(data, dict):
-                    self.summary = data.get("summary", "") or ""
-                    history = data.get("history", [])
-                    self._memory = history if isinstance(history, list) else []
-                elif isinstance(data, list):
-                    # Backward compatibility for legacy memory files
-                    self._memory = data
+                with open(self.memory_file, 'rb') as f:
+                    file_content = f.read()
+
+                # Attempt to decrypt
+                if self._fernet:
+                    try:
+                        decrypted_content = self._fernet.decrypt(file_content)
+                        data = json.loads(decrypted_content.decode('utf-8'))
+                    except Exception:
+                        # Fallback: maybe it's a plaintext file with the new name?
+                        # Or the key changed?
+                        try:
+                            data = json.loads(file_content.decode('utf-8'))
+                            print("Warning: Memory file was plaintext. Saving as encrypted now.")
+                            self._process_loaded_data(data)
+                            self.save_memory()
+                            return
+                        except json.JSONDecodeError:
+                            print(f"Error: Could not decrypt or decode memory file {self.memory_file}.")
+                            data = None
                 else:
-                    print(f"Warning: Unexpected memory format in {self.memory_file}. Starting fresh.")
-                    self._memory = []
-            except json.JSONDecodeError:
-                print(f"Warning: Could not decode memory file {self.memory_file}. Starting fresh.")
+                    # No encryption key? Try plain load
+                    try:
+                        data = json.loads(file_content.decode('utf-8'))
+                    except Exception:
+                        print("Error: No encryption key available and file is not plain JSON.")
+                        data = None
+
+                if data is not None:
+                    self._process_loaded_data(data)
+                else:
+                     self._memory = []
+
+            except Exception as e:
+                print(f"Warning: Failed to load memory from {self.memory_file}: {e}")
                 self._memory = []
         else:
             self._memory = []
 
+    def _process_loaded_data(self, data):
+        """Helper to process the raw loaded data structure."""
+        if isinstance(data, dict):
+            self.summary = data.get("summary", "") or ""
+            history = data.get("history", [])
+            self._memory = history if isinstance(history, list) else []
+        elif isinstance(data, list):
+            # Backward compatibility for legacy memory files
+            self._memory = data
+        else:
+            print(f"Warning: Unexpected memory format. Starting fresh.")
+            self._memory = []
+
     def save_memory(self):
-        """Saves the current memory state to the JSON file."""
+        """Saves the current memory state to the encrypted file."""
         payload = {
             "summary": self.summary,
             "history": self._memory,
         }
-        with open(self.memory_file, 'w', encoding='utf-8') as f:
-            json.dump(payload, f, indent=2, ensure_ascii=False)
+
+        try:
+            json_str = json.dumps(payload, indent=2, ensure_ascii=False)
+            data_bytes = json_str.encode('utf-8')
+
+            if self._fernet:
+                encrypted_data = self._fernet.encrypt(data_bytes)
+                with open(self.memory_file, 'wb') as f:
+                    f.write(encrypted_data)
+            else:
+                # Fallback if encryption failed init (should warn user)
+                print("Warning: Saving memory in PLAINTEXT (Encryption unavailable)")
+                with open(self.memory_file, 'w', encoding='utf-8') as f:
+                    f.write(json_str)
+
+        except Exception as e:
+            print(f"Error saving memory: {e}")
 
     def add_entry(self, role: str, content: str, metadata: Optional[Dict[str, Any]] = None):
         """Adds a new interaction to memory."""
