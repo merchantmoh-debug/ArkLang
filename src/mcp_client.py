@@ -50,6 +50,7 @@ class MCPServerConnection:
     connected: bool = False
     error: Optional[str] = None
     _client_cm: Any = None  # Client context manager for cleanup
+    tool_wrappers: Dict[str, Callable[..., Any]] = field(default_factory=dict)
 
 
 class MCPClientManager:
@@ -287,6 +288,10 @@ class MCPClientManager:
         try:
             tools_response = await connection.session.list_tools()
 
+            # Clear existing tools and wrappers to avoid duplicates on re-discovery
+            connection.tools.clear()
+            connection.tool_wrappers.clear()
+
             for tool in tools_response.tools:
                 mcp_tool = MCPTool(
                     name=tool.name,
@@ -298,6 +303,12 @@ class MCPClientManager:
                     original_name=tool.name,
                 )
                 connection.tools.append(mcp_tool)
+
+                # Pre-create and cache the wrapper
+                prefixed_name = mcp_tool.get_prefixed_name(self.tool_prefix)
+                connection.tool_wrappers[prefixed_name] = self._create_tool_wrapper(
+                    connection, mcp_tool
+                )
 
         except Exception as e:
             print(f"      ⚠️ Error discovering tools: {e}")
@@ -331,9 +342,14 @@ class MCPClientManager:
             if not connection.connected:
                 continue
 
-            for tool in connection.tools:
-                prefixed_name = tool.get_prefixed_name(self.tool_prefix)
-                callables[prefixed_name] = self._create_tool_wrapper(connection, tool)
+            # Check for pre-created wrappers (fast path)
+            if connection.tool_wrappers:
+                callables.update(connection.tool_wrappers)
+            # Fallback for manually added tools (e.g. in tests/benchmarks without discovery)
+            elif connection.tools:
+                for tool in connection.tools:
+                    prefixed_name = tool.get_prefixed_name(self.tool_prefix)
+                    callables[prefixed_name] = self._create_tool_wrapper(connection, tool)
 
         self._tool_cache = callables
         return callables
