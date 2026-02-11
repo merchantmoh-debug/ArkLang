@@ -128,8 +128,14 @@ func lexer_scan(lexer) {
         if ident_str == "func" { type := TOKEN_KEYWORD }
         if ident_str == "let" { type := TOKEN_KEYWORD }
         if ident_str == "if" { type := TOKEN_KEYWORD }
+        if ident_str == "else" { type := TOKEN_KEYWORD }
         if ident_str == "while" { type := TOKEN_KEYWORD }
         if ident_str == "return" { type := TOKEN_KEYWORD }
+        if ident_str == "class" { type := TOKEN_KEYWORD }
+        if ident_str == "true" { type := TOKEN_KEYWORD }
+        if ident_str == "false" { type := TOKEN_KEYWORD }
+        if ident_str == "and" { type := TOKEN_KEYWORD }
+        if ident_str == "or" { type := TOKEN_KEYWORD }
 
         lexer := lexer_add_token(lexer, type, ident_str)
         return lexer
@@ -203,9 +209,9 @@ func lexer_tokenize(source) {
 
 // --- TEST RUNNER ---
 
-src := "x := 123 + y"
+src := "func let if else while return class true false and or"
 // print("Source:", src)
-print("Source: x := 123 + y")
+print("Source: " + src)
 
 tokens := lexer_tokenize(src)
 print("Tokens Generated:")
