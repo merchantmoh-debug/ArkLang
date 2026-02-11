@@ -29,15 +29,38 @@ pub enum EvalError {
     TypeMismatch(String, Value),
     #[error("Not executable")]
     NotExecutable,
+    #[error("System Lockout: Recursion Limit Exceeded (Vertigo Check)")]
+    RecursionLimitExceeded,
 }
 
-pub struct Interpreter;
+pub struct Interpreter {
+    recursion_limit: usize,
+    current_depth: usize,
+}
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Interpreter {
-    pub fn eval(node: &ArkNode, scope: &mut Scope) -> Result<Value, EvalError> {
+    pub fn new() -> Self {
+        Interpreter {
+            recursion_limit: 500,
+            current_depth: 0,
+        }
+    }
+
+    pub fn eval(&mut self, node: &ArkNode, scope: &mut Scope) -> Result<Value, EvalError> {
+        self.current_depth += 1;
+        if self.current_depth > self.recursion_limit {
+            return Err(EvalError::RecursionLimitExceeded);
+        }
+
         let result = match node {
-            ArkNode::Statement(stmt) => Interpreter::eval_statement(stmt, scope),
-            ArkNode::Expression(expr) => Interpreter::eval_expression(expr, scope),
+            ArkNode::Statement(stmt) => self.eval_statement(stmt, scope),
+            ArkNode::Expression(expr) => self.eval_expression(expr, scope),
             ArkNode::Function(func_def) => {
                 scope.set(func_def.name.clone(), Value::Function(func_def.clone()));
                 Ok(Value::Unit)
@@ -45,21 +68,23 @@ impl Interpreter {
             _ => Ok(Value::Unit),
         };
 
+        self.current_depth -= 1;
+
         match result {
             Ok(Value::Return(val)) => Ok(*val),
             other => other,
         }
     }
 
-    fn eval_statement(stmt: &Statement, scope: &mut Scope) -> Result<Value, EvalError> {
+    fn eval_statement(&mut self, stmt: &Statement, scope: &mut Scope) -> Result<Value, EvalError> {
         match stmt {
             Statement::Let { name, ty: _, value } => {
-                let val = Interpreter::eval_expression(value, scope)?;
+                let val = self.eval_expression(value, scope)?;
                 scope.set(name.clone(), val);
                 Ok(Value::Unit)
             }
             Statement::LetDestructure { names, value } => {
-                let result = Interpreter::eval_expression(value, scope)?;
+                let result = self.eval_expression(value, scope)?;
                 match result {
                     Value::List(items) => {
                         if items.len() != names.len() {
@@ -80,13 +105,13 @@ impl Interpreter {
                 }
             }
             Statement::Return(expr) => {
-                let val = Interpreter::eval_expression(expr, scope)?;
+                let val = self.eval_expression(expr, scope)?;
                 Ok(Value::Return(Box::new(val)))
             }
             Statement::Block(stmts) => {
                 let mut last_val = Value::Unit;
                 for stmt in stmts {
-                    let val = Interpreter::eval_statement(stmt, scope)?;
+                    let val = self.eval_statement(stmt, scope)?;
                     if let Value::Return(_) = val {
                         return Ok(val);
                     }
@@ -94,13 +119,13 @@ impl Interpreter {
                 }
                 Ok(last_val)
             }
-            Statement::Expression(expr) => Interpreter::eval_expression(expr, scope),
+            Statement::Expression(expr) => self.eval_expression(expr, scope),
             Statement::If {
                 condition,
                 then_block,
                 else_block,
             } => {
-                let cond_val = Interpreter::eval_expression(condition, scope)?;
+                let cond_val = self.eval_expression(condition, scope)?;
                 let is_true = match cond_val {
                     Value::Integer(i) => i != 0,
                     Value::Boolean(b) => b,
@@ -110,14 +135,14 @@ impl Interpreter {
                 let mut result = Value::Unit;
                 if is_true {
                     for stmt in then_block {
-                        result = Interpreter::eval_statement(stmt, scope)?;
+                        result = self.eval_statement(stmt, scope)?;
                         if let Value::Return(_) = result {
                             return Ok(result);
                         }
                     }
                 } else if let Some(stmts) = else_block {
                     for stmt in stmts {
-                        result = Interpreter::eval_statement(stmt, scope)?;
+                        result = self.eval_statement(stmt, scope)?;
                         if let Value::Return(_) = result {
                             return Ok(result);
                         }
@@ -127,7 +152,7 @@ impl Interpreter {
             }
             Statement::While { condition, body } => {
                 loop {
-                    let cond_val = Interpreter::eval_expression(condition, scope)?;
+                    let cond_val = self.eval_expression(condition, scope)?;
                     let is_true = match cond_val {
                         Value::Integer(i) => i != 0,
                         Value::Boolean(b) => b,
@@ -139,7 +164,7 @@ impl Interpreter {
                     }
 
                     for stmt in body {
-                        let val = Interpreter::eval_statement(stmt, scope)?;
+                        let val = self.eval_statement(stmt, scope)?;
                         if let Value::Return(_) = val {
                             return Ok(val);
                         }
@@ -152,7 +177,7 @@ impl Interpreter {
                 field,
                 value,
             } => {
-                let val = Interpreter::eval_expression(value, scope)?;
+                let val = self.eval_expression(value, scope)?;
                 let mut obj = scope
                     .take(obj_name)
                     .ok_or_else(|| EvalError::VariableNotFound(obj_name.clone()))?;
@@ -173,18 +198,30 @@ impl Interpreter {
         }
     }
 
-    fn eval_expression(expr: &Expression, scope: &mut Scope) -> Result<Value, EvalError> {
+    fn eval_expression(&mut self, expr: &Expression, scope: &mut Scope) -> Result<Value, EvalError> {
+        self.current_depth += 1;
+        if self.current_depth > self.recursion_limit {
+            return Err(EvalError::RecursionLimitExceeded);
+        }
+
+        let result = self.eval_expression_impl(expr, scope);
+
+        self.current_depth -= 1;
+        result
+    }
+
+    fn eval_expression_impl(&mut self, expr: &Expression, scope: &mut Scope) -> Result<Value, EvalError> {
         match expr {
             Expression::StructInit { fields } => {
                 let mut data = std::collections::HashMap::new();
                 for (name, expr) in fields {
-                    let val = Interpreter::eval_expression(expr, scope)?;
+                    let val = self.eval_expression(expr, scope)?;
                     data.insert(name.clone(), val);
                 }
                 Ok(Value::Struct(data))
             }
             Expression::GetField { obj, field } => {
-                let obj_val = Interpreter::eval_expression(obj, scope)?;
+                let obj_val = self.eval_expression(obj, scope)?;
                 match obj_val {
                     Value::Struct(mut data) => data
                         .remove(field)
@@ -212,7 +249,7 @@ impl Interpreter {
             } => {
                 let mut evaluated_args = Vec::new();
                 for arg in args {
-                    evaluated_args.push(Interpreter::eval_expression(arg, scope)?);
+                    evaluated_args.push(self.eval_expression(arg, scope)?);
                 }
 
                 if let Some(native_fn) =
@@ -242,11 +279,9 @@ impl Interpreter {
                         }
 
                         // Eval body
-                        // We need to recursively evaluate the AST node.
-                        // Since func_def.body is MastNode, we need to extract content.
-                        // Currently MastNode holds ArkNode.
-                        // Wait, func_def.body is Box<MastNode>.
-                        return Interpreter::eval(&func_def.body.content, &mut call_scope);
+                        // Recursively evaluate the AST node.
+                        // func_def.body.content is ArkNode
+                        return self.eval(&func_def.body.content, &mut call_scope);
                     } else {
                         println!(
                             "Found variable '{}' but it is not a function: {:?}",
@@ -262,7 +297,7 @@ impl Interpreter {
             Expression::List(items) => {
                 let mut values = Vec::new();
                 for item in items {
-                    values.push(Interpreter::eval_expression(item, scope)?);
+                    values.push(self.eval_expression(item, scope)?);
                 }
                 Ok(Value::List(values))
             }
@@ -278,6 +313,7 @@ mod tests {
     #[test]
     fn test_eval_arithmetic() {
         let mut scope = Scope::new();
+        let mut interpreter = Interpreter::new();
 
         // 5 + 3
         let expr = Expression::Call {
@@ -288,7 +324,29 @@ mod tests {
             ],
         };
 
-        let result = Interpreter::eval_expression(&expr, &mut scope).unwrap();
+        let result = interpreter.eval_expression(&expr, &mut scope).unwrap();
         assert_eq!(result, Value::Integer(8));
+    }
+
+    #[test]
+    fn test_recursion_limit() {
+        let mut scope = Scope::new();
+        let mut interpreter = Interpreter::new();
+        interpreter.recursion_limit = 5;
+
+        // Create a deep chain of calls: add(add(add(...)))
+        let mut expr = Expression::Literal("1".to_string());
+        for _ in 0..10 {
+            expr = Expression::Call {
+                function_hash: "intrinsic_add".to_string(),
+                args: vec![
+                    expr,
+                    Expression::Literal("1".to_string())
+                ]
+            };
+        }
+
+        let result = interpreter.eval_expression(&expr, &mut scope);
+        assert!(matches!(result, Err(EvalError::RecursionLimitExceeded)));
     }
 }

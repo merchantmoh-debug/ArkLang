@@ -37,7 +37,8 @@ fn main() {
                     }
 
                     let mut scope = runtime::Scope::new();
-                    match eval::Interpreter::eval(&node, &mut scope) {
+                    let mut interpreter = eval::Interpreter::new();
+                    match interpreter.eval(&node, &mut scope) {
                         Ok(_) => {} // Success
                         Err(e) => println!("Runtime Error: {}", e),
                     }

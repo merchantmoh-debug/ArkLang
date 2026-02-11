@@ -1,0 +1,3 @@
+127.0.0.1 - - [11/Feb/2026 14:31:55] "GET /web/index.html HTTP/1.1" 200 -
+127.0.0.1 - - [11/Feb/2026 14:31:55] "GET /web/main.js HTTP/1.1" 200 -
+127.0.0.1 - - [11/Feb/2026 14:31:56] "GET /target/wasm32-unknown-unknown/release/ark_0_zheng.wasm HTTP/1.1" 200 -

@@ -67,7 +67,8 @@ pub fn start() {
             Expression::Literal(input.to_string())
         };
 
-        match Interpreter::eval(&ArkNode::Expression(expr), &mut scope) {
+        let mut interpreter = Interpreter::new();
+        match interpreter.eval(&ArkNode::Expression(expr), &mut scope) {
             Ok(val) => println!("= {:?}", val),
             Err(e) => println!("Error: {}", e),
         }
