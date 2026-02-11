@@ -17,21 +17,7 @@
  */
 
 use crate::ast::{ArkNode, Expression, Statement};
-use crate::runtime::{Scope, Value};
-
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum EvalError {
-    #[error("Variable not found: {0}")]
-    VariableNotFound(String),
-    #[error("Type mismatch: expected {0}, got {1:?}")]
-    TypeMismatch(String, Value),
-    #[error("Not executable")]
-    NotExecutable,
-    #[error("System Lockout: Recursion Limit Exceeded (Vertigo Check)")]
-    RecursionLimitExceeded,
-}
+use crate::runtime::{Scope, Value, RuntimeError};
 
 pub struct Interpreter {
     recursion_limit: usize,
@@ -52,17 +38,19 @@ impl Interpreter {
         }
     }
 
-    pub fn eval(&mut self, node: &ArkNode, scope: &mut Scope) -> Result<Value, EvalError> {
+    pub fn eval(&mut self, node: &ArkNode, scope: &mut Scope) -> Result<Value, RuntimeError> {
         self.current_depth += 1;
         if self.current_depth > self.recursion_limit {
-            return Err(EvalError::RecursionLimitExceeded);
+            return Err(RuntimeError::RecursionLimitExceeded);
         }
 
         let result = match node {
             ArkNode::Statement(stmt) => self.eval_statement(stmt, scope),
             ArkNode::Expression(expr) => self.eval_expression(expr, scope),
             ArkNode::Function(func_def) => {
-                scope.set(func_def.name.clone(), Value::Function(func_def.clone()));
+                // Interpreter deprecated for functions. VM is used.
+                // We keep this for compatibility if referenced, but it does nothing useful for execution.
+                scope.set(func_def.name.clone(), Value::Unit);
                 Ok(Value::Unit)
             }
             _ => Ok(Value::Unit),
@@ -76,7 +64,7 @@ impl Interpreter {
         }
     }
 
-    fn eval_statement(&mut self, stmt: &Statement, scope: &mut Scope) -> Result<Value, EvalError> {
+    fn eval_statement(&mut self, stmt: &Statement, scope: &mut Scope) -> Result<Value, RuntimeError> {
         match stmt {
             Statement::Let { name, ty: _, value } => {
                 let val = self.eval_expression(value, scope)?;
@@ -88,20 +76,19 @@ impl Interpreter {
                 match result {
                     Value::List(items) => {
                         if items.len() != names.len() {
-                            // Should be runtime error
                             println!(
                                 "Destructuring mismatch: expected {} items, got {}",
                                 names.len(),
                                 items.len()
                             );
-                            return Err(EvalError::NotExecutable);
+                            return Err(RuntimeError::NotExecutable);
                         }
                         for (i, val) in items.into_iter().enumerate() {
                             scope.set(names[i].clone(), val);
                         }
                         Ok(Value::Unit)
                     }
-                    _ => Err(EvalError::TypeMismatch("List".to_string(), result)),
+                    _ => Err(RuntimeError::TypeMismatch("List".to_string(), result)),
                 }
             }
             Statement::Return(expr) => {
@@ -180,28 +167,28 @@ impl Interpreter {
                 let val = self.eval_expression(value, scope)?;
                 let mut obj = scope
                     .take(obj_name)
-                    .ok_or_else(|| EvalError::VariableNotFound(obj_name.clone()))?;
+                    .ok_or_else(|| RuntimeError::VariableNotFound(obj_name.clone()))?;
 
                 match &mut obj {
                     Value::Struct(fields) => {
                         fields.insert(field.clone(), val);
                     }
-                    _ => return Err(EvalError::TypeMismatch("Struct".to_string(), obj)),
+                    _ => return Err(RuntimeError::TypeMismatch("Struct".to_string(), obj)),
                 }
                 scope.set(obj_name.clone(), obj);
                 Ok(Value::Unit)
             }
             Statement::Function(func_def) => {
-                scope.set(func_def.name.clone(), Value::Function(func_def.clone()));
+                scope.set(func_def.name.clone(), Value::Unit);
                 Ok(Value::Unit)
             }
         }
     }
 
-    fn eval_expression(&mut self, expr: &Expression, scope: &mut Scope) -> Result<Value, EvalError> {
+    fn eval_expression(&mut self, expr: &Expression, scope: &mut Scope) -> Result<Value, RuntimeError> {
         self.current_depth += 1;
         if self.current_depth > self.recursion_limit {
-            return Err(EvalError::RecursionLimitExceeded);
+            return Err(RuntimeError::RecursionLimitExceeded);
         }
 
         let result = self.eval_expression_impl(expr, scope);
@@ -210,7 +197,7 @@ impl Interpreter {
         result
     }
 
-    fn eval_expression_impl(&mut self, expr: &Expression, scope: &mut Scope) -> Result<Value, EvalError> {
+    fn eval_expression_impl(&mut self, expr: &Expression, scope: &mut Scope) -> Result<Value, RuntimeError> {
         match expr {
             Expression::StructInit { fields } => {
                 let mut data = std::collections::HashMap::new();
@@ -225,8 +212,8 @@ impl Interpreter {
                 match obj_val {
                     Value::Struct(mut data) => data
                         .remove(field)
-                        .ok_or_else(|| EvalError::VariableNotFound(field.clone())),
-                    _ => Err(EvalError::TypeMismatch("Struct".to_string(), obj_val)),
+                        .ok_or_else(|| RuntimeError::VariableNotFound(field.clone())),
+                    _ => Err(RuntimeError::TypeMismatch("Struct".to_string(), obj_val)),
                 }
             }
             Expression::Literal(s) => {
@@ -242,7 +229,7 @@ impl Interpreter {
             }
             Expression::Variable(name) => scope
                 .get_or_move(name)
-                .ok_or_else(|| EvalError::VariableNotFound(name.clone())),
+                .ok_or_else(|| RuntimeError::VariableNotFound(name.clone())),
             Expression::Call {
                 function_hash,
                 args,
@@ -260,28 +247,13 @@ impl Interpreter {
 
                 // User Function Lookup
                 if let Some(val) = scope.get_or_move(function_hash) {
-                    if let Value::Function(func_def) = val {
-                        // Create new scope with parent
-                        let mut call_scope = Scope::with_parent(scope);
-
-                        // Bind args
-                        if evaluated_args.len() != func_def.inputs.len() {
-                            println!(
-                                "Arity mismatch: expected {}, got {}",
-                                func_def.inputs.len(),
-                                evaluated_args.len()
-                            );
-                            return Err(EvalError::NotExecutable); // Arity mismatch
-                        }
-
-                        for (i, (param_name, _)) in func_def.inputs.iter().enumerate() {
-                            call_scope.set(param_name.clone(), evaluated_args[i].clone());
-                        }
-
-                        // Eval body
-                        // Recursively evaluate the AST node.
-                        // func_def.body.content is ArkNode
-                        return self.eval(&func_def.body.content, &mut call_scope);
+                    if let Value::Function(_) = val {
+                        // Interpreter cannot execute Bytecode Functions directly.
+                        println!(
+                            "Interpreter Warning: Cannot execute bytecode function '{}' in tree-walker.",
+                            function_hash
+                        );
+                        return Err(RuntimeError::NotExecutable);
                     } else {
                         println!(
                             "Found variable '{}' but it is not a function: {:?}",
@@ -292,7 +264,7 @@ impl Interpreter {
                     println!("Function '{}' not found in scope.", function_hash);
                 }
 
-                Err(EvalError::NotExecutable)
+                Err(RuntimeError::NotExecutable)
             }
             Expression::List(items) => {
                 let mut values = Vec::new();
@@ -347,6 +319,6 @@ mod tests {
         }
 
         let result = interpreter.eval_expression(&expr, &mut scope);
-        assert!(matches!(result, Err(EvalError::RecursionLimitExceeded)));
+        assert!(matches!(result, Err(RuntimeError::RecursionLimitExceeded)));
     }
 }

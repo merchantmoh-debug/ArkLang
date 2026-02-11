@@ -1,0 +1,107 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Function": {
+          "name": "factorial",
+          "inputs": [
+            [
+              "n",
+              {
+                "Shared": "Any"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "If": {
+                      "condition": {
+                        "Call": {
+                          "function_hash": "intrinsic_lt",
+                          "args": [
+                            {
+                              "Variable": "n"
+                            },
+                            {
+                              "Literal": "2"
+                            }
+                          ]
+                        }
+                      },
+                      "then_block": [
+                        {
+                          "Return": {
+                            "Literal": "1"
+                          }
+                        }
+                      ],
+                      "else_block": null
+                    }
+                  },
+                  {
+                    "Return": {
+                      "Call": {
+                        "function_hash": "intrinsic_mul",
+                        "args": [
+                          {
+                            "Variable": "n"
+                          },
+                          {
+                            "Call": {
+                              "function_hash": "factorial",
+                              "args": [
+                                {
+                                  "Call": {
+                                    "function_hash": "intrinsic_sub",
+                                    "args": [
+                                      {
+                                        "Variable": "n"
+                                      },
+                                      {
+                                        "Literal": "1"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Call": {
+                  "function_hash": "factorial",
+                  "args": [
+                    {
+                      "Literal": "5"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

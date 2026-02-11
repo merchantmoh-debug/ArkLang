@@ -16,16 +16,16 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
-use ark_0_zheng::eval::Interpreter;
+use ark_0_zheng::compiler::Compiler; // JIT
 use ark_0_zheng::loader::load_ark_program;
-use ark_0_zheng::runtime::Scope;
+use ark_0_zheng::vm::VM; // Bytecode VM
 use std::env;
 use std::fs;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: ark_loader <program.json>");
+        eprintln!("Usage: ark_loader <program.json> [args...]");
         return;
     }
 
@@ -35,33 +35,36 @@ fn main() {
     match load_ark_program(&json_content) {
         Ok(node) => {
             // println!("MAST Loaded Successfully.");
-            let mut scope = Scope::new();
 
-            // Inject sys.args (List of Strings)
             let mut ark_args = Vec::new();
-            for arg in args {
-                ark_args.push(ark_0_zheng::runtime::Value::String(arg));
+            for arg in &args[1..] {
+                ark_args.push(ark_0_zheng::runtime::Value::String(arg.clone()));
             }
-            // We need to set this in a global or intrinsic accessible way.
-            // But intrinsics don't capture scope.
-            // Option 1: Add to Scope as "sys.args" variable.
-            // Option 2: Add to Intrinsic Registry STATE (Registry is stateless).
-            // Option 3: Add to Scope, and users access via variable `sys_args` (not intrinsic).
-            // Python prototype used `sys.argv`.
-            // Let's inject it as a variable "sys_args" in the root scope.
-            // Users can do: `args := sys_args`
 
-            scope.set(
-                "sys_args".to_string(),
-                ark_0_zheng::runtime::Value::List(ark_args),
-            );
+            // 1. JIT Compile
+            let compiler = Compiler::new();
+            let chunk = compiler.compile(&node);
 
-            let mut interpreter = Interpreter::new();
-            match interpreter.eval(&node, &mut scope) {
+            // 2. Setup VM
+            let mut vm = VM::new(chunk);
+
+            // 3. Inject Args into Global Scope (Scope 0)
+            if let Some(scope) = vm.scopes.get_mut(0) {
+                scope.set(
+                    "sys_args".to_string(),
+                    ark_0_zheng::runtime::Value::List(ark_args),
+                );
+            }
+
+            // 4. Run
+            match vm.run() {
                 Ok(_val) => {
                     // println!("Execution Result: {:?}", val);
                 }
-                Err(e) => eprintln!("Execution Error: {:?}", e),
+                Err(e) => {
+                    eprintln!("Runtime Error: {}", e);
+                    std::process::exit(1);
+                }
             }
         }
         Err(e) => eprintln!("Load Error: {:?}", e),

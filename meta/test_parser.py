@@ -14,7 +14,7 @@
 # PATENT NOTICE: Protected by US Patent App #63/935,467.
 # NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
 
-from parser import QiParser
+from ark_parser import QiParser
 import sys
 
 def verify():

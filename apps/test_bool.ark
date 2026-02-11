@@ -1,0 +1,17 @@
+func main() {
+    print("Test AND:")
+    a := 1
+    b := 1
+    print("1 and 1: " + (a and b))
+    print("1 and 0: " + (1 and 0))
+    print("true and true: " + (true and true))
+    print("Test OR:")
+    print("0 or 1: " + (0 or 1))
+
+    print("Test Complex:")
+    c := "s"
+    print("s >= a: " + (c >= "a"))
+    print("s <= z: " + (c <= "z"))
+    print("Range check: " + ((c >= "a") and (c <= "z")))
+}
+main()

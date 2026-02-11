@@ -17,10 +17,12 @@
  */
 
 use crate::ast::FunctionDef;
+use crate::bytecode::Chunk;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Value {
     Integer(i64),
     String(String),
@@ -32,12 +34,34 @@ pub enum Value {
         typename: String,
         payload: String, // Simplified representation
     },
-    Function(FunctionDef), // Closures/First-class funcs (simplified)
+    Function(Rc<Chunk>), // Bytecode Function
+    NativeFunction(NativeFn),
     List(Vec<Value>),
     Buffer(Vec<u8>),
     Struct(HashMap<String, Value>),
     /// Control Flow: Return value wrapper
     Return(Box<Value>),
+}
+
+pub type NativeFn = fn(Vec<Value>) -> Result<Value, RuntimeError>;
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Integer(a), Value::Integer(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Boolean(a), Value::Boolean(b)) => a == b,
+            (Value::Unit, Value::Unit) => true,
+            (Value::LinearObject { id: a, .. }, Value::LinearObject { id: b, .. }) => a == b,
+            (Value::Function(a), Value::Function(b)) => Rc::ptr_eq(a, b),
+            (Value::NativeFunction(a), Value::NativeFunction(b)) => a == b,
+            (Value::List(a), Value::List(b)) => a == b,
+            (Value::Buffer(a), Value::Buffer(b)) => a == b,
+            (Value::Struct(a), Value::Struct(b)) => a == b, // Note: HashMap comparisons can be slow
+            (Value::Return(a), Value::Return(b)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 impl Value {
@@ -47,6 +71,7 @@ impl Value {
             | Value::Boolean(_)
             | Value::Unit
             | Value::Function(_)
+            | Value::NativeFunction(_)
             | Value::String(_) => false,
             Value::List(_)
             | Value::LinearObject { .. }
@@ -124,4 +149,24 @@ impl<'a> Scope<'a> {
     pub fn set(&mut self, name: String, value: Value) {
         self.variables.insert(name, value);
     }
+}
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum RuntimeError {
+    #[error("Variable not found: {0}")]
+    VariableNotFound(String),
+    #[error("Type mismatch: expected {0}, got {1:?}")]
+    TypeMismatch(String, Value),
+    #[error("Not executable")]
+    NotExecutable,
+    #[error("Function not found: {0}")]
+    FunctionNotFound(String),
+    #[error("Stack underflow")]
+    StackUnderflow,
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(String),
+    #[error("System Lockout: Recursion Limit Exceeded (Vertigo Check)")]
+    RecursionLimitExceeded,
 }

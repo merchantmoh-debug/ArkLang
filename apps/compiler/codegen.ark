@@ -107,6 +107,7 @@ func codegen_block(stmts) {
 
 func codegen_func(node) {
     let (name, node) := sys.struct.get(node, "name")
+    print("Codegen Func: " + name)
     let (args, node) := sys.struct.get(node, "args")
     let (body, node) := sys.struct.get(node, "body")
     
@@ -131,13 +132,30 @@ func codegen_program(ast) {
     let (children, ast) := sys.struct.get(ast, "children")
     let (count, children) := sys.len(children)
     
-    if count > 0 {
-        let (child, children) := sys.list.get(children, 0)
+    // We need to collect all functions.
+    // MAST structure: List of Nodes.
+
+    json := "["
+    i := 0
+    first := 1
+
+    while i < count {
+        let (child, children) := sys.list.get(children, i)
         let (kind, child) := sys.struct.get(child, "kind")
+
         if kind == 1 { // FUNC_DEF
-             return codegen_func(child)
+            func_json := codegen_func(child)
+
+            if first == 0 {
+                json := json + ", "
+            }
+            json := json + func_json
+            first := 0
         }
+
+        i := i + 1
     }
     
-    return "{\"Error\": \"EmptyOrInvalidProgram\"}"
+    json := json + "]"
+    return json
 }

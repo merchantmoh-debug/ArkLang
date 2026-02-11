@@ -1,0 +1,339 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Function": {
+          "name": "main",
+          "inputs": [],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "Test AND:"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Let": {
+                      "name": "a",
+                      "ty": null,
+                      "value": {
+                        "Literal": "1"
+                      }
+                    }
+                  },
+                  {
+                    "Let": {
+                      "name": "b",
+                      "ty": null,
+                      "value": {
+                        "Literal": "1"
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Literal": "1 and 1: "
+                                },
+                                {
+                                  "Call": {
+                                    "function_hash": "intrinsic_and",
+                                    "args": [
+                                      {
+                                        "Variable": "a"
+                                      },
+                                      {
+                                        "Variable": "b"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Literal": "1 and 0: "
+                                },
+                                {
+                                  "Call": {
+                                    "function_hash": "intrinsic_and",
+                                    "args": [
+                                      {
+                                        "Literal": "1"
+                                      },
+                                      {
+                                        "Literal": "0"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Literal": "true and true: "
+                                },
+                                {
+                                  "Call": {
+                                    "function_hash": "intrinsic_and",
+                                    "args": [
+                                      {
+                                        "Literal": "true"
+                                      },
+                                      {
+                                        "Literal": "true"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "Test OR:"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Literal": "0 or 1: "
+                                },
+                                {
+                                  "Call": {
+                                    "function_hash": "intrinsic_or",
+                                    "args": [
+                                      {
+                                        "Literal": "0"
+                                      },
+                                      {
+                                        "Literal": "1"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "Test Complex:"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Let": {
+                      "name": "c",
+                      "ty": null,
+                      "value": {
+                        "Literal": "s"
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Literal": "s >= a: "
+                                },
+                                {
+                                  "Call": {
+                                    "function_hash": "intrinsic_ge",
+                                    "args": [
+                                      {
+                                        "Variable": "c"
+                                      },
+                                      {
+                                        "Literal": "a"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Literal": "s <= z: "
+                                },
+                                {
+                                  "Call": {
+                                    "function_hash": "intrinsic_le",
+                                    "args": [
+                                      {
+                                        "Variable": "c"
+                                      },
+                                      {
+                                        "Literal": "z"
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Literal": "Range check: "
+                                },
+                                {
+                                  "Call": {
+                                    "function_hash": "intrinsic_and",
+                                    "args": [
+                                      {
+                                        "Call": {
+                                          "function_hash": "intrinsic_ge",
+                                          "args": [
+                                            {
+                                              "Variable": "c"
+                                            },
+                                            {
+                                              "Literal": "a"
+                                            }
+                                          ]
+                                        }
+                                      },
+                                      {
+                                        "Call": {
+                                          "function_hash": "intrinsic_le",
+                                          "args": [
+                                            {
+                                              "Variable": "c"
+                                            },
+                                            {
+                                              "Literal": "z"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "main",
+            "args": []
+          }
+        }
+      }
+    ]
+  }
+}

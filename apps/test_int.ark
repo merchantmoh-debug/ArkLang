@@ -1,0 +1,11 @@
+func main() {
+    print("Testing Integer Print:")
+    print(1)
+    print("Testing String Print:")
+    print("1")
+    print("Testing Add String+Int:")
+    print("A" + 1)
+    print("Testing Add String+Bool:")
+    print("B" + true)
+}
+main()
