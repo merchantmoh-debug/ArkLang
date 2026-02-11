@@ -66,8 +66,8 @@ impl Compiler {
                 func_compiler.visit(&func_def.body.content);
 
                 // 4. Ensure Return (Optional, if void function falls off)
-                // func_compiler.chunk.write(OpCode::Push(Value::Unit));
-                // func_compiler.chunk.write(OpCode::Ret);
+                func_compiler.chunk.write(OpCode::Push(Value::Unit));
+                func_compiler.chunk.write(OpCode::Ret);
 
                 let compiled_chunk = func_compiler.chunk;
 
@@ -139,6 +139,16 @@ impl Compiler {
                     self.chunk.write(OpCode::Store(name.clone()));
                 }
             }
+            Statement::SetField {
+                obj_name,
+                field,
+                value,
+            } => {
+                self.visit_expr(value);
+                self.chunk.write(OpCode::Load(obj_name.clone()));
+                self.chunk.write(OpCode::SetField(field.clone()));
+                self.chunk.write(OpCode::Store(obj_name.clone()));
+            }
             _ => {
                 // println!("Compiler Warning: Unimplemented statement");
             }
@@ -147,6 +157,23 @@ impl Compiler {
 
     fn visit_expr(&mut self, expr: &Expression) {
         match expr {
+            Expression::List(items) => {
+                for item in items {
+                    self.visit_expr(item);
+                }
+                self.chunk.write(OpCode::MakeList(items.len()));
+            }
+            Expression::StructInit { fields } => {
+                for (name, expr) in fields {
+                    self.visit_expr(expr);
+                    self.chunk.write(OpCode::Push(Value::String(name.clone())));
+                }
+                self.chunk.write(OpCode::MakeStruct(fields.len()));
+            }
+            Expression::GetField { obj, field } => {
+                self.visit_expr(obj);
+                self.chunk.write(OpCode::GetField(field.clone()));
+            }
             Expression::Literal(s) => {
                 if let Ok(i) = s.parse::<i64>() {
                     self.chunk.write(OpCode::Push(Value::Integer(i)));

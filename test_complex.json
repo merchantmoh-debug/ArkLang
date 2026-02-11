@@ -1,0 +1,144 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Literal": "Testing Complex Types..."
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "l",
+          "ty": null,
+          "value": {
+            "List": [
+              {
+                "Literal": "1"
+              },
+              {
+                "Literal": "2"
+              },
+              {
+                "Literal": "3"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Literal": "List created"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "s",
+          "ty": null,
+          "value": {
+            "StructInit": {
+              "fields": [
+                [
+                  "x",
+                  {
+                    "Literal": "10"
+                  }
+                ],
+                [
+                  "y",
+                  {
+                    "Literal": "20"
+                  }
+                ]
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Literal": "Struct created"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "val",
+          "ty": null,
+          "value": {
+            "GetField": {
+              "obj": {
+                "Variable": "s"
+              },
+              "field": "x"
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Literal": "Field x:"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Variable": "val"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "SetField": {
+          "obj_name": "s",
+          "field": "y",
+          "value": {
+            "Literal": "30"
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Literal": "Field y updated"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

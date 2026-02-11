@@ -32,14 +32,36 @@ impl<'a> VM<'a> {
     pub fn run(&mut self) -> Result<Value, String> {
         loop {
             if self.ip >= self.chunk.code.len() {
-                // If main chunk finishes, we return.
-                // But what if we just returned from a function and frames is empty?
-                // OpCode::Ret handles return.
-                // If we fall off end of main, we return Unit.
+                // End of chunk.
+                if !self.frames.is_empty() {
+                    // Implicit Return Unit
+                    // Logic matches OpCode::Ret
+                    let result = self.stack.pop().unwrap_or(Value::Unit);
+
+                    if let Some(frame) = self.frames.pop() {
+                        self.chunk = frame.chunk;
+                        self.ip = frame.ip;
+                        self.scopes.pop();
+                        self.stack.push(result);
+                        continue; // Continue loop in previous frame
+                    }
+                }
                 return Ok(Value::Unit);
             }
 
             let op = &self.chunk.code[self.ip];
+            #[cfg(debug_assertions)]
+            {
+                use std::io::Write;
+                println!(
+                    "IP: {:03} | Op: {:?} | Stack: {} | Frames: {}",
+                    self.ip,
+                    op,
+                    self.stack.len(),
+                    self.frames.len()
+                );
+                std::io::stdout().flush().unwrap();
+            }
             self.ip += 1;
 
             match op {
@@ -103,6 +125,55 @@ impl<'a> VM<'a> {
                         }
                     } else {
                         return Err(format!("Destructure expected List, got {:?}", val));
+                    }
+                }
+
+                OpCode::MakeList(size) => {
+                    let mut items = Vec::new();
+                    for _ in 0..*size {
+                        items.push(self.stack.pop().ok_or("Stack underflow")?);
+                    }
+                    items.reverse();
+                    self.stack.push(Value::List(items));
+                }
+
+                OpCode::MakeStruct(size) => {
+                    let mut fields = std::collections::HashMap::new();
+                    for _ in 0..*size {
+                        let key_val = self.stack.pop().ok_or("Stack underflow")?;
+                        let val = self.stack.pop().ok_or("Stack underflow")?;
+
+                        if let Value::String(key) = key_val {
+                            fields.insert(key, val);
+                        } else {
+                            return Err(format!("Struct key must be string, got {:?}", key_val));
+                        }
+                    }
+                    self.stack.push(Value::Struct(fields));
+                }
+
+                OpCode::GetField(field) => {
+                    let obj = self.stack.pop().ok_or("Stack underflow")?;
+                    if let Value::Struct(mut fields) = obj {
+                        if let Some(val) = fields.remove(field) {
+                            self.stack.push(val);
+                        } else {
+                            return Err(format!("Field '{}' not found in struct", field));
+                        }
+                    } else {
+                        return Err(format!("GetField expected Struct, got {:?}", obj));
+                    }
+                }
+
+                OpCode::SetField(field) => {
+                    let obj = self.stack.pop().ok_or("Stack underflow")?;
+                    let val = self.stack.pop().ok_or("Stack underflow")?;
+
+                    if let Value::Struct(mut fields) = obj {
+                        fields.insert(field.clone(), val);
+                        self.stack.push(Value::Struct(fields));
+                    } else {
+                        return Err(format!("SetField expected Struct, got {:?}", obj));
                     }
                 }
 
@@ -191,8 +262,6 @@ impl<'a> VM<'a> {
                         return Ok(result);
                     }
                 }
-
-                _ => return Err(format!("Unimplemented opcode: {:?}", op)),
             }
         }
     }

@@ -47,8 +47,12 @@ body {
   z-index: 1;
 }
 
-/* Glassmorphism Classes */
-.glass-panel {
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--glass-border);
     background: var(--glass-bg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
@@ -72,6 +76,8 @@ ark-terminal {
 }
 
 h1 {
+    font-size: 18px;
+    font-weight: 600;
     margin: 0;
     text-transform: uppercase;
     letter-spacing: 3px;
@@ -94,4 +100,59 @@ a:hover {
     color: #fff;
     border-bottom-style: solid;
     text-shadow: 0 0 8px var(--accent-cyan);
+}
+
+.system-status {
+    font-size: 12px;
+    display: flex;
+    gap: 12px;
+}
+
+/* Ensure terminal content is visible */
+.terminal-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+    position: relative;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+#terminal-output {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-color); 
+    scroll-behavior: smooth;
+}
+
+.line { margin-bottom: 4px; }
+.dim { color: var(--text-dim); }
+.status-ok { color: var(--text-color); }
+
+.input-area {
+    display: flex;
+    align-items: center;
+    padding: 16px 24px;
+    background: rgba(10, 15, 20, 0.8);
+    border-top: 1px solid var(--glass-border);
+}
+
+.prompt {
+    color: var(--text-color);
+    margin-right: 12px;
+    font-weight: bold;
+}
+
+input#cmd-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    outline: none;
 }

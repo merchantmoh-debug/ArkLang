@@ -54,6 +54,7 @@ impl IntrinsicRegistry {
             "intrinsic_math_pow" | "math.pow" => Some(intrinsic_math_pow),
             "intrinsic_math_sqrt" | "math.sqrt" => Some(intrinsic_math_sqrt),
             "intrinsic_io_cls" | "io.cls" => Some(intrinsic_io_cls),
+            "intrinsic_list_set" | "sys.list.set" => Some(intrinsic_list_set),
             _ => None,
         }
     }
@@ -173,6 +174,10 @@ impl IntrinsicRegistry {
             "io.cls".to_string(),
             Value::NativeFunction(intrinsic_io_cls),
         );
+        scope.set(
+            "sys.list.set".to_string(),
+            Value::NativeFunction(intrinsic_list_set),
+        );
     }
 }
 
@@ -193,7 +198,9 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     #[cfg(target_arch = "wasm32")]
     {
-        return Ok(Value::String("[Ark:AI] Unavailable in Browser Runtime (OIS: Low)".to_string()));
+        return Ok(Value::String(
+            "[Ark:AI] Unavailable in Browser Runtime (OIS: Low)".to_string(),
+        ));
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -247,7 +254,8 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
         // Fallback Mock
         println!("[Ark:AI] WARNING: API Failed. Using Fallback Mock.");
         let start = "```python\n";
-        let code = "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
+        let code =
+            "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
         let end = "```";
         Ok(Value::String(format!("{}{}{}", start, code, end)))
     }
@@ -940,10 +948,34 @@ pub fn intrinsic_struct_get(args: Vec<Value>) -> Result<Value, RuntimeError> {
                 Err(RuntimeError::VariableNotFound(field))
             }
         }
-        _ => Err(RuntimeError::TypeMismatch(
-            "Struct".to_string(),
-            struct_val,
-        )),
+        _ => Err(RuntimeError::TypeMismatch("Struct".to_string(), struct_val)),
+    }
+}
+
+pub fn intrinsic_list_set(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    // args: [list, index, value]
+    let mut args = args;
+    let val = args.pop().unwrap();
+    let idx_val = args.pop().unwrap();
+    let list_val = args.pop().unwrap();
+
+    let index = match idx_val {
+        Value::Integer(n) => n,
+        _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), idx_val)),
+    };
+
+    match list_val {
+        Value::List(mut list) => {
+            if index < 0 || index >= list.len() as i64 {
+                return Err(RuntimeError::NotExecutable);
+            }
+            list[index as usize] = val;
+            Ok(Value::List(list))
+        }
+        _ => Err(RuntimeError::TypeMismatch("List".to_string(), list_val)),
     }
 }
 
@@ -973,10 +1005,7 @@ pub fn intrinsic_struct_set(args: Vec<Value>) -> Result<Value, RuntimeError> {
             data.insert(field, new_val);
             Ok(Value::Struct(data))
         }
-        _ => Err(RuntimeError::TypeMismatch(
-            "Struct".to_string(),
-            struct_val,
-        )),
+        _ => Err(RuntimeError::TypeMismatch("Struct".to_string(), struct_val)),
     }
 }
 
@@ -1011,7 +1040,9 @@ pub fn intrinsic_math_sqrt(args: Vec<Value>) -> Result<Value, RuntimeError> {
     match &args[0] {
         Value::Integer(n) => {
             if *n < 0 {
-                 return Err(RuntimeError::InvalidOperation("Square root of negative number".to_string()));
+                return Err(RuntimeError::InvalidOperation(
+                    "Square root of negative number".to_string(),
+                ));
             }
             let res = (*n as f64).sqrt();
             Ok(Value::Integer(res as i64))

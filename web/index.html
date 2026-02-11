@@ -3,245 +3,70 @@
   <head>
     <meta charset="UTF-8" />
     <title>Ark-0 Sovereign Console</title>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;600&family=Inter:wght@200;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Inter:wght@200;400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../site/css/style.css">
     <style>
-      :root {
-        --bg-color: #050505;
-        --glass-bg: rgba(20, 20, 20, 0.8);
-        --glass-border: rgba(255, 255, 255, 0.05);
-        --accent: #00ff9d;
-        --secondary: #38bdf8;
-        --text: #e2e8f0;
-        --text-dim: #94a3b8;
-        --font-mono: "Fira Code", monospace;
-        --font-ui: "Inter", sans-serif;
-      }
-
-      body {
-        margin: 0;
-        padding: 0;
-        background-color: var(--bg-color);
-        background-image: radial-gradient(circle at 50% 50%, #111 0%, #000 100%);
-        color: var(--text);
-        font-family: var(--font-ui);
-        height: 100vh;
-        width: 100vw;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-      }
-
-      /* TOP BAR */
-      header {
-        height: 50px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 1.5rem;
-        border-bottom: 1px solid var(--glass-border);
-        background: rgba(0,0,0,0.5);
-        backdrop-filter: blur(5px);
-      }
-
-      .brand {
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--text);
-        font-size: 0.9rem;
-      }
-      .brand span { color: var(--accent); }
-
-      .system-status {
-        display: flex;
-        gap: 1.5rem;
-        font-family: var(--font-mono);
-        font-size: 0.75rem;
-        color: var(--text-dim);
-      }
-      .status-item span { color: var(--accent); }
-
-      /* MAIN LAYOUT */
-      main {
-        flex: 1;
-        display: flex;
-        padding: 1rem;
-        gap: 1rem;
-      }
-
-      .pane {
-        flex: 1;
-        background: var(--glass-bg);
-        border: 1px solid var(--glass-border);
-        border-radius: 8px;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        position: relative;
-      }
-
-      .pane-header {
-        padding: 0.75rem 1rem;
-        border-bottom: 1px solid var(--glass-border);
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-dim);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: rgba(255, 255, 255, 0.02);
-      }
-
-      .pane-content {
-        flex: 1;
-        position: relative;
-        overflow: hidden;
-      }
-
-      /* EDITOR */
-      textarea#input {
-        width: 100%;
-        height: 100%;
-        background: transparent;
-        border: none;
-        color: var(--text);
-        font-family: var(--font-mono);
-        font-size: 0.9rem;
-        padding: 1rem;
-        resize: none;
-        outline: none;
-        line-height: 1.6;
-        box-sizing: border-box;
-      }
-
-      /* OUTPUT */
-      #output {
-        width: 100%;
-        height: 100%;
-        padding: 1rem;
-        font-family: var(--font-mono);
-        font-size: 0.9rem;
-        white-space: pre-wrap;
-        overflow-y: auto;
-        color: var(--secondary);
-        box-sizing: border-box;
-      }
-
-      /* ACTION BAR (Bottom) */
-      footer {
-        height: 50px;
-        border-top: 1px solid var(--glass-border);
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        padding: 0 1.5rem;
-        background: rgba(0,0,0,0.5);
-      }
-
-      .btn {
-        background: transparent;
-        border: 1px solid var(--accent);
-        color: var(--accent);
-        padding: 0.5rem 2rem;
-        border-radius: 4px;
-        cursor: pointer;
-        font-family: var(--font-mono);
-        text-transform: uppercase;
-        font-size: 0.8rem;
-        transition: all 0.2s;
-      }
-      .btn:hover {
-        background: var(--accent);
-        color: #000;
-        box-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
-      }
-
-      /* UTILS */
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #333;
-        display: inline-block;
-        margin-right: 6px;
-      }
-      .status-dot.active {
-        background: var(--accent);
-        box-shadow: 0 0 8px var(--accent);
-      }
-      .status-dot.error {
-        background: #ef4444;
-        box-shadow: 0 0 8px #ef4444;
-      }
-
-      /* SCROLLBAR */
-      ::-webkit-scrollbar { width: 6px; height: 6px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+       /* Inline Overrides for Web-Specific Layout if needed, 
+          but primarily relying on the new style.css */
+       body {
+           background-image: radial-gradient(circle at 50% 50%, #0d1117 0%, #000 100%);
+       }
     </style>
   </head>
   <body>
-    <header>
-      <div class="brand">ARK <span>//</span> OMEGA-POINT v112.0</div>
-      <div class="system-status">
-        <div class="status-item">HEART: <span>SOUND</span></div>
-        <div class="status-item">OIS: <span>100/100</span></div>
-        <div class="status-item">MODE: <span>TURTLE</span></div>
-        <div class="status-item"><div class="status-dot" id="wasm-status"></div>RUNTIME</div>
-      </div>
-    </header>
+    <div id="app">
+        <header>
+          <h1>ARK <span>//</span> OMEGA-POINT v112.0</h1>
+          <div class="system-status">
+            <span class="status-ok">HEART: SOUND</span>
+            <span class="dim">|</span>
+            <span class="status-ok">OIS: 100/100</span>
+            <span class="dim">|</span>
+            <span class="accent-color">MODE: TURTLE</span>
+          </div>
+        </header>
 
-    <main>
-      <div class="pane">
-        <div class="pane-header">Source Input (JSON MAST)</div>
-        <div class="pane-content">
-          <textarea id="input" spellcheck="false">{
-  "Statement": {
-    "Block": [
-      {
-        "Let": {
-          "name": "x",
-          "ty": null,
-          "value": { "Literal": "100" }
-        }
-      },
-      {
-        "Let": {
-          "name": "y",
-          "ty": null,
-          "value": { "Literal": "50" }
-        }
-      },
-      {
-        "Expression": {
-          "Call": {
-            "function_hash": "intrinsic_add",
-            "args": [
-              { "Variable": "x" },
-              { "Variable": "y" }
-            ]
-          }
-        }
-      }
-    ]
-  }
-}</textarea>
+        <div class="terminal-container">
+            <div id="terminal-output">
+                <div class="line dim">Initialized Ark Omega-Point Runtime...</div>
+                <div class="line">Ready for Sovereign Execution.</div>
+                <br>
+            </div>
         </div>
-      </div>
 
-      <div class="pane">
-        <div class="pane-header">Sovereign Runtime Output</div>
-        <div class="pane-content">
-          <div id="output">Initializing Neural Link...</div>
+        <div class="input-area">
+            <span class="prompt">➜</span>
+            <input type="text" id="cmd-input" placeholder="Enter command..." autofocus>
         </div>
-      </div>
-    </main>
-
-    <footer>
-      <button class="btn" onclick="runArk()">EXECUTE [CTRL+ENTER]</button>
-    </footer>
-
+    </div>
+    
     <script src="main.js"></script>
+    <script>
+        // Minimal JS to handle input for now
+        const input = document.getElementById('cmd-input');
+        const output = document.getElementById('terminal-output');
+
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const cmd = input.value;
+                if (cmd.trim()) {
+                    const line = document.createElement('div');
+                    line.className = 'line';
+                    line.innerHTML = `<span class="prompt">➜</span> ${cmd}`;
+                    output.appendChild(line);
+                    
+                    // Echo response (Simulation for now)
+                    const resp = document.createElement('div');
+                    resp.className = 'line';
+                    resp.style.color = '#ccc';
+                    resp.textContent = `[System]: Command '${cmd}' received. Processing...`;
+                    output.appendChild(resp);
+
+                    input.value = '';
+                    output.scrollTop = output.scrollHeight;
+                }
+            }
+        });
+    </script>
   </body>
 </html>

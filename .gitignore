@@ -9,3 +9,4 @@ __pycache__/
 *.swo
 .memory_key
 *.enc
+*.log

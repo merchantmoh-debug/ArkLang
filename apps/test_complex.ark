@@ -1,0 +1,14 @@
+print("Testing Complex Types...")
+
+l := [1, 2, 3]
+print("List created")
+
+s := { x: 10, y: 20 }
+print("Struct created")
+
+val := s.x
+print("Field x:")
+print(val)
+
+s.y := 30
+print("Field y updated")
