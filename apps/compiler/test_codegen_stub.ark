@@ -1,0 +1,65 @@
+
+// --- Codegen Test Runner ---
+
+// Mock AST Constants
+NODE_FUNC_DEF := 1
+NODE_RETURN := 5
+NODE_EXPR_BINARY := 8
+NODE_EXPR_VAR := 12
+NODE_LITERAL_INT := 10
+
+// Import codegen (Inlined for now, or we rely on compile.py to include it?)
+// Since we don't have `import`, I will paste `codegen.ark` content here or 
+// rely on `compile.py` to link multiple files?
+// `compile.py` supports single file compilation. 
+// So I must INLINE the Codegen logic or append it.
+// I will APPEND it in the tool call for simplicity or assume I can cat them.
+// For this file, I will just call the functions and expect them to be present 
+// if I compile `codegen.ark` + `test_codegen.ark` together?
+// No, `compile.py` takes one file. 
+// I will INLINE the codegen logic into this test file for verification 
+// (or use `sys.fs.read` + `eval` if we were advanced enough, but we aren't).
+// So I will make this file STANDALONE by copy-pasting the Codegen logic 
+// (or simplified version) or better:
+// I will create `test_codegen_combined.ark` which is `codegen.ark` + test logic.
+
+// ... (Codegen Logic will be appended by the tool) ...
+
+func run_test() {
+    print("Testing Codegen...")
+    
+    // Construct AST: func add(a, b) { return a + b }
+    
+    // Body: Return(Add(Var(a), Var(b)))
+    var_a := { kind: 12, name: "a" }
+    var_b := { kind: 12, name: "b" }
+    
+    expr_add := { kind: 8, op: "add", left: var_a, right: var_b }
+    
+    stmt_ret := { kind: 5, value: expr_add }
+    
+    body_stmts := [stmt_ret] // List of statements
+    
+    // Func Def
+    func_node := { 
+        kind: 1, 
+        name: "add", 
+        args: ["a", "b"], 
+        body: body_stmts // codegen expects `body` to be the list of stmts
+    }
+    
+    // Program Wrapper
+    program_node := {
+        kind: 0,
+        children: [func_node]
+    }
+    
+    // Generate
+    json := codegen_program(program_node)
+    
+    print("Generated JSON:")
+    print(json)
+}
+
+// Entry
+// run_test() // Will be called at end

@@ -1,0 +1,61 @@
+
+// --- The Driver (Main Entry Point) ---
+
+func main() {
+    // 1. Read Args
+    // sys_args is injected by loader. typ: List<String>
+    // sys_args[0] = binary path
+    // sys_args[1] = compiler.json
+    // sys_args[2] = input source path
+    // sys_args[3] = output json path
+    
+    let (arg_count, list) := sys.len(sys_args)
+    if arg_count < 4 {
+        print("Usage: compiler.ark <input.ark> <output.json>")
+        return 0
+    }
+    
+    // Debug Args
+    print("Arg Count: " + int_to_str(arg_count))
+    
+    // Get Input Path (For Read - Fresh Copy)
+    let (input_path, _) := sys.list.get(sys_args, 2)
+    let (output_path, _) := sys.list.get(sys_args, 3)
+    
+    // Print using dedicated copy
+    let (input_path_print, _) := sys.list.get(sys_args, 2)
+    print("Compiling: " + input_path_print)
+    
+    // 2. Read Source (Using input_path)
+    source := sys.fs.read(input_path)
+    print("Source Loaded.")
+
+    // 3. Lexer
+    // tokens := lexer_tokenize(source)
+    print("Starting Lexer...")
+    tokens := lexer_tokenize(source)
+    print("Lexer Finished.")
+    
+    // 4. Parser
+    // ast := parse_program(tokens)
+    print("Starting Parser...")
+    ast := parse_program(tokens)
+    print("Parser Finished.")
+    
+    // 5. Codegen
+    // mast_json := codegen_program(ast)
+    print("Starting Codegen...")
+    mast_json := codegen_program(ast)
+    print("Codegen Finished.")
+    
+    // 6. Write Output
+    print("Writing Output to: '" + output_path + "'")
+    sys.fs.write(output_path, mast_json)
+    
+    print("Compilation Complete. Output written to: " + output_path)
+    
+    return 0
+}
+
+// Invoke Main
+main()

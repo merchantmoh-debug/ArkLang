@@ -1,0 +1,324 @@
+// --- Ark Parser Runner (Verification) ---
+
+// Imports (Inlined for now until we have `import`)
+// Copy-paste Lexer + Parser.ark content here for testing
+
+// --- LEXER (Minified) ---
+TOKEN_EOF := 0
+TOKEN_IDENTIFIER := 1
+TOKEN_NUMBER := 2
+TOKEN_STRING := 3
+// ... (Add required token constants)
+
+func lexer_tokenize(source) {
+    // Manual token sequence for: x := 1 + 2 * 3
+    // x
+    // :=
+    // 1
+    // +
+    // 2
+    // *
+    // 3
+    // EOF
+    
+    // TOKEN_IDENTIFIER := 1
+    // TOKEN_NUMBER := 2
+    // TOKEN_PLUS := 5
+    // TOKEN_STAR := 7
+    // TOKEN_ASSIGN := 16
+    
+    return [
+        { type: 1, value: "x", line: 1, col: 1 },
+        { type: 16, value: ":=", line: 1, col: 3 },
+        { type: 2, value: "1", line: 1, col: 6 },
+        { type: 5, value: "+", line: 1, col: 8 },
+        { type: 2, value: "2", line: 1, col: 10 },
+        { type: 7, value: "*", line: 1, col: 12 },
+        { type: 2, value: "3", line: 1, col: 14 },
+        { type: 0, value: "", line: 1, col: 15 }
+    ]
+}
+
+// ... parser included via compile.py concatenation ...
+
+// --- TEST VERIFICATION ---
+// ... (in update check below)
+
+// --- PARSER (Inlined from parser.ark) ---
+
+// CONSTANTS (Repeated for safety)
+// ...
+
+func parser_new(tokens) {
+    return {
+        tokens: tokens,
+        pos: 0
+    }
+}
+
+func parser_peek(parser) {
+    let (tokens, parser) := sys.struct.get(parser, "tokens")
+    let (pos, parser) := sys.struct.get(parser, "pos")
+    let (len, tokens) := sys.len(tokens)
+    
+    if pos >= len {
+        return [{ type: 0, value: "", line: 0, col: 0 }, parser]
+    }
+    
+    let (tok, _) := sys.list.get(tokens, pos) 
+    return [tok, parser]
+}
+
+func parser_advance(parser) {
+    let (pos, parser) := sys.struct.get(parser, "pos")
+    new_pos := pos + 1
+    parser := sys.struct.set(parser, "pos", new_pos)
+    return parser
+}
+
+func parse_primary(parser) {
+    let (tok, p_peek) := parser_peek(parser)
+    let (ttype, tok) := sys.struct.get(tok, "type")
+    
+    // TOKEN_NUMBER := 2
+    if ttype == 2 {
+        let (val, tok) := sys.struct.get(tok, "value")
+        p_adv := parser_advance(p_peek)
+        node := { kind: 10, value: val } // NODE_EXPR_LITERAL_INT
+        return [node, p_adv]
+    }
+    
+    // TOKEN_IDENTIFIER := 1
+    if ttype == 1 {
+        let (val, tok) := sys.struct.get(tok, "value")
+        p_adv := parser_advance(p_peek)
+        node := { kind: 12, name: val } // NODE_EXPR_VAR
+        return [node, p_adv]
+    }
+    
+    // Fallback error
+    p_adv := parser_advance(p_peek)
+    return [{kind: 99, value: "unexpected_primary"}, p_adv]
+}
+
+func parse_factor(parser) {
+    // Left side: parse_primary
+    let (lhs, p_curr) := parse_primary(parser)
+    
+    ref_parser := [p_curr]
+    ref_lhs := [lhs]
+    
+    running := true
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_peek) := parser_peek(p)
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        
+        // TOKEN_STAR := 7, TOKEN_SLASH := 8
+        is_op := false
+        if ttype == 7 { is_op := true }
+        if ttype == 8 { is_op := true }
+        
+        if is_op {
+            p_after_op := parser_advance(p_peek)
+            let (rhs, p_after_rhs) := parse_primary(p_after_op)
+            let (prev_lhs, _) := sys.list.get(ref_lhs, 0)
+            
+            op_name := "mul"
+            if ttype == 8 { op_name := "div" }
+            
+            node := {
+                kind: 8, // NODE_EXPR_BINARY
+                left: prev_lhs,
+                right: rhs,
+                op: op_name
+            }
+            
+            ref_lhs := [node]
+            ref_parser := [p_after_rhs]
+        } else {
+            running := false
+            ref_parser := [p_peek] 
+        }
+    }
+    
+    let (final_lhs, _) := sys.list.get(ref_lhs, 0)
+    let (final_parser, _) := sys.list.get(ref_parser, 0)
+    
+    return [final_lhs, final_parser]
+}
+
+func parse_term(parser) {
+    // Left side: parse_factor
+    let (lhs, p_curr) := parse_factor(parser)
+    
+    ref_parser := [p_curr]
+    ref_lhs := [lhs]
+    
+    running := true
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_peek) := parser_peek(p)
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        
+        // TOKEN_PLUS := 5, TOKEN_MINUS := 6
+        is_op := false
+        if ttype == 5 { is_op := true }
+        if ttype == 6 { is_op := true }
+        
+        if is_op {
+            p_after_op := parser_advance(p_peek)
+            let (rhs, p_after_rhs) := parse_factor(p_after_op)
+            let (prev_lhs, _) := sys.list.get(ref_lhs, 0)
+            
+            op_name := "add"
+            if ttype == 6 { op_name := "sub" }
+            
+            node := {
+                kind: 8, // NODE_EXPR_BINARY
+                left: prev_lhs,
+                right: rhs,
+                op: op_name
+            }
+            
+            ref_lhs := [node]
+            ref_parser := [p_after_rhs]
+        } else {
+            running := false
+            ref_parser := [p_peek] 
+        }
+    }
+    
+    let (final_lhs, _) := sys.list.get(ref_lhs, 0)
+    let (final_parser, _) := sys.list.get(ref_parser, 0)
+    
+    return [final_lhs, final_parser]
+}
+
+func parse_expr(parser) {
+    return parse_term(parser)
+}
+
+func parse_stmt(parser) {
+    let (tok, p_stmt_peek) := parser_peek(parser)
+    let (ttype, tok) := sys.struct.get(tok, "type")
+    
+    if ttype == 1 { // IDENTIFIER
+        p_after_id := parser_advance(p_stmt_peek)
+        let (tok2, p_stmt_peek2) := parser_peek(p_after_id)
+        let (ttype2, tok2) := sys.struct.get(tok2, "type")
+        
+        if ttype2 == 16 { // ASSIGN
+             p_after_assign := parser_advance(p_stmt_peek2)
+             
+             let (expr_node, p_after_expr) := parse_expr(p_after_assign)
+             
+             let (id_name, tok) := sys.struct.get(tok, "value")
+             
+             node := {
+                kind: 101, // NODE_ASSIGN
+                name: id_name,
+                value: expr_node
+             }
+             
+             return [node, p_after_expr]
+        } else {
+             p_adv := parser_advance(p_stmt_peek2)
+             return [{kind: 99, value: "expected_assign"}, p_adv]
+        }
+    }
+    
+    p_adv := parser_advance(p_stmt_peek)
+    return [{kind: 99, value: "skipped"}, p_adv]
+}
+
+func parse_program(tokens) {
+    parser := parser_new(tokens)
+    ref_parser := [parser]
+    children := []
+    
+    running := true
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_prog_peek) := parser_peek(p)
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        
+        if ttype == 0 { // EOF
+            running := false
+            ref_parser := [p_prog_peek]
+        } else {
+            let (node, p_next) := parse_stmt(p_prog_peek)
+            children := sys.list.append(children, node)
+            ref_parser := [p_next]
+        }
+    }
+    
+    return {
+        kind: 0, // NODE_PROGRAM
+        children: children
+    }
+}
+
+// --- TEST ---
+// --- TEST ---
+print("STARTING TEST (Top Level)")
+print("Calling Lexer...")
+tokens := lexer_tokenize("x := 123")
+print("Lexer Done.")
+
+let (count, tokens) := sys.len(tokens)
+print("Tokens Count:", count)
+
+print("Parsing...")
+ast := parse_program(tokens)
+print("Parsing Done.")
+
+// Inspect AST
+let (kind, ast) := sys.struct.get(ast, "kind")
+print("AST Kind:", kind) // Should be NODE_PROGRAM (0)
+
+let (children, ast) := sys.struct.get(ast, "children")
+let (count_c, children) := sys.len(children)
+print("Children Count:", count_c)
+
+if count_c > 0 {
+    let (child, children) := sys.list.get(children, 0)
+    // Child 0 is Assign(x, Expr)
+    
+    let (ckind, child) := sys.struct.get(child, "kind")
+    print("First Child Kind:", ckind) // 101 (Assign)
+    
+    let (val_node, child) := sys.struct.get(child, "value")
+    
+    // Check Value Node (Should be Binary Add)
+    let (vkind, val_node) := sys.struct.get(val_node, "kind")
+    print("Value Node Kind:", vkind) // 8 (NODE_EXPR_BINARY)
+    
+    let (op, val_node) := sys.struct.get(val_node, "op")
+    print("Top Op:", op) // "add"
+    
+    // Check Left (Literal 1)
+    let (left, val_node) := sys.struct.get(val_node, "left")
+    let (lkind, left) := sys.struct.get(left, "kind")
+    let (lval, left) := sys.struct.get(left, "value")
+    print("Left Kind:", lkind) // 10 (Literal Int)
+    print("Left Val:", lval)   // "1"
+    
+    // Check Right (Binary Mul)
+    let (right, val_node) := sys.struct.get(val_node, "right")
+    let (rkind, right) := sys.struct.get(right, "kind")
+    print("Right Kind:", rkind) // 8 (NODE_EXPR_BINARY)
+    
+    let (rop, right) := sys.struct.get(right, "op")
+    print("Right Op:", rop) // "mul"
+    
+    // Check Right-Left (Literal 2)
+    let (rl, right) := sys.struct.get(right, "left")
+    let (rlval, rl) := sys.struct.get(rl, "value")
+    print("Right-Left Val:", rlval) // "2"
+    
+    // Check Right-Right (Literal 3)
+    let (rr, right) := sys.struct.get(right, "right")
+    let (rrval, rr) := sys.struct.get(rr, "value")
+    print("Right-Right Val:", rrval) // "3"
+}

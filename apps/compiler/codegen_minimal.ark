@@ -1,0 +1,27 @@
+
+// --- Helper Functions Only ---
+
+func int_to_str(n) {
+    if n == 0 { return "0" }
+    s := ""
+    while n > 0 {
+        digit := n - ((n / 10) * 10)
+        c := "0"
+        if digit == 1 { c := "1" }
+        if digit == 2 { c := "2" }
+        if digit == 3 { c := "3" }
+        if digit == 4 { c := "4" }
+        if digit == 5 { c := "5" }
+        if digit == 6 { c := "6" }
+        if digit == 7 { c := "7" }
+        if digit == 8 { c := "8" }
+        if digit == 9 { c := "9" }
+        s := c + s
+        n := n / 10
+    }
+    return s
+}
+
+func json_quote(s) {
+    return "\"" + s + "\""
+}

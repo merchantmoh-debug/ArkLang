@@ -45,6 +45,11 @@ impl LinearChecker {
         }
     }
 
+    pub fn check(node: &ArkNode) -> Result<(), LinearError> {
+        let mut checker = LinearChecker::new();
+        checker.traverse_node(node)
+    }
+
     pub fn check_function(&mut self, func: &FunctionDef) -> Result<(), LinearError> {
         // 1. Register input arguments
         for (name, ty) in &func.inputs {
@@ -86,6 +91,16 @@ impl LinearChecker {
                 }
                 Ok(())
             }
+            Statement::LetDestructure { names: _, value } => {
+                self.traverse_node(&ArkNode::Expression(value.clone()))?;
+                // Todo: Register destructuring bindings as linear if applicable
+                Ok(())
+            }
+            Statement::SetField {
+                obj_name: _,
+                field: _,
+                value,
+            } => self.traverse_node(&ArkNode::Expression(value.clone())),
             Statement::Return(expr) => self.traverse_node(&ArkNode::Expression(expr.clone())),
             Statement::Block(stmts) => {
                 for s in stmts {
