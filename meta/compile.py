@@ -62,6 +62,8 @@ class ArkCompiler:
             return self._compile_assign_var(stmt)
         elif kind == "assign_destructure":
             return self._compile_assign_destructure(stmt)
+        elif kind == "assign_attr":
+            return self._compile_assign_attr(stmt)
         elif kind == "if":
             return self._compile_if(stmt)
         elif kind == "function_def":
@@ -104,6 +106,34 @@ class ArkCompiler:
         return {
             "LetDestructure": {
                 "names": targets,
+                "value": self.compile_expr(value_node)
+            }
+        }
+
+    def _compile_assign_attr(self, stmt):
+        # assign_attr: atom "." IDENTIFIER ":=" expression
+        # children: [atom_dict, IDENTIFIER_token, expr_dict]
+        atom = stmt.children[0]
+        field_token = stmt.children[1]
+        value_node = stmt.children[2]
+
+        obj_name = ""
+        if isinstance(atom, dict) and atom.get("type") == "var":
+            obj_name = atom["name"]
+        elif hasattr(atom, 'data') and atom.data == "var":
+             obj_name = atom.children[0].value
+        else:
+             # Fallback: maybe atom is a Token(NAME)?
+             if hasattr(atom, 'type') and atom.type == "NAME":
+                 obj_name = atom.value
+             else:
+                 print(f"Error: Field assignment only supported on simple variables. Got {atom}")
+                 return None
+
+        return {
+            "SetField": {
+                "obj_name": obj_name,
+                "field": field_token.value,
                 "value": self.compile_expr(value_node)
             }
         }

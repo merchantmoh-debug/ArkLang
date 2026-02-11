@@ -42,6 +42,12 @@ pub enum OpCode {
     // System
     Print,
     Destructure,
+
+    // Types
+    MakeList(usize),
+    MakeStruct(usize),
+    GetField(String),
+    SetField(String),
 }
 
 #[derive(Debug, Clone)]

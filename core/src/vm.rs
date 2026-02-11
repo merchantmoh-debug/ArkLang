@@ -106,6 +106,55 @@ impl<'a> VM<'a> {
                     }
                 }
 
+                OpCode::MakeList(size) => {
+                    let mut items = Vec::new();
+                    for _ in 0..*size {
+                        items.push(self.stack.pop().ok_or("Stack underflow")?);
+                    }
+                    items.reverse();
+                    self.stack.push(Value::List(items));
+                }
+
+                OpCode::MakeStruct(size) => {
+                    let mut fields = std::collections::HashMap::new();
+                    for _ in 0..*size {
+                        let key_val = self.stack.pop().ok_or("Stack underflow")?;
+                        let val = self.stack.pop().ok_or("Stack underflow")?;
+
+                        if let Value::String(key) = key_val {
+                            fields.insert(key, val);
+                        } else {
+                            return Err(format!("Struct key must be string, got {:?}", key_val));
+                        }
+                    }
+                    self.stack.push(Value::Struct(fields));
+                }
+
+                OpCode::GetField(field) => {
+                    let obj = self.stack.pop().ok_or("Stack underflow")?;
+                    if let Value::Struct(mut fields) = obj {
+                        if let Some(val) = fields.remove(field) {
+                            self.stack.push(val);
+                        } else {
+                            return Err(format!("Field '{}' not found in struct", field));
+                        }
+                    } else {
+                        return Err(format!("GetField expected Struct, got {:?}", obj));
+                    }
+                }
+
+                OpCode::SetField(field) => {
+                    let obj = self.stack.pop().ok_or("Stack underflow")?;
+                    let val = self.stack.pop().ok_or("Stack underflow")?;
+
+                    if let Value::Struct(mut fields) = obj {
+                        fields.insert(field.clone(), val);
+                        self.stack.push(Value::Struct(fields));
+                    } else {
+                        return Err(format!("SetField expected Struct, got {:?}", obj));
+                    }
+                }
+
                 OpCode::Load(name) => {
                     let val = self
                         .find_var(name)
