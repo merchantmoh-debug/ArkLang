@@ -11,6 +11,7 @@ import threading
 from lark import Lark
 import hashlib
 import ctypes
+import html
 
 # --- Types ---
 
@@ -369,9 +370,14 @@ def sys_or(args: List[ArkValue]):
     right = is_truthy(args[1])
     return ArkValue(left or right, "Boolean")
 
+def sys_html_escape(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.html_escape expects a string")
+    return ArkValue(html.escape(args[0].val), "String")
 
 INTRINSICS = {
     "print": core_print,
+    "sys.html_escape": sys_html_escape,
     "len": core_len,
     "get": core_get,
     "sys.exec": sys_exec,

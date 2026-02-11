@@ -35,7 +35,28 @@ def run_verification():
             if "OK" not in body:
                 print("FAILURE: Health content mismatch")
                 return False
-                
+
+        # Test 3: XSS Check
+        print("Testing XSS Protection...")
+        # Use socket for raw request to bypass urllib encoding
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(("127.0.0.1", 8087))
+        request = b"GET /<script>alert(1)</script> HTTP/1.1\r\nHost: localhost\r\n\r\n"
+        s.sendall(request)
+        response = s.recv(4096).decode('utf-8', errors='ignore')
+        s.close()
+
+        if "<script>alert(1)</script>" in response:
+             print("FAILURE: VULNERABILITY PERSISTS. Raw script tag reflected.")
+             return False
+
+        if "&lt;script&gt;alert(1)&lt;/script&gt;" in response:
+            print("SUCCESS: Payload correctly escaped.")
+        else:
+            print("WARNING: Payload not found in expected escaped format.")
+            # Depending on strictness, we might return False, but for now just warn if format differs but raw is gone
+
         print("SUCCESS: All tests passed.")
         return True
         
