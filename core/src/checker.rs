@@ -83,6 +83,11 @@ impl LinearChecker {
             Statement::Let { name, ty, value } => {
                 self.traverse_node(&ArkNode::Expression(value.clone()))?;
 
+                // Check for shadowing of active linear variable
+                if self.active_linears.contains(name) {
+                    return Err(LinearError::UnusedResource(name.clone()));
+                }
+
                 if let Some(t) = ty {
                     if t.is_linear() {
                         self.active_linears.insert(name.clone());
@@ -321,5 +326,104 @@ mod tests {
         let mut checker = LinearChecker::new();
         let result = checker.check_function(&func);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_linear_let_shadowing_leak() {
+        let func = FunctionDef {
+            name: "shadow_leak".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                    Statement::Let {
+                        name: "x".to_string(),
+                        ty: Some(ArkType::Linear("Resource".to_string())),
+                        value: Expression::Literal("dummy1".to_string()),
+                    },
+                    // Shadowing 'x' without consuming the first one
+                    Statement::Let {
+                        name: "x".to_string(),
+                        ty: Some(ArkType::Linear("Resource".to_string())),
+                        value: Expression::Literal("dummy2".to_string()),
+                    },
+                    Statement::Return(Expression::Variable("x".to_string())),
+                ])))
+                .unwrap(),
+            ),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        // Desired: Error. Current: Likely Ok.
+        match result {
+            Err(LinearError::UnusedResource(name)) => assert_eq!(name, "x"),
+            Err(e) => panic!("Expected UnusedResource error, got {:?}", e),
+            Ok(_) => panic!("Checker failed to catch linear variable shadowing leak!"),
+        }
+    }
+
+    #[test]
+    #[ignore] // TODO: Enable when type inference is implemented for linear moves
+    fn test_linear_let_untyped_move() {
+        let func = FunctionDef {
+            name: "untyped_move".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                    Statement::Let {
+                        name: "x".to_string(),
+                        ty: Some(ArkType::Linear("Resource".to_string())),
+                        value: Expression::Literal("dummy".to_string()),
+                    },
+                    Statement::Let {
+                        name: "y".to_string(),
+                        ty: None,
+                        value: Expression::Variable("x".to_string()),
+                    },
+                    Statement::Expression(Expression::Variable("y".to_string())),
+                    Statement::Return(Expression::Variable("y".to_string())),
+                ])))
+                .unwrap(),
+            ),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        assert!(result.is_err(), "Checker allowed linear resource to escape into untyped variable");
+    }
+
+    #[test]
+    fn test_linear_let_shadowing_valid() {
+        let func = FunctionDef {
+            name: "shadow_valid".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                    Statement::Let {
+                        name: "x".to_string(),
+                        ty: Some(ArkType::Linear("Resource".to_string())),
+                        value: Expression::Literal("dummy1".to_string()),
+                    },
+                    // Consume x
+                    Statement::Expression(Expression::Variable("x".to_string())),
+                    // Shadow x (valid because previous x was consumed)
+                    Statement::Let {
+                        name: "x".to_string(),
+                        ty: Some(ArkType::Linear("Resource".to_string())),
+                        value: Expression::Literal("dummy2".to_string()),
+                    },
+                    // Consume new x
+                    Statement::Return(Expression::Variable("x".to_string())),
+                ])))
+                .unwrap(),
+            ),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        assert!(result.is_ok(), "Valid shadowing (after consumption) should be allowed");
     }
 }
