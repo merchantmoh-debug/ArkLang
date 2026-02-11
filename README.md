@@ -19,7 +19,6 @@ We didn't just build a language. We built a **Singularity**.
 | **Python** 🐍 | Slow, GIL-locked, fragile "glue." | **Native Speed.** No GIL. Neuro-Symbolic Primitives as first-class citizens. |
 | **Rust** 🦀 | Fighting the Borrow Checker is a waste of life. | **Linear Types.** Memory safety *without* the mental gymnastics. Use it once, or the compiler kills you. Simple. |
 | **C++** 🦕 | Bloated, unsafe, archaic header files. | **Zero-Cost Abstractions.** Clean syntax. Modern module system. |
-| **Mojo/Moonbit** | VC-funded vaporware. | **Sovereign Built.** 100% Independent. Built *by* AI Swarms, *for* AI Swarms. |
 
 ---
 
