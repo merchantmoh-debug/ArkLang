@@ -272,6 +272,11 @@ def sys_time_sleep(args: List[ArkValue]):
     time.sleep(args[0].val)
     return ArkValue(None, "Unit")
 
+def sys_time_now(args: List[ArkValue]):
+    if len(args) != 0:
+        raise Exception("sys.time.now expects 0 arguments")
+    return ArkValue(int(time.time() * 1000), "Integer")
+
 def sys_crypto_hash(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.crypto.hash expects a string")
@@ -425,6 +430,7 @@ INTRINSICS = {
     "sys.mem.write": sys_mem_write,
     "sys.net.http.serve": sys_net_http_serve,
     "sys.str.get": sys_list_get,
+    "sys.time.now": sys_time_now,
     "sys.time.sleep": sys_time_sleep,
 
     # Intrinsics (Aliased / Specific)
@@ -445,6 +451,7 @@ INTRINSICS = {
     "intrinsic_lt": lambda args: eval_binop("lt", args[0], args[1]),
     "intrinsic_merkle_root": sys_crypto_merkle_root,
     "intrinsic_or": sys_or,
+    "intrinsic_time_now": sys_time_now,
 }
 
 
