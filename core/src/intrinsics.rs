@@ -781,23 +781,8 @@ pub fn intrinsic_buffer_read(args: Vec<Value>) -> Result<Value, RuntimeError> {
 }
 
 pub fn intrinsic_buffer_write(args: Vec<Value>) -> Result<Value, RuntimeError> {
-    // args: [buffer, index, value] BUT Value::Buffer is cloned in args?
-    // CRITICAL ISSUE: Value passed to intrinsic is a CLONE if not Linear.
-    // In Rust AST/Eval, we pass "Vec<Value>" which owns the values.
-    // If the Buffer IS the value, we are modifying the local copy in `args`.
-    // We need to mutate the original. But `intrinsic` signature consumes args.
-    // THE ONLY WAY to mutate is if the intrinsic returns the modified buffer
-    // OR if we use Reference types (which we don't have yet)
-    // OR if Buffer internally uses Arc<Mutex<Vec>> or Unsafe Pointer.
-    // A "Bio-Bridge" needs shared memory.
-    // "Pointer Swapping" strategy:
-    // We can't mutate `args[0]` and have it reflect caller unless we return it.
-    // BUT `intrinsic_buffer_write(buf, i, v)` -> returns `buf`?
-    // That's functional style.
     // S-Lang "Linear Types" - we consume the buffer and return a new one (same data, effectively).
-    // Let's implement that: Consume Buffer, Mutate in place, Return Buffer.
-    // This aligns with "Zombie Killer" Linear constraints too!
-
+    // This implements Linear Swap semantics: buf := sys.mem.write(buf, i, v)
     if args.len() != 3 {
         return Err(RuntimeError::NotExecutable);
     }
@@ -1108,5 +1093,30 @@ mod tests {
         // Just verify it runs and returns Unit
         let args = vec![];
         assert_eq!(intrinsic_io_cls(args).unwrap(), Value::Unit);
+    }
+
+    #[test]
+    fn test_buffer_write() {
+        // [buffer, index, value]
+        let buf = Value::Buffer(vec![0u8; 3]);
+        let idx = Value::Integer(1);
+        let val = Value::Integer(42);
+        let args = vec![buf, idx, val];
+
+        let res = intrinsic_buffer_write(args).unwrap();
+
+        match res {
+            Value::Buffer(b) => {
+                assert_eq!(b, vec![0u8, 42u8, 0u8]);
+            }
+            _ => panic!("Expected Buffer, got {:?}", res),
+        }
+
+        // Test Out of Bounds
+        let buf = Value::Buffer(vec![0u8; 3]);
+        let idx = Value::Integer(10); // OOB
+        let val = Value::Integer(42);
+        let args = vec![buf, idx, val];
+        assert!(intrinsic_buffer_write(args).is_err());
     }
 }
