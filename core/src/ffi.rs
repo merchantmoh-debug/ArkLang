@@ -26,7 +26,9 @@ use std::os::raw::{c_char};
 /// Returns a pointer to a C-string containing the result (Debug formatted).
 /// The caller must free the returned string using `ark_free_string`.
 ///
-/// Implements the FFI interface requested for external app integration.
+/// # Safety
+/// This function is unsafe because it dereferences a raw pointer.
+/// The caller must ensure `json_ptr` is a valid pointer to a null-terminated C string.
 #[no_mangle]
 pub extern "C" fn ark_eval_string(json_ptr: *const c_char) -> *mut c_char {
     if json_ptr.is_null() {
