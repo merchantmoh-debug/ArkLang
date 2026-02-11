@@ -64,8 +64,27 @@ func lexer_advance(lexer) {
     } else {
         lexer.col := lexer.col + 1
     }
-    // Return modified lexer because we modified fields in place?
-    // `lexer.pos := ...` updates the Struct in place (Rust `eval.rs` SetField).
+
+    // Check for comments (//)
+    if lexer.pos < lexer.length {
+        let (next_c, _src) := sys.str.get(lexer.source, lexer.pos)
+        if next_c == "/" {
+             if (lexer.pos + 1) < lexer.length {
+                 let (next_next_c, _src2) := sys.str.get(lexer.source, lexer.pos + 1)
+                 if next_next_c == "/" {
+                     // Skip until newline
+                     looping := 1
+                     while looping {
+                         lexer := lexer_advance(lexer)
+                         peek_c := lexer_peek(lexer)
+                         if peek_c == "\n" { looping := 0 }
+                         if peek_c == "" { looping := 0 }
+                     }
+                 }
+             }
+        }
+    }
+
     return lexer
 }
 
