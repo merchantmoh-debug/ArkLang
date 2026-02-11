@@ -3,6 +3,9 @@
 // Objective: Convert source string into a list of Tokens using Structs.
 
 // --- Constants ---
+true := 1
+false := 0
+
 // Token Types
 TOKEN_EOF := 0
 TOKEN_IDENTIFIER := 1
@@ -44,8 +47,8 @@ func lexer_peek(lexer) {
     if lexer.pos >= lexer.length {
         return "" // EOF
     }
-    // Uses polymorphic sys.list.get via operator[]
-    return lexer.source[lexer.pos]
+    let (c, src) := sys.str.get(lexer.source, lexer.pos)
+    return c
 }
 
 func lexer_advance(lexer) {
@@ -140,6 +143,28 @@ func lexer_scan(lexer) {
         lexer := lexer_add_token(lexer, type, ident_str)
         return lexer
     }
+
+    // Comments
+    if char_str == "/" {
+        if (lexer.pos + 1) < lexer.length {
+            let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
+            if next_char == "/" {
+                 // Skip until newline
+                 looping := true
+                 while looping {
+                     lexer := lexer_advance(lexer)
+                     c := lexer_peek(lexer)
+                     if c == "\n" {
+                         looping := false
+                     }
+                     if c == "" {
+                         looping := false
+                     }
+                 }
+                 return lexer_scan(lexer)
+            }
+        }
+    }
     
     // Symbols (single char for now)
     // Handle := (2 chars)
@@ -173,26 +198,7 @@ func lexer_tokenize(source) {
         count := lexer.token_count
 
         if count > 0 {
-            // Extract from struct (consumes field)
-            toks := lexer.tokens
-            
-            // Get item (consumes list, returns [val, new_list])
-            // (token_struct, toks) := toks[count - 1] -> Syntax supported?
-            // "let (a, b) := ..." 
-            
-            let (last_token_pair, toks) := sys.list.get(toks, count - 1)
-            // Wait, sys.list.get returns [val, list]
-            // But 'val' might be token struct.
-            // Oh, I can just destructure the result of get.
-            // let (token_struct, toks) := toks[count - 1]
-            // But toks[index] syntactic sugar might not work with let destructure if parser isn't smart enough?
-            // Let's use direct intrinsic call or explicit step.
-            
-            full_res := toks[count - 1]
-            let (token_struct, toks) := full_res
-            
-            // Put back
-            lexer.tokens := toks
+            let (token_struct, toks_ref) := sys.list.get(lexer.tokens, count - 1)
             
             type := token_struct.type
             if type == TOKEN_EOF {
@@ -217,13 +223,12 @@ tokens := lexer_tokenize(src)
 print("Tokens Generated:")
 
 // Print tokens pretty
-let (cnt, toks) := sys.len(tokens)
-tokens := toks
+let (cnt, toks_ref) := sys.len(tokens)
 count := cnt
+tokens := toks_ref
 i := 0
 while i < count {
-    // let (tok, _) := tokens[i]
-    let (tok, _ign) := tokens[i]
+    let (tok, _) := sys.list.get(tokens, i)
     print("Token:", tok)
     i := i + 1
 }

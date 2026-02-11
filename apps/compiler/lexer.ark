@@ -36,9 +36,10 @@ func is_whitespace(char_str) {
 // --- Lexer Struct & Methods ---
 
 func lexer_new(source) {
+    let (l, src) := sys.len(source)
     return {
-        source: source,
-        length: sys.len(source),
+        source: src,
+        length: l,
         pos: 0,
         line: 1,
         col: 1,
@@ -50,22 +51,8 @@ func lexer_peek(lexer) {
     if lexer.pos >= lexer.length {
         return "" // EOF
     }
-    // We need sys.str.get or indexing?
-    // "source[pos]" syntax compiles to `sys.list.get` (which handles strings in Python prototype?).
-    // In Rust `intrinsics.rs`, `sys.list.get` expects List.
-    // We need `sys.str.get` or `intrinsic_buffer_read`?
-    // Wait, source is String.
-    // I need `sys.str.get`!
-    // Python `sys.list.get` handles string indexing?
-    // Let's check `intrinsics.rs` -> `intrinsic_list_get` expects List.
-    // BLOCKER: No string indexing in Rust Core yet!
-    // I need to add `intrinsic_string_get` or make `list_get` polymorphic.
-    // Or use `sys.mem.read` if source is Buffer.
-    // The plan said "Input: Source Code (String)".
-    // I will use `sys.str.get(str, idx)` intrinsic.
-    // I need to implement it.
-    // For now, I will assume it exists and fix it in next step.
-    return sys.str.get(lexer.source, lexer.pos)
+    let (c, src) := sys.str.get(lexer.source, lexer.pos)
+    return c
 }
 
 func lexer_advance(lexer) {
@@ -144,6 +131,28 @@ func lexer_scan(lexer) {
         lexer := lexer_add_token(lexer, token_type, ident_str)
         return lexer
     }
+
+    // Comments
+    if char_str == "/" {
+        if (lexer.pos + 1) < lexer.length {
+            let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
+            if next_char == "/" {
+                 // Skip until newline
+                 looping := true
+                 while looping {
+                     lexer := lexer_advance(lexer)
+                     c := lexer_peek(lexer)
+                     if c == "\n" {
+                         looping := false
+                     }
+                     if c == "" {
+                         looping := false
+                     }
+                 }
+                 return lexer_scan(lexer)
+            }
+        }
+    }
     
     // Symbols
     lexer := lexer_add_token(lexer, TOKEN_SYMBOL, char_str)
@@ -155,18 +164,11 @@ func lexer_tokenize(source) {
     lexer := lexer_new(source)
     running := true
     while running {
-        // Need to check if EOF token added.
-        // But `lexer_scan` adds one token and returns.
-        // How do we know if done?
-        // Access last token?
-        count := sys.len(lexer.tokens)
+        let (count, tokens_ref) := sys.len(lexer.tokens)
+        lexer.tokens := tokens_ref
         if count > 0 {
             last_token := sys.list.get(lexer.tokens, count - 1)
-            // list.get returns [val, list]
-            // We need to extract val.
-            // Destructure!
             let (token_val, token_list) := last_token
-            // token_val is Struct.
             type := token_val.type
             if type == TOKEN_EOF {
                 running := false

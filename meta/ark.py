@@ -326,7 +326,10 @@ def sys_list_get(args: List[ArkValue]):
     elif lst.type == "String":
         # String indexing returns [char_str, original_string]
         s = lst.val
-        char_str = s[idx]
+        try:
+            char_str = s[idx]
+        except IndexError:
+            raise Exception(f"String index out of range: idx={idx}, len={len(s)}, s='{s}'")
         return ArkValue([ArkValue(char_str, "String"), lst], "List")
     else:
         raise Exception("Expected List or String")
@@ -421,6 +424,7 @@ INTRINSICS = {
     "sys.mem.read": sys_mem_read,
     "sys.mem.write": sys_mem_write,
     "sys.net.http.serve": sys_net_http_serve,
+    "sys.str.get": sys_list_get,
     "sys.time.sleep": sys_time_sleep,
 
     # Intrinsics (Aliased / Specific)
@@ -502,6 +506,22 @@ def eval_node(node, scope):
             scope.set(name, klass)
             return klass
 
+        if node.data == "struct_init":
+            fields = {}
+            if node.children:
+                # children[0] might be field_list or empty list if parsed differently?
+                # Grammar: "{" [field_list] "}" -> struct_init
+                # If field_list exists, it's children[0]
+                child = node.children[0]
+                if hasattr(child, "data") and child.data == "field_list":
+                     for field in child.children:
+                        # field is field_init [ID, expr]
+                        name = field.children[0].value
+                        val = eval_node(field.children[1], scope)
+                        fields[name] = val
+            instance = ArkInstance(None, fields)
+            return ArkValue(instance, "Instance")
+
         # --- Control Flow ---
         if node.data == "return_stmt":
             val = eval_node(node.children[0], scope) if node.children else ArkValue(None, "Unit")
@@ -524,6 +544,20 @@ def eval_node(node, scope):
                 eval_node(body_node, scope)
             return ArkValue(None, "Unit")
 
+        if node.data == "logical_or":
+            # logical_or children might include the OR token because it is a named terminal in grammar
+            # Use first and last child to be safe
+            left = eval_node(node.children[0], scope)
+            if is_truthy(left): return ArkValue(True, "Boolean")
+            right = eval_node(node.children[-1], scope)
+            return ArkValue(is_truthy(right), "Boolean")
+
+        if node.data == "logical_and":
+            left = eval_node(node.children[0], scope)
+            if not is_truthy(left): return ArkValue(False, "Boolean")
+            right = eval_node(node.children[-1], scope)
+            return ArkValue(is_truthy(right), "Boolean")
+
         if node.data == "var":
             name = node.children[0].value
             val = scope.get(name)
@@ -540,6 +574,26 @@ def eval_node(node, scope):
             name = node.children[0].value
             val = eval_node(node.children[1], scope)
             scope.set(name, val)
+            return val
+
+        if node.data == "assign_destructure":
+            # children: ID, ID, ..., expr
+            expr_node = node.children[-1]
+            var_tokens = node.children[:-1]
+
+            val = eval_node(expr_node, scope)
+
+            # Expect List for destructuring
+            if val.type != "List":
+                raise Exception(f"Destructuring expects List, got {val.type}")
+
+            items = val.val
+            if len(items) < len(var_tokens):
+                raise Exception(f"Not enough items to destructure: needed {len(var_tokens)}, got {len(items)}")
+
+            for i, token in enumerate(var_tokens):
+                scope.set(token.value, items[i])
+
             return val
 
         if node.data == "assign_attr":
@@ -570,7 +624,7 @@ def eval_node(node, scope):
                     return obj.val.fields[attr]
                 # 2. Check methods (and bind this)
                 klass = obj.val.klass
-                if attr in klass.methods:
+                if klass and attr in klass.methods:
                     method = klass.methods[attr]
                     # Return a Bound Method? Or just the function?
                     # We need to pass 'obj' as 'this' when called.
@@ -623,7 +677,7 @@ def eval_node(node, scope):
         s = node.children[0].value[1:-1]
         return ArkValue(s, "String")
         
-    if node.data in ["add", "sub", "mul", "div", "lt", "gt", "eq"]:
+    if node.data in ["add", "sub", "mul", "div", "lt", "gt", "le", "ge", "eq"]:
         left = eval_node(node.children[0], scope)
         right = eval_node(node.children[1], scope)
         return eval_binop(node.data, left, right)

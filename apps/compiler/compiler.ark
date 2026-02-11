@@ -32,19 +32,16 @@ func is_alpha(char_str) {
 }
 
 func is_whitespace(char_str) {
-
-    // res := (char_str == " ") or (char_str == "\n") or (char_str == "\t") or (char_str == "\r")
-
     return (char_str == " ") or (char_str == "\n") or (char_str == "\t") or (char_str == "\r")
 }
 
 // --- Lexer Struct & Methods ---
 
 func lexer_new(source) {
-    let (length, source) := sys.len(source)
+    let (l, src) := sys.len(source)
     return {
-        source: source,
-        length: length,
+        source: src,
+        length: l,
         pos: 0,
         line: 1,
         col: 1,
@@ -53,65 +50,35 @@ func lexer_new(source) {
 }
 
 func lexer_peek(lexer) {
-    let (len, lexer) := sys.struct.get(lexer, "length")
-    let (pos, lexer) := sys.struct.get(lexer, "pos")
-
-    // Restore
-    lexer := sys.struct.set(lexer, "length", len)
-    lexer := sys.struct.set(lexer, "pos", pos)
-
-    if pos >= len {
-        return ["", lexer] // EOF
+    if lexer.pos >= lexer.length {
+        return "" // EOF
     }
-
-    let (source, lexer) := sys.struct.get(lexer, "source")
-
-    // sys.str.get returns [char, source]
-    let (char_str, source) := sys.str.get(source, pos)
-
-    // Restore source
-    lexer := sys.struct.set(lexer, "source", source)
-
-    return [char_str, lexer]
+    let (c, src) := sys.str.get(lexer.source, lexer.pos)
+    return c
 }
 
 func lexer_advance(lexer) {
-    let (c, lexer) := lexer_peek(lexer)
-
-    let (pos, lexer) := sys.struct.get(lexer, "pos")
-    new_pos := pos + 1
-    lexer := sys.struct.set(lexer, "pos", new_pos)
-
-    let (line, lexer) := sys.struct.get(lexer, "line")
-    let (col, lexer) := sys.struct.get(lexer, "col")
-
+    c := lexer_peek(lexer)
+    lexer.pos := lexer.pos + 1
     if c == "\n" {
-        line := line + 1
-        col := 1
+        lexer.line := lexer.line + 1
+        lexer.col := 1
     } else {
-        col := col + 1
+        lexer.col := lexer.col + 1
     }
-
-    lexer := sys.struct.set(lexer, "line", line)
-    lexer := sys.struct.set(lexer, "col", col)
-
+    // Return modified lexer because we modified fields in place?
+    // `lexer.pos := ...` updates the Struct in place (Rust `eval.rs` SetField).
     return lexer
 }
 
 func lexer_add_token(lexer, type, value) {
-    let (line, lexer) := sys.struct.get(lexer, "line")
-    let (col, lexer) := sys.struct.get(lexer, "col")
-
     token := {
         type: type,
         value: value,
-        line: line,
-        col: col
+        line: lexer.line,
+        col: lexer.col
     }
-
-    let (tokens, lexer) := sys.struct.get(lexer, "tokens")
-    tokens := sys.list.append(tokens, token)
-    lexer := sys.struct.set(lexer, "tokens", tokens)
+    lexer.tokens := sys.list.append(lexer.tokens, token)
     return lexer
 }
 
@@ -125,127 +92,96 @@ func check_keyword(ident_str) {
     return 1 // TOKEN_IDENTIFIER
 }
 
-func lexer_scan(lexer_arg) {
+func lexer_scan(lexer) {
     // Main loop
-    let (char_str, lex) := lexer_peek(lexer_arg)
+    char_str := lexer_peek(lexer)
     
-    // Check EOF special case
     if char_str == "" {
-        lex := lexer_add_token(lex, TOKEN_EOF, "EOF")
-        return lex
+        lexer := lexer_add_token(lexer, TOKEN_EOF, "EOF")
+        return lexer
     }
     
-
-
-
-    // Optimize: Loop over whitespace instead of recurse
-    is_ws := is_whitespace(char_str)
-    while is_ws {
-        lex := lexer_advance(lex)
-
-        // Peek next
-        let (next_c, next_l) := lexer_peek(lex)
-        lex := next_l
-        char_str := next_c
-
-        if char_str == "" {
-             lex := lexer_add_token(lex, TOKEN_EOF, "EOF")
-             return lex
-        }
-
-        is_ws := is_whitespace(char_str)
+    if is_whitespace(char_str) {
+        lexer := lexer_advance(lexer)
+        return lexer_scan(lexer) // Tail recursion? We don't have TCO. Loop in evaluator.
+        // Wait, Ark doesn't have loops in functions yet?
+        // It has `while` statement.
+        // So `lexer_scan` should be called in a loop in `main`.
     }
     
-
     if is_digit(char_str) {
-
         // Parse number
         num_str := ""
-
-        // Loop
-        looping := true
-        while looping {
-            let (c, l) := lexer_peek(lex)
-            lex := l
-            if is_digit(c) {
-                num_str := num_str + c
-                lex := lexer_advance(lex)
-            } else {
-                looping := false
-            }
+        while is_digit(lexer_peek(lexer)) {
+            num_str := num_str + lexer_peek(lexer)
+            lexer := lexer_advance(lexer)
         }
-
-        lex := lexer_add_token(lex, TOKEN_NUMBER, num_str)
-        return lex
+        lexer := lexer_add_token(lexer, TOKEN_NUMBER, num_str)
+        return lexer
     }
     
 
     if is_alpha(char_str) {
-
         // Parse identifier/keyword
         ident_str := ""
-
-        looping := true
-        while looping {
-            let (c, l) := lexer_peek(lex)
-            lex := l
-
-            is_alph := is_alpha(c)
-            is_dig := is_digit(c)
-
-            if is_alph or is_dig {
-                ident_str := ident_str + c
-                lex := lexer_advance(lex)
-            } else {
-                looping := false
-            }
+        while is_alpha(lexer_peek(lexer)) or is_digit(lexer_peek(lexer)) {
+            ident_str := ident_str + lexer_peek(lexer)
+            lexer := lexer_advance(lexer)
         }
         
         token_type := check_keyword(ident_str)
-        lex := lexer_add_token(lex, token_type, ident_str)
-        return lex
+        lexer := lexer_add_token(lexer, token_type, ident_str)
+        return lexer
+    }
+
+    // Comments
+    if char_str == "/" {
+        if (lexer.pos + 1) < lexer.length {
+            let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
+            if next_char == "/" {
+                 // Skip until newline
+                 looping := true
+                 while looping {
+                     lexer := lexer_advance(lexer)
+                     c := lexer_peek(lexer)
+                     if c == "\n" {
+                         looping := false
+                     }
+                     if c == "" {
+                         looping := false
+                     }
+                 }
+                 return lexer_scan(lexer)
+            }
+        }
     }
     
     // Symbols
-
-
-    lex := lexer_add_token(lex, TOKEN_SYMBOL, char_str)
-    lex := lexer_advance(lex)
-    return lex
+    lexer := lexer_add_token(lexer, TOKEN_SYMBOL, char_str)
+    lexer := lexer_advance(lexer)
+    return lexer
 }
 
 func lexer_tokenize(source) {
     lexer := lexer_new(source)
     running := true
     while running {
-        // Unpack tokens to check length
-        let (tokens, lexer) := sys.struct.get(lexer, "tokens")
-        let (count, tokens) := sys.len(tokens)
-
+        let (count, tokens_ref) := sys.len(lexer.tokens)
+        lexer.tokens := tokens_ref
         if count > 0 {
-            // Peek last token
-            let (last_token_node, tokens) := sys.list.get(tokens, count - 1)
-            // Restore tokens to lexer so we can pass lexer to scan
-            lexer := sys.struct.set(lexer, "tokens", tokens)
-
-            // Check type
-            let (ttype, last_token_node) := sys.struct.get(last_token_node, "type")
-
-            if ttype == 0 { // EOF
+            last_token := sys.list.get(lexer.tokens, count - 1)
+            let (token_val, token_list) := last_token
+            type := token_val.type
+            if type == TOKEN_EOF {
                 running := false
             } else {
                 lexer := lexer_scan(lexer)
             }
         } else {
-            // Restore and scan
-            lexer := sys.struct.set(lexer, "tokens", tokens)
             lexer := lexer_scan(lexer)
         }
     }
-
-    // Return just tokens
-    let (tokens, lexer) := sys.struct.get(lexer, "tokens")
-    return tokens
+    return lexer.tokens
 }
 
 
@@ -857,19 +793,15 @@ func parse_program(tokens) {
         if ttype == TOKEN_EOF {
             running := false
             ref_parser := [p_prog_peek]
+        } else if ttype == 103 { // TOKEN_KEYWORD_FUNC
+            let (node, p_next) := parse_func_def(p_prog_peek)
+            children := sys.list.append(children, node)
+            ref_parser := [p_next]
         } else {
-             // Debug
-             // print("Parser Loop: ttype=" + int_to_str(ttype))
-             if ttype == 103 { // TOKEN_KEYWORD_FUNC
-                let (node, p_next) := parse_func_def(p_prog_peek)
-                children := sys.list.append(children, node)
-                ref_parser := [p_next]
-             } else {
-                // Use parse_stmt
-                let (node, p_next) := parse_stmt(p_prog_peek)
-                children := sys.list.append(children, node)
-                ref_parser := [p_next]
-             }
+            // Use parse_stmt
+            let (node, p_next) := parse_stmt(p_prog_peek)
+            children := sys.list.append(children, node)
+            ref_parser := [p_next]
         }
     }
     
@@ -993,6 +925,7 @@ func codegen_block(stmts) {
 
 func codegen_func(node) {
     let (name, node) := sys.struct.get(node, "name")
+    print("Codegen Func: " + name)
     let (args, node) := sys.struct.get(node, "args")
     let (body, node) := sys.struct.get(node, "body")
     
@@ -1058,52 +991,51 @@ func main() {
     // sys_args[2] = input source path
     // sys_args[3] = output json path
     
-    // Threading sys_args linearly
-    let (arg_count, sys_args) := sys.len(sys_args)
-
+    let (arg_count, list) := sys.len(sys_args)
     if arg_count < 4 {
         print("Usage: compiler.ark <input.ark> <output.json>")
         return 0
     }
     
     // Debug Args
-    // print("Arg Count: " + int_to_str(arg_count))
-
-    print("DEBUG: Accessing sys_args[2]...")
-    // Get Input Path
-    let (input_path, sys_args) := sys.list.get(sys_args, 2)
-    print("DEBUG: Got input_path: " + input_path)
+    print("Arg Count: " + int_to_str(arg_count))
     
-    print("DEBUG: Accessing sys_args[3]...")
-    let (output_path, sys_args) := sys.list.get(sys_args, 3)
-    print("DEBUG: Got output_path: " + output_path)
+    // Get Input Path (For Read - Fresh Copy)
+    let (input_path, _) := sys.list.get(sys_args, 2)
+    let (output_path, _) := sys.list.get(sys_args, 3)
     
-    print("Compiling: " + input_path)
+    // Print using dedicated copy
+    let (input_path_print, _) := sys.list.get(sys_args, 2)
+    print("Compiling: " + input_path_print)
     
     // 2. Read Source (Using input_path)
-    print("DEBUG: 1. Reading Source...")
     source := sys.fs.read(input_path)
-    print("DEBUG: 2. Source Loaded.")
+    print("Source Loaded.")
 
     // 3. Lexer
-    print("DEBUG: 3. Starting Lexer...")
+    // tokens := lexer_tokenize(source)
+    print("Starting Lexer...")
     tokens := lexer_tokenize(source)
-    print("DEBUG: 4. Lexer Finished.")
+    print("Lexer Finished.")
     
     // 4. Parser
-    print("DEBUG: 5. Starting Parser...")
+    // ast := parse_program(tokens)
+    print("Starting Parser...")
     ast := parse_program(tokens)
-    print("DEBUG: 6. Parser Finished.")
+    print("Parser Finished.")
     
     // 5. Codegen
-    print("DEBUG: 7. Starting Codegen...")
+    print("Starting Codegen...")
     mast_json := codegen_program(ast)
-    print("DEBUG: 8. Codegen Finished.")
+    print("Codegen Finished.")
     
+    // Debug Codegen Output
+    let (mast_len, _) := sys.len(mast_json)
+    print("MAST JSON Length: " + int_to_str(mast_len))
+
     // 6. Write Output
-    print("DEBUG: 9. Writing Output to: " + output_path)
+    print("Writing Output to: '" + output_path + "'")
     sys.fs.write(output_path, mast_json)
-    print("DEBUG: 10. Done.")
     
     print("Compilation Complete. Output written to: " + output_path)
     
