@@ -211,4 +211,97 @@ mod tests {
             _ => panic!("Expected DoubleUse error, got {:?}", result),
         }
     }
+
+    #[test]
+    fn test_linear_let_unused() {
+        let func = FunctionDef {
+            name: "unused".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                Statement::Let {
+                    name: "x".to_string(),
+                    ty: Some(ArkType::Linear("Resource".to_string())),
+                    value: Expression::Literal("dummy".to_string()),
+                },
+                Statement::Return(Expression::Literal("void".to_string())),
+            ])))),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        match result {
+            Err(LinearError::UnusedResource(name)) => assert_eq!(name, "x"),
+            _ => panic!("Expected UnusedResource error, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_linear_let_double_use() {
+        let func = FunctionDef {
+            name: "double".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                Statement::Let {
+                    name: "x".to_string(),
+                    ty: Some(ArkType::Linear("Resource".to_string())),
+                    value: Expression::Literal("dummy".to_string()),
+                },
+                Statement::Expression(Expression::Variable("x".to_string())),
+                Statement::Expression(Expression::Variable("x".to_string())),
+            ])))),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        match result {
+            Err(LinearError::DoubleUse(name)) => assert_eq!(name, "x"),
+            _ => panic!("Expected DoubleUse error, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_linear_let_valid() {
+        let func = FunctionDef {
+            name: "valid".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                Statement::Let {
+                    name: "x".to_string(),
+                    ty: Some(ArkType::Linear("Resource".to_string())),
+                    value: Expression::Literal("dummy".to_string()),
+                },
+                Statement::Return(Expression::Variable("x".to_string())),
+            ])))),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_non_linear_let_multiple_use() {
+        let func = FunctionDef {
+            name: "shared".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                Statement::Let {
+                    name: "x".to_string(),
+                    ty: Some(ArkType::Shared("Int".to_string())),
+                    value: Expression::Literal("42".to_string()),
+                },
+                Statement::Expression(Expression::Variable("x".to_string())),
+                Statement::Expression(Expression::Variable("x".to_string())),
+                Statement::Return(Expression::Variable("x".to_string())),
+            ])))),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        assert!(result.is_ok());
+    }
 }
