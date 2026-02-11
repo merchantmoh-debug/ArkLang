@@ -18,9 +18,16 @@
 
 use crate::types::ArkType;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use hex;
 use sha2::{Digest, Sha256};
+
+#[derive(Error, Debug)]
+pub enum AstError {
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] bincode::Error),
+}
 
 /// Merkle-ized Abstract Syntax Tree Node
 /// Content-Addressed by the hash of its content.
@@ -31,13 +38,13 @@ pub struct MastNode {
 }
 
 impl MastNode {
-    pub fn new(content: ArkNode) -> Self {
-        let serialized = bincode::serialize(&content).unwrap(); // Todo: Handle error
+    pub fn new(content: ArkNode) -> Result<Self, AstError> {
+        let serialized = bincode::serialize(&content)?;
         let mut hasher = Sha256::new();
         hasher.update(&serialized);
         let result = hasher.finalize();
         let hash = hex::encode(result);
-        MastNode { hash, content }
+        Ok(MastNode { hash, content })
     }
 }
 
