@@ -33,7 +33,8 @@ class ArkLexer(RegexLexer):
     }
 
 def run_repl():
-    print("Ark REPL (v112.0) - Type 'exit' to quit.")
+    print("ARK OMEGA-POINT v112.0 REPL")
+    print("Type 'exit' to quit, 'help' for commands.")
 
     # Initialize Scope
     scope = ark.Scope()
@@ -81,22 +82,58 @@ def run_repl():
         })
     )
 
+    buffer = []
+
     while True:
         try:
-            text = session.prompt('ark> ')
-            if not text.strip():
+            prompt_text = '... ' if buffer else 'ark> '
+            text = session.prompt(prompt_text)
+
+            # Handle empty input
+            if not text.strip() and not buffer:
                 continue
-            if text.strip() in ['exit', 'quit']:
+
+            # Handle exit
+            if not buffer and text.strip() in ['exit', 'quit']:
                 break
+
+            # Handle help
+            if not buffer and text.strip() == 'help':
+                print("\nAvailable Commands:")
+                print("  exit, quit  - Quit REPL")
+                print("  help        - Show this help")
+                print("\nAvailable Intrinsics:")
+                # Simple word wrap for display
+                intrinsics = sorted(ark.INTRINSICS.keys())
+                print(", ".join(intrinsics))
+                print("")
+                continue
+
+            buffer.append(text)
+            full_text = "\n".join(buffer)
 
             # Parse
             try:
-                tree = parser.parse(text)
-            except lark.UnexpectedToken as e:
-                print(f"Syntax Error: {e}")
-                continue
+                tree = parser.parse(full_text)
+                buffer = [] # Reset buffer on success
+            except (lark.UnexpectedToken, lark.UnexpectedEOF) as e:
+                # Check for incomplete input (UnexpectedToken at EOF)
+                is_incomplete = False
+                if isinstance(e, lark.UnexpectedToken) and e.token.type == '$END':
+                    is_incomplete = True
+                elif isinstance(e, lark.UnexpectedEOF):
+                    is_incomplete = True
+
+                if is_incomplete:
+                    # Continue loop to get more input
+                    continue
+                else:
+                    print(f"Syntax Error: {e}")
+                    buffer = []
+                    continue
             except lark.UnexpectedCharacters as e:
                 print(f"Syntax Error: {e}")
+                buffer = []
                 continue
 
             # Evaluate
@@ -117,6 +154,8 @@ def run_repl():
 
         except KeyboardInterrupt:
             # Handle Ctrl+C (clear input)
+            print("\nKeyboardInterrupt")
+            buffer = []
             continue
         except EOFError:
             # Handle Ctrl+D (exit)
