@@ -1,4 +1,5 @@
 import os
+import sys
 from .base import CodeSandbox
 from .local import LocalSandbox
 
@@ -9,7 +10,11 @@ def get_sandbox() -> CodeSandbox:
     Supported types: docker (default), local (opt-in), e2b (future)
     Raises RuntimeError if the requested type module is unavailable.
     """
-    mode = os.getenv("SANDBOX_TYPE", "docker").lower()
+    mode = os.getenv("SANDBOX_TYPE")
+    if mode is None:
+        mode = "docker"  # Secure default
+    else:
+        mode = mode.lower()
 
     if mode == "docker":
         try:
@@ -36,6 +41,10 @@ def get_sandbox() -> CodeSandbox:
             raise RuntimeError(f"Failed to initialize E2B sandbox: {e}")
 
     if mode == "local":
+        print(
+            "WARNING: LocalSandbox is insecure and allows arbitrary code execution on the host machine. Use with caution.",
+            file=sys.stderr,
+        )
         return LocalSandbox()
 
     raise ValueError(f"Unknown sandbox type: {mode}")

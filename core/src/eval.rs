@@ -336,4 +336,78 @@ mod tests {
         let result = interpreter.eval_statement(&stmt, &mut scope);
         assert!(matches!(result, Err(RuntimeError::NotExecutable)));
     }
+
+    #[test]
+    fn test_if_statement() {
+        let mut scope = Scope::new();
+        let mut interpreter = Interpreter::new();
+
+        // Test 1: Condition is true
+        // if true { let x = 10; } else { let x = 20; }
+        let if_true_stmt = Statement::If {
+            condition: Expression::Literal("true".to_string()),
+            then_block: vec![Statement::Let {
+                name: "x".to_string(),
+                ty: None,
+                value: Expression::Literal("10".to_string()),
+            }],
+            else_block: Some(vec![Statement::Let {
+                name: "x".to_string(),
+                ty: None,
+                value: Expression::Literal("20".to_string()),
+            }]),
+        };
+
+        interpreter.eval_statement(&if_true_stmt, &mut scope).unwrap();
+        assert_eq!(scope.get("x").unwrap(), Value::Integer(10));
+
+        // Test 2: Condition is false
+        // if false { let y = 10; } else { let y = 20; }
+        let if_false_stmt = Statement::If {
+            condition: Expression::Literal("false".to_string()),
+            then_block: vec![Statement::Let {
+                name: "y".to_string(),
+                ty: None,
+                value: Expression::Literal("10".to_string()),
+            }],
+            else_block: Some(vec![Statement::Let {
+                name: "y".to_string(),
+                ty: None,
+                value: Expression::Literal("20".to_string()),
+            }]),
+        };
+
+        interpreter.eval_statement(&if_false_stmt, &mut scope).unwrap();
+        assert_eq!(scope.get("y").unwrap(), Value::Integer(20));
+
+        // Test 3: Condition is integer (truthy)
+        // if 1 { let z = 30; }
+        let if_int_stmt = Statement::If {
+            condition: Expression::Literal("1".to_string()),
+            then_block: vec![Statement::Let {
+                name: "z".to_string(),
+                ty: None,
+                value: Expression::Literal("30".to_string()),
+            }],
+            else_block: None,
+        };
+
+        interpreter.eval_statement(&if_int_stmt, &mut scope).unwrap();
+        assert_eq!(scope.get("z").unwrap(), Value::Integer(30));
+
+        // Test 4: Condition is integer (falsy)
+        // if 0 { let w = 40; }
+        let if_zero_stmt = Statement::If {
+            condition: Expression::Literal("0".to_string()),
+            then_block: vec![Statement::Let {
+                name: "w".to_string(),
+                ty: None,
+                value: Expression::Literal("40".to_string()),
+            }],
+            else_block: None,
+        };
+
+        interpreter.eval_statement(&if_zero_stmt, &mut scope).unwrap();
+        assert!(scope.get("w").is_none());
+    }
 }
