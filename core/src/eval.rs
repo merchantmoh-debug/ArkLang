@@ -321,4 +321,19 @@ mod tests {
         let result = interpreter.eval_expression(&expr, &mut scope);
         assert!(matches!(result, Err(RuntimeError::RecursionLimitExceeded)));
     }
+
+    #[test]
+    fn test_destructuring_mismatch() {
+        let mut scope = Scope::new();
+        let mut interpreter = Interpreter::new();
+
+        // let (a, b) = [1];
+        let stmt = Statement::LetDestructure {
+            names: vec!["a".to_string(), "b".to_string()],
+            value: Expression::List(vec![Expression::Literal("1".to_string())]),
+        };
+
+        let result = interpreter.eval_statement(&stmt, &mut scope);
+        assert!(matches!(result, Err(RuntimeError::NotExecutable)));
+    }
 }

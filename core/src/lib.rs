@@ -22,7 +22,8 @@ pub mod bridge;
 pub mod bytecode;
 pub mod checker;
 pub mod compiler;
-// pub mod eval; // Deprecated by VM
+#[cfg(test)]
+pub mod eval; // Deprecated by VM, enabled for tests
 pub mod intrinsics;
 pub mod loader;
 // pub mod repl; // Deprecated interpreter REPL
