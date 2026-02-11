@@ -24,6 +24,7 @@ pub mod checker;
 pub mod compiler;
 #[cfg(test)]
 pub mod eval; // Deprecated by VM, enabled for tests
+pub mod ffi;
 pub mod intrinsics;
 pub mod loader;
 // pub mod repl; // Deprecated interpreter REPL
