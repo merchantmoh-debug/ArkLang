@@ -144,8 +144,7 @@ class MCPClientManager:
                 print("   ℹ️ No MCP servers configured")
                 return
 
-            for config in configs:
-                await self._connect_server(config)
+            await asyncio.gather(*(self._connect_server(config) for config in configs))
 
             connected_count = sum(1 for s in self.servers.values() if s.connected)
             total_tools = sum(len(s.tools) for s in self.servers.values())
