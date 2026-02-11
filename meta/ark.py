@@ -371,41 +371,45 @@ def sys_or(args: List[ArkValue]):
 
 
 INTRINSICS = {
-    "print": core_print,
-    "len": core_len,
+    # Core
     "get": core_get,
-    "sys.exec": sys_exec,
-    "sys.fs.write": sys_fs_write,
-    "sys.fs.read": sys_fs_read,
-    "sys.net.http.serve": sys_net_http_serve,
-    "sys.time.sleep": sys_time_sleep,
-    "intrinsic_ask_ai": ask_ai,
-    "intrinsic_extract_code": extract_code,
+    "len": core_len,
+    "print": core_print,
+
+    # System
     "sys.crypto.hash": sys_crypto_hash,
     "sys.crypto.merkle_root": sys_crypto_merkle_root,
-    "intrinsic_crypto_hash": sys_crypto_hash, 
-    "intrinsic_merkle_root": sys_crypto_merkle_root,
+    "sys.exec": sys_exec,
+    "sys.fs.read": sys_fs_read,
+    "sys.fs.write": sys_fs_write,
+    "sys.len": sys_len,
+    "sys.list.append": sys_list_append,
+    "sys.list.get": sys_list_get,
     "sys.mem.alloc": sys_mem_alloc,
-
+    "sys.mem.inspect": sys_mem_inspect,
     "sys.mem.read": sys_mem_read,
     "sys.mem.write": sys_mem_write,
+    "sys.net.http.serve": sys_net_http_serve,
+    "sys.time.sleep": sys_time_sleep,
+
+    # Intrinsics (Aliased / Specific)
+    "intrinsic_and": sys_and,
+    "intrinsic_ask_ai": ask_ai,
     "intrinsic_buffer_alloc": sys_mem_alloc,
     "intrinsic_buffer_inspect": sys_mem_inspect,
-    "sys.mem.inspect": sys_mem_inspect,
     "intrinsic_buffer_read": sys_mem_read,
     "intrinsic_buffer_write": sys_mem_write,
-    "sys.list.get": sys_list_get,
-    "intrinsic_list_get": sys_list_get,
-    "sys.list.append": sys_list_append,
-    "intrinsic_list_append": sys_list_append,
-    "sys.len": sys_len,
-    "intrinsic_len": sys_len,
-    "intrinsic_and": sys_and,
-    "intrinsic_or": sys_or,
+    "intrinsic_crypto_hash": sys_crypto_hash,
+    "intrinsic_extract_code": extract_code,
     "intrinsic_ge": lambda args: eval_binop("ge", args[0], args[1]),
-    "intrinsic_le": lambda args: eval_binop("le", args[0], args[1]),
     "intrinsic_gt": lambda args: eval_binop("gt", args[0], args[1]),
+    "intrinsic_le": lambda args: eval_binop("le", args[0], args[1]),
+    "intrinsic_len": sys_len,
+    "intrinsic_list_append": sys_list_append,
+    "intrinsic_list_get": sys_list_get,
     "intrinsic_lt": lambda args: eval_binop("lt", args[0], args[1]),
+    "intrinsic_merkle_root": sys_crypto_merkle_root,
+    "intrinsic_or": sys_or,
 }
 
 
