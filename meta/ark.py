@@ -272,6 +272,9 @@ def sys_time_sleep(args: List[ArkValue]):
     time.sleep(args[0].val)
     return ArkValue(None, "Unit")
 
+def intrinsic_time_now(args: List[ArkValue]):
+    return ArkValue(int(time.time() * 1000), "Integer")
+
 def sys_crypto_hash(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.crypto.hash expects a string")
@@ -428,6 +431,9 @@ INTRINSICS = {
     "sys.time.sleep": sys_time_sleep,
 
     # Intrinsics (Aliased / Specific)
+    "time_now": intrinsic_time_now,
+    "intrinsic_time_now": intrinsic_time_now,
+    "sys_crypto_hash": sys_crypto_hash,
     "intrinsic_and": sys_and,
     "intrinsic_ask_ai": ask_ai,
     "intrinsic_buffer_alloc": sys_mem_alloc,

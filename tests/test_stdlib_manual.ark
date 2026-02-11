@@ -1,0 +1,36 @@
+// tests/test_stdlib_manual.ark
+
+// Mocking library inclusion (since no import)
+// This verifies that if the code was concatenated, it would work.
+// And specifically tests the intrinsics `time_now` and `sys_crypto_hash` are working.
+
+time := {
+    now: time_now
+}
+
+crypto := {
+    hash: sys_crypto_hash
+}
+
+print("Testing Standard Library Wrappers...")
+
+// Test time
+t := time.now()
+print("Time: " + t)
+if t > 0 {
+    print("Time check: PASS")
+} else {
+    print("Time check: FAIL")
+}
+
+// Test crypto
+msg := "Sovereignty"
+h := crypto.hash(msg)
+print("Hash of '" + msg + "': " + h)
+
+// Verify length of SHA256 hex string is 64
+if len(h) == 64 {
+    print("Hash check: PASS")
+} else {
+    print("Hash check: FAIL " + len(h))
+}

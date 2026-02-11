@@ -1,0 +1,4 @@
+// lib/std/time.ark
+time := {
+    now: time_now
+}

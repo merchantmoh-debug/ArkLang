@@ -1,0 +1,4 @@
+// lib/std/crypto.ark
+crypto := {
+    hash: sys_crypto_hash
+}
