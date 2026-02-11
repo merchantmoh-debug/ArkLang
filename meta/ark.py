@@ -89,6 +89,7 @@ def sys_exec(args: List[ArkValue]):
     if not args or args[0].type != "String":
         raise Exception("sys.exec expects a string command")
     command = args[0].val
+    print(f"WARNING: Executing system command: {command}", file=sys.stderr)
     try:
         result = os.popen(command).read()
         return ArkValue(result, "String")
@@ -194,7 +195,6 @@ def sys_net_http_serve(args: List[ArkValue]):
     # To allow `call_user_func` to be accessible within the handler,
     # we pass it as a global or ensure it's imported/defined in the scope where this intrinsic runs.
     # For this example, we assume `call_user_func` is available in the module's global scope.
-    global call_user_func 
 
     class ArkHttpHandler(http.server.SimpleHTTPRequestHandler):
         def do_GET(self):
@@ -242,7 +242,6 @@ def sys_net_http_serve(args: List[ArkValue]):
 def sys_time_sleep(args: List[ArkValue]):
     if len(args) != 1 or args[0].type not in ["Integer", "Float"]:
         raise Exception("sys.time.sleep expects a number (seconds)")
-    time.sleep(args[0].val)
     time.sleep(args[0].val)
     return ArkValue(None, "Unit")
 
@@ -381,7 +380,6 @@ INTRINSICS = {
     "sys.net.http.serve": sys_net_http_serve,
     "sys.time.sleep": sys_time_sleep,
     "intrinsic_ask_ai": ask_ai,
-    "intrinsic_ask_ai": ask_ai,
     "intrinsic_extract_code": extract_code,
     "sys.crypto.hash": sys_crypto_hash,
     "sys.crypto.merkle_root": sys_crypto_merkle_root,
@@ -402,7 +400,6 @@ INTRINSICS = {
     "intrinsic_list_append": sys_list_append,
     "sys.len": sys_len,
     "intrinsic_len": sys_len,
-    "intrinsic_and": sys_and,
     "intrinsic_and": sys_and,
     "intrinsic_or": sys_or,
     "intrinsic_ge": lambda args: eval_binop("ge", args[0], args[1]),
@@ -559,7 +556,6 @@ def eval_node(node, scope):
             # `print` is parsed as `var`. `eval_node` returns value.
             # If `print` is not in scope, `eval_node` returns Unit + Error (currently).
             
-            # FIX: Update `var` handling to return Intrinsic if found.
             if func_val.type == "Intrinsic":
                 return INTRINSICS[func_val.val](args)
                 
