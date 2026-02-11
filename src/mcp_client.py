@@ -84,6 +84,7 @@ class MCPClientManager:
         self.tool_prefix = settings.MCP_TOOL_PREFIX
         self._initialized = False
         self._lock = asyncio.Lock()
+        self._tool_cache: Dict[str, Callable[..., Any]] = {}
 
     def _load_server_configs(self) -> List[MCPServerConfig]:
         """
@@ -321,6 +322,9 @@ class MCPClientManager:
         Returns:
             Dictionary mapping tool names to async callable functions
         """
+        if self._tool_cache:
+            return self._tool_cache
+
         callables = {}
 
         for connection in self.servers.values():
@@ -331,6 +335,7 @@ class MCPClientManager:
                 prefixed_name = tool.get_prefixed_name(self.tool_prefix)
                 callables[prefixed_name] = self._create_tool_wrapper(connection, tool)
 
+        self._tool_cache = callables
         return callables
 
     def _create_tool_wrapper(
@@ -461,6 +466,7 @@ Input Schema:
                 print(f"   ⚠️ Error disconnecting from {name}: {e}")
 
         self.servers.clear()
+        self._tool_cache.clear()
         self._initialized = False
 
     def get_status(self) -> Dict[str, Any]:
@@ -496,6 +502,7 @@ class MCPClientManagerSync:
     def __init__(self, config_path: Optional[str] = None):
         self._async_manager = MCPClientManager(config_path)
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._tool_cache: Dict[str, Callable[..., Any]] = {}
 
     def _get_loop(self) -> Tuple[asyncio.AbstractEventLoop, bool]:
         """Get or create an event loop.
@@ -564,6 +571,9 @@ class MCPClientManagerSync:
 
     def get_all_tools_as_callables(self) -> Dict[str, Callable[..., Any]]:
         """Get all tools as sync-wrapped callables."""
+        if self._tool_cache:
+            return self._tool_cache
+
         async_callables = self._async_manager.get_all_tools_as_callables()
         sync_callables = {}
 
@@ -582,6 +592,7 @@ class MCPClientManagerSync:
 
             sync_callables[name] = make_sync_wrapper(async_fn)
 
+        self._tool_cache = sync_callables
         return sync_callables
 
     def get_tool_descriptions(self) -> str:
@@ -590,6 +601,7 @@ class MCPClientManagerSync:
 
     def shutdown(self) -> None:
         """Shutdown connections."""
+        self._tool_cache.clear()
         loop, running = self._get_loop()
         if running:
             self._run_in_new_thread(self._async_manager.shutdown())
