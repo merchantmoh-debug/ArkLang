@@ -178,9 +178,12 @@ mod tests {
             name: "id".to_string(),
             inputs: vec![("x".to_string(), ArkType::Linear("Resource".to_string()))],
             output: ArkType::Linear("Resource".to_string()),
-            body: Box::new(MastNode::new(ArkNode::Statement(Statement::Return(
-                Expression::Variable("x".to_string()),
-            )))),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Return(Expression::Variable(
+                    "x".to_string(),
+                ))))
+                .unwrap(),
+            ),
         };
 
         let mut checker = LinearChecker::new();
@@ -194,13 +197,16 @@ mod tests {
             name: "double".to_string(),
             inputs: vec![("x".to_string(), ArkType::Linear("Resource".to_string()))],
             output: ArkType::Shared("Void".to_string()),
-            body: Box::new(MastNode::new(ArkNode::Expression(Expression::Call {
-                function_hash: "dummy".to_string(),
-                args: vec![
-                    Expression::Variable("x".to_string()),
-                    Expression::Variable("x".to_string()),
-                ],
-            }))),
+            body: Box::new(
+                MastNode::new(ArkNode::Expression(Expression::Call {
+                    function_hash: "dummy".to_string(),
+                    args: vec![
+                        Expression::Variable("x".to_string()),
+                        Expression::Variable("x".to_string()),
+                    ],
+                }))
+                .unwrap(),
+            ),
         };
 
         let mut checker = LinearChecker::new();
