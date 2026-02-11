@@ -1,0 +1,135 @@
+import unittest
+import asyncio
+import json
+from unittest.mock import MagicMock, AsyncMock
+from src.mcp_client import MCPClientManager, MCPServerConnection, MCPServerConfig, MCPTool
+from src.config import settings
+
+class TestMCPClient(unittest.TestCase):
+    def setUp(self):
+        # Reset settings if needed, though usually not required for unit tests unless they modify globals
+        pass
+
+    def test_tool_wrapper_creation(self):
+        """
+        Verify that get_all_tools_as_callables correctly creates wrappers
+        and that those wrappers function as expected.
+        """
+        # Setup
+        manager = MCPClientManager()
+        config = MCPServerConfig(name="test_server", command="echo", args=[], env={})
+        connection = MCPServerConnection(config=config)
+        connection.connected = True
+
+        # Mock session
+        mock_session = AsyncMock()
+        # Mock call_tool to return a simple string or object depending on what the wrapper expects
+        # The wrapper checks for .content or .structuredContent attributes on the result object
+        # or just casts to str(result). Let's return a simple string for now.
+        mock_session.call_tool.return_value = "Tool result"
+        connection.session = mock_session
+
+        # Add a tool
+        tool = MCPTool(
+            name="test_tool",
+            description="Test tool description",
+            server_name="test_server",
+            input_schema={"type": "object", "properties": {"arg": {"type": "string"}}},
+            original_name="test_tool"
+        )
+        connection.tools.append(tool)
+        manager.servers["test_server"] = connection
+
+        # Action
+        callables = manager.get_all_tools_as_callables()
+
+        # Verification 1: Wrapper existence
+        prefixed_name = f"{settings.MCP_TOOL_PREFIX}test_server_test_tool"
+        self.assertIn(prefixed_name, callables)
+        wrapper = callables[prefixed_name]
+        self.assertTrue(callable(wrapper))
+
+        # Verification 2: Metadata (Docstring and Name)
+        self.assertEqual(wrapper.__name__, prefixed_name)
+        self.assertIn("Test tool description", wrapper.__doc__)
+        self.assertIn("Server: test_server", wrapper.__doc__)
+        self.assertIn('"type": "object"', wrapper.__doc__) # Schema check
+
+        # Verification 3: Execution
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            result = loop.run_until_complete(wrapper(arg="value"))
+        finally:
+            loop.close()
+
+        self.assertEqual(result, "Tool result")
+
+        # Verification 4: Verify mock call
+        mock_session.call_tool.assert_called_once_with("test_tool", arguments={"arg": "value"})
+
+    def test_get_all_tools_as_callables_multiple_calls(self):
+        """
+        Verify that subsequent calls to get_all_tools_as_callables return
+        consistent results (this tests caching logic if present).
+        """
+        manager = MCPClientManager()
+        config = MCPServerConfig(name="s1", command="echo", args=[], env={})
+        conn = MCPServerConnection(config=config)
+        conn.connected = True
+        conn.session = AsyncMock()
+
+        tool = MCPTool(name="t1", description="d1", server_name="s1", input_schema={}, original_name="t1")
+        conn.tools.append(tool)
+        manager.servers["s1"] = conn
+
+        callables1 = manager.get_all_tools_as_callables()
+        callables2 = manager.get_all_tools_as_callables()
+
+        self.assertEqual(callables1.keys(), callables2.keys())
+        # Check if they are the SAME function objects (identity check)
+        # Currently, the code caches the entire dict in self._tool_cache, so this should be true.
+        key = list(callables1.keys())[0]
+        self.assertIs(callables1[key], callables2[key])
+
+    def test_discover_tools_populates_cache(self):
+        """
+        Verify that _discover_tools correctly populates the tool_wrappers cache.
+        """
+        async def run_test():
+            manager = MCPClientManager()
+            connection = MCPServerConnection(config=MCPServerConfig(name="s1", command="echo", args=[], env={}))
+            connection.connected = True
+
+            # Mock session.list_tools
+            mock_tool = MagicMock()
+            mock_tool.name = "t1"
+            mock_tool.description = "d1"
+            # Simulate inputSchema attribute
+            mock_tool.inputSchema = {"type": "object"}
+
+            mock_response = MagicMock()
+            mock_response.tools = [mock_tool]
+
+            mock_session = AsyncMock()
+            mock_session.list_tools.return_value = mock_response
+            connection.session = mock_session
+
+            # Action
+            await manager._discover_tools(connection)
+
+            # Verify
+            prefixed_name = f"{settings.MCP_TOOL_PREFIX}s1_t1"
+            self.assertTrue(connection.tool_wrappers)
+            self.assertIn(prefixed_name, connection.tool_wrappers)
+            self.assertTrue(callable(connection.tool_wrappers[prefixed_name]))
+
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(run_test())
+        finally:
+            loop.close()
+
+if __name__ == '__main__':
+    unittest.main()
