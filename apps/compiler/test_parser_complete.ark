@@ -1,0 +1,396 @@
+// --- Ark Parser Runner (Complete Verification) ---
+
+// --- LEXER STATICS ---
+TOKEN_EOF := 0
+TOKEN_IDENTIFIER := 1
+TOKEN_NUMBER := 2
+TOKEN_STRING := 3
+TOKEN_EQ := 4
+TOKEN_PLUS := 5
+TOKEN_MINUS := 6
+TOKEN_STAR := 7
+TOKEN_SLASH := 8
+TOKEN_LPAREN := 9
+TOKEN_RPAREN := 10
+TOKEN_LBRACE := 11
+TOKEN_RBRACE := 12
+TOKEN_COMMA := 13
+TOKEN_COLON := 14
+TOKEN_SEMICOLON := 15
+TOKEN_ASSIGN := 16
+
+// Keywords
+TOKEN_KEYWORD_IF := 100
+TOKEN_KEYWORD_ELSE := 101
+TOKEN_KEYWORD_WHILE := 102
+TOKEN_KEYWORD_FUNC := 103
+TOKEN_KEYWORD_RETURN := 104
+TOKEN_KEYWORD_LET := 105
+
+// AST Nodes
+NODE_PROGRAM := 0
+NODE_FUNC_DEF := 1
+NODE_BLOCK := 2
+NODE_IF := 3
+NODE_WHILE := 4
+NODE_RETURN := 5
+NODE_ASSIGN := 101
+NODE_EXPR_BINARY := 8
+NODE_EXPR_CALL := 9
+NODE_EXPR_LITERAL_INT := 10
+NODE_EXPR_VAR := 12
+
+// --- TEST TOKENS ---
+// func add(a, b) { return a + b }
+// x := add(1, 2)
+
+func get_test_tokens() {
+    return [
+        // func add(a, b) {
+        { type: 103, value: "func", line: 1, col: 1 },
+        { type: 1, value: "add", line: 1, col: 6 },
+        { type: 9, value: "(", line: 1, col: 9 },
+        { type: 1, value: "a", line: 1, col: 10 },
+        { type: 13, value: ",", line: 1, col: 11 },
+        { type: 1, value: "b", line: 1, col: 13 },
+        { type: 10, value: ")", line: 1, col: 14 },
+        { type: 11, value: "{", line: 1, col: 16 },
+        
+        // return a + b
+        { type: 104, value: "return", line: 2, col: 4 },
+        { type: 1, value: "a", line: 2, col: 11 },
+        { type: 5, value: "+", line: 2, col: 13 },
+        { type: 1, value: "b", line: 2, col: 15 },
+        
+        // }
+        { type: 12, value: "}", line: 3, col: 1 },
+        
+        // x := add(1, 2)
+        { type: 1, value: "x", line: 4, col: 1 },
+        { type: 16, value: ":=", line: 4, col: 3 },
+        { type: 1, value: "add", line: 4, col: 6 },
+        { type: 9, value: "(", line: 4, col: 9 },
+        { type: 2, value: "1", line: 4, col: 10 },
+        { type: 13, value: ",", line: 4, col: 11 },
+        { type: 2, value: "2", line: 4, col: 13 },
+        { type: 10, value: ")", line: 4, col: 14 },
+        
+        // EOF
+        { type: 0, value: "", line: 5, col: 1 }
+    ]
+}
+
+// --- PARSER (Inlined Logic) ---
+
+func parser_new(tok_input) { return { tokens: tok_input, pos: 0 } }
+
+func parser_peek(parser) {
+    let (tok_list, parser) := sys.struct.get(parser, "tokens")
+    let (pos, parser) := sys.struct.get(parser, "pos")
+    
+    let (tok, tok_list) := sys.list.get(tok_list, pos) 
+    
+    parser := sys.struct.set(parser, "tokens", tok_list)
+    return [tok, parser]
+}
+
+func parser_advance(parser) {
+    let (pos, parser) := sys.struct.get(parser, "pos")
+    parser := sys.struct.set(parser, "pos", pos + 1)
+    return parser
+}
+
+// -- Expressions --
+
+func parse_primary(parser) {
+    let (tok, p_peek) := parser_peek(parser)
+    let (ttype, tok) := sys.struct.get(tok, "type")
+    
+    if ttype == 2 { // Number
+        let (val, tok) := sys.struct.get(tok, "value")
+        p_adv := parser_advance(p_peek)
+        node := { kind: 10, value: val }
+        return [node, p_adv]
+    }
+    
+    if ttype == 1 { // Identifier
+        let (val, tok) := sys.struct.get(tok, "value")
+        p_after_id := parser_advance(p_peek)
+        
+        // Check for Call: (
+        let (tok2, p_peek2) := parser_peek(p_after_id)
+        let (ttype2, tok2) := sys.struct.get(tok2, "type")
+        
+        if ttype2 == 9 { // LPAREN
+             p_after_paren := parser_advance(p_peek2)
+             args := []
+             ref_parser := [p_after_paren]
+             running := true
+             
+             while running {
+                 let (p, _) := sys.list.get(ref_parser, 0)
+                 let (t, p_pk) := parser_peek(p)
+                 let (tt, t) := sys.struct.get(t, "type")
+                 
+                 if tt == 10 { // RPAREN
+                     running := false
+                     p_after_args := parser_advance(p_pk)
+                     ref_parser := [p_after_args]
+                 } else {
+                     let (arg_expr, p_next) := parse_expr(p_pk) 
+                     args := sys.list.append(args, arg_expr)
+                     
+                     let (t2, p_pk2) := parser_peek(p_next)
+                     let (tt2, t2) := sys.struct.get(t2, "type")
+                     
+                     if tt2 == 13 { // COMMA
+                         p_comma := parser_advance(p_pk2)
+                         ref_parser := [p_comma]
+                     } else {
+                         ref_parser := [p_next]
+                     }
+                 }
+             }
+             let (final_parser, _) := sys.list.get(ref_parser, 0)
+             node := { kind: 9, function: val, args: args } // CALL
+             return [node, final_parser]
+        }
+        
+        node := { kind: 12, name: val } // VAR
+        return [node, p_after_id]
+    }
+    
+    p_adv := parser_advance(p_peek)
+    return [{kind: 99}, p_adv]
+}
+
+func parse_factor(parser) {
+    let (lhs, p_curr) := parse_primary(parser)
+    // ref_parser loop omitted for brevity in test if no * used
+    // But wait, test uses +
+    return [lhs, p_curr] 
+}
+
+func parse_term(parser) {
+    let (lhs, p_curr) := parse_factor(parser)
+    
+    ref_parser := [p_curr]
+    ref_lhs := [lhs]
+    running := true
+    
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_peek) := parser_peek(p)
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        
+        is_op := false
+        if ttype == 5 { is_op := true } // +
+        
+        if is_op {
+            p_op := parser_advance(p_peek)
+            let (rhs, p_rhs) := parse_factor(p_op)
+            let (prev, _) := sys.list.get(ref_lhs, 0)
+            
+            node := { kind: 8, left: prev, right: rhs, op: "add" }
+            ref_lhs := [node]
+            ref_parser := [p_rhs]
+        } else {
+            running := false
+            ref_parser := [p_peek] // Fix: Use peek
+        }
+    }
+    let (final, _) := sys.list.get(ref_lhs, 0)
+    let (fp, _) := sys.list.get(ref_parser, 0)
+    return [final, fp]
+}
+
+func parse_expr(parser) { return parse_term(parser) }
+
+// -- Statements --
+
+func parse_block(parser) {
+    let (tok, p_brace) := parser_peek(parser)
+    p_curr := parser_advance(p_brace)
+    
+    children := []
+    ref_parser := [p_curr]
+    running := true
+    
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_peek) := parser_peek(p)
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        
+        if ttype == 12 { // RBRACE
+            running := false
+            p_after := parser_advance(p_peek)
+            ref_parser := [p_after]
+        } else if ttype == 0 {
+            running := false
+            ref_parser := [p_peek]
+        } else {
+            let (stmt, p_next) := parse_stmt(p_peek)
+            children := sys.list.append(children, stmt)
+            ref_parser := [p_next]
+        }
+    }
+    let (fp, _) := sys.list.get(ref_parser, 0)
+    return [children, fp]
+}
+
+func parse_return(parser) {
+    let (tok, p_ret) := parser_peek(parser)
+    p_after := parser_advance(p_ret)
+    let (val, p_final) := parse_expr(p_after)
+    return [{kind: 5, value: val}, p_final] // RETURN
+}
+
+func parse_stmt(parser) {
+    let (tok, p_peek) := parser_peek(parser)
+    let (ttype, tok) := sys.struct.get(tok, "type")
+    
+    if ttype == 104 { return parse_return(p_peek) }
+    
+    if ttype == 1 { // IDENTIFIER
+        p_id := parser_advance(p_peek)
+        let (tok2, p_peek2) := parser_peek(p_id)
+        let (ttype2, tok2) := sys.struct.get(tok2, "type")
+        
+        if ttype2 == 16 { // :=
+             p_assign := parser_advance(p_peek2)
+             let (val, p_end) := parse_expr(p_assign)
+             let (name, tok) := sys.struct.get(tok, "value")
+             return [{kind: 101, name: name, value: val}, p_end] // ASSIGN
+        }
+    }
+    // Fallback
+    p_adv := parser_advance(p_peek)
+    return [{kind: 99}, p_adv]
+}
+
+// -- Functions --
+
+func parse_func_args(parser) {
+    let (tok, p_peek) := parser_peek(parser)
+    p_curr := parser_advance(p_peek) // consume (
+    
+    args := []
+    ref_parser := [p_curr]
+    running := true
+    
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (t, p_pk) := parser_peek(p)
+        let (tt, t) := sys.struct.get(t, "type")
+        
+        if tt == 10 { // )
+            running := false
+            p_end := parser_advance(p_pk)
+            ref_parser := [p_end]
+        } else if tt == 1 {
+             let (name, t) := sys.struct.get(t, "value")
+             args := sys.list.append(args, name)
+             p_next := parser_advance(p_pk)
+             
+             let (t2, p_pk2) := parser_peek(p_next)
+             let (tt2, t2) := sys.struct.get(t2, "type")
+             
+             if tt2 == 13 { // ,
+                 p_comma := parser_advance(p_pk2)
+                 ref_parser := [p_comma]
+             } else {
+                 ref_parser := [p_next]
+             }
+        } else {
+            running := false
+            ref_parser := [p_pk]
+        }
+    }
+    let (fp, _) := sys.list.get(ref_parser, 0)
+    return [args, fp]
+}
+
+func parse_func_def(parser) {
+    let (tok, p_func) := parser_peek(parser)
+    p_after_func := parser_advance(p_func)
+    
+    let (tok2, p_peek2) := parser_peek(p_after_func)
+    let (name, tok2) := sys.struct.get(tok2, "value")
+    p_after_name := parser_advance(p_peek2)
+    
+    let (args, p_after_args) := parse_func_args(p_after_name)
+    let (body, p_final) := parse_block(p_after_args)
+    
+    return [{kind: 1, name: name, args: args, body: body}, p_final] // FUNC_DEF
+}
+
+func parse_program(tok_input) {
+    print("In parse_program")
+    parser := parser_new(tok_input)
+    print("Parser created")
+    ref_parser := [parser]
+    children := []
+    
+    running := true
+    while running {
+        print("Loop start")
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_peek) := parser_peek(p)
+        print("Peek done")
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        
+        if ttype == 0 {
+            running := false
+            ref_parser := [p_peek]
+        } else if ttype == 103 { // func
+            let (node, p_next) := parse_func_def(p_peek) // Use peek
+            children := sys.list.append(children, node)
+            ref_parser := [p_next]
+        } else {
+            let (node, p_next) := parse_stmt(p_peek) // Use peek
+            children := sys.list.append(children, node)
+            ref_parser := [p_next]
+        }
+    }
+    return { kind: 0, children: children }
+}
+
+// --- VERIFICATION ---
+print("STARTING TEST (Complete)")
+tokens := get_test_tokens()
+ast := parse_program(tokens)
+print("Parsing Done.")
+
+let (kind, ast) := sys.struct.get(ast, "kind")
+print("AST Kind:", kind) // 0
+
+let (children, ast) := sys.struct.get(ast, "children")
+let (count, children) := sys.len(children)
+print("Children Count:", count) // 2 (Func, Assign)
+
+if count > 1 {
+    // Check Func
+    let (child1, children) := sys.list.get(children, 0)
+    let (k1, child1) := sys.struct.get(child1, "kind")
+    print("Child 1 Kind:", k1) // 1 (Func)
+    let (n1, child1) := sys.struct.get(child1, "name")
+    print("Func Name:", n1) // add
+    let (args1, child1) := sys.struct.get(child1, "args")
+    let (cnt1, args1) := sys.len(args1)
+    print("Func Args:", cnt1) // 2
+    
+    // Check Assign
+    let (child2, children) := sys.list.get(children, 1)
+    let (k2, child2) := sys.struct.get(child2, "kind")
+    print("Child 2 Kind:", k2) // 101 (Assign)
+    
+    // Check Value (Call)
+    let (val2, child2) := sys.struct.get(child2, "value")
+    let (vk2, val2) := sys.struct.get(val2, "kind")
+    print("Assign Value Kind:", vk2) // 9 (Call)
+    let (fn2, val2) := sys.struct.get(val2, "function")
+    print("Call Function:", fn2) // add
+    let (args2, val2) := sys.struct.get(val2, "args")
+    let (acnt2, args2) := sys.len(args2)
+    print("Call Args:", acnt2) // 2
+}

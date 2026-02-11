@@ -1,0 +1,20 @@
+{
+  "Statement": {
+    "Function": {
+      "name": "double_use",
+      "inputs": [ ["x", {"Linear": "Integer"}] ],
+      "output": {"Linear": "Integer"},
+      "body": {
+        "hash": "todo_hash",
+        "content": {
+          "Statement": {
+            "Block": [
+               { "Expression": { "Call": { "function_hash": "print", "args": [{"Variable": "x"}] } } },
+               { "Expression": { "Call": { "function_hash": "print", "args": [{"Variable": "x"}] } } }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

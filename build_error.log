@@ -1,0 +1,251 @@
+    Checking ark-0-zheng v0.1.0 (C:\Users\Stran\.gemini\antigravity\scratch\ark-compiler-prime\core)
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:49:54
+   |
+49 |                 OpCode::Add => self.binary_op(|a, b| intrinsics::intrinsic_add(vec![a, b]))?,
+   |                                                      ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:50:54
+   |
+50 |                 OpCode::Sub => self.binary_op(|a, b| intrinsics::intrinsic_sub(vec![a, b]))?,
+   |                                                      ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:51:54
+   |
+51 |                 OpCode::Mul => self.binary_op(|a, b| intrinsics::intrinsic_mul(vec![a, b]))?,
+   |                                                      ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:52:54
+   |
+52 |                 OpCode::Div => self.binary_op(|a, b| intrinsics::intrinsic_div(vec![a, b]))?,
+   |                                                      ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:53:54
+   |
+53 |                 OpCode::Mod => self.binary_op(|a, b| intrinsics::intrinsic_mod(vec![a, b]))?,
+   |                                                      ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:55:53
+   |
+55 |                 OpCode::Eq => self.binary_op(|a, b| intrinsics::intrinsic_eq(vec![a, b]))?,
+   |                                                     ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:58:25
+   |
+58 |                         intrinsics::intrinsic_eq(vec![a, b]).map_err(|e| format!("{:?}", e))?;
+   |                         ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:65:53
+   |
+65 |                 OpCode::Gt => self.binary_op(|a, b| intrinsics::intrinsic_gt(vec![a, b]))?,
+   |                                                     ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:66:53
+   |
+66 |                 OpCode::Lt => self.binary_op(|a, b| intrinsics::intrinsic_lt(vec![a, b]))?,
+   |                                                     ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:67:53
+   |
+67 |                 OpCode::Ge => self.binary_op(|a, b| intrinsics::intrinsic_ge(vec![a, b]))?,
+   |                                                     ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:68:53
+   |
+68 |                 OpCode::Le => self.binary_op(|a, b| intrinsics::intrinsic_le(vec![a, b]))?,
+   |                                                     ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:74:25
+   |
+74 |                         intrinsics::intrinsic_and(vec![a, b]).map_err(|e| format!("{:?}", e))?;
+   |                         ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:81:25
+   |
+81 |                         intrinsics::intrinsic_or(vec![a, b]).map_err(|e| format!("{:?}", e))?;
+   |                         ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+error[E0433]: failed to resolve: use of unresolved module or unlinked crate `intrinsics`
+  --> core\src\vm.rs:86:31
+   |
+86 |                     let res = intrinsics::intrinsic_not(vec![a]).map_err(|e| format!("{:?}", e))?;
+   |                               ^^^^^^^^^^ use of unresolved module or unlinked crate `intrinsics`
+   |
+help: to make use of source file core\src\intrinsics.rs, use `mod intrinsics` in this file to declare the module
+  --> core\src\lib.rs:19:1
+   |
+19 + mod intrinsics;
+   |
+help: consider importing this module
+   |
+ 1 + use crate::intrinsics;
+   |
+
+warning: unused imports: `Deserialize` and `Serialize`
+ --> core\src\bytecode.rs:2:13
+  |
+2 | use serde::{Deserialize, Serialize};
+  |             ^^^^^^^^^^^  ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::ast::FunctionDef`
+  --> core\src\runtime.rs:19:5
+   |
+19 | use crate::ast::FunctionDef;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0609]: no field `name` on type `&Rc<Chunk>`
+   --> core\src\intrinsics.rs:425:57
+    |
+425 |         Value::Function(f) => print!("<Function:{}>", f.name),
+    |                                                         ^^^^ unknown field
+    |
+    = note: available fields are: `code`, `constants`
+
+Some errors have detailed explanations: E0433, E0609.
+For more information about an error, try `rustc --explain E0433`.
+warning: `ark-0-zheng` (lib) generated 2 warnings
+error: could not compile `ark-0-zheng` (lib) due to 15 previous errors; 2 warnings emitted

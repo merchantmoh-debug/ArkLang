@@ -1,0 +1,39 @@
+
+// Struct Verification Script
+// Objective: Verify Struct Init, Dot Access, and Linear Semantics.
+
+// 1. Instantiation
+p := { x: 10, y: 20 }
+print("Struct created:", p)
+
+// 2. Read Field (Consumes P in linear system?)
+// We implemented GetField as `data.remove(field)`.
+// So accessing 'x' removes it from 'p'.
+// 'p' still exists but 'x' is gone.
+val_x := p.x
+print("Extracted x:", val_x)
+
+// 3. Access 'y'
+val_y := p.y
+print("Extracted y:", val_y)
+
+// 4. Try accessing 'x' again (Should fail or return None/Error?)
+// Current impl: `variable not found` if field missing.
+// This tests the "Partial Move" or "Field Consumption" logic.
+// print("Trying x again (should fail):", p.x) 
+
+// 5. Nested Structs and Linearity
+// Alloc a buffer (Linear)
+buf := sys.mem.alloc(5)
+buf := sys.mem.write(buf, 0, 99) // Threading!
+
+// Wrap in struct
+wrapper := { b: buf, id: 1 }
+print("Wrapper created with linear buffer.")
+
+// Extract buffer (Moves ownership from wrapper to buf2)
+buf2 := wrapper.b
+print("Buffer extracted. Inspecting:")
+sys.mem.inspect(buf2)
+
+// Wrapper is now empty of 'b'.

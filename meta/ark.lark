@@ -16,22 +16,33 @@ class_def: "class" IDENTIFIER "{" function_def* "}"
 flow_stmt: if_stmt | while_stmt | return_stmt
 return_stmt: "return" expression
 
-if_stmt: "if" expression "{" block "}" ["else" "{" block "}"]
+if_stmt: "if" expression "{" block "}" ("else" "if" expression "{" block "}")* ["else" "{" block "}"]
+
 while_stmt: "while" expression "{" block "}"
 
 block: statement*
 
 // --- Assignments ---
-?assignment: assign_var | assign_attr
+?assignment: assign_var | assign_attr | assign_destructure
+
 assign_var: IDENTIFIER ":=" expression
+assign_destructure: "let" "(" IDENTIFIER ("," IDENTIFIER)* ")" ":=" expression
 assign_attr: atom "." IDENTIFIER ":=" expression
 
 // --- Expressions ---
-?expression: comparison
+?expression: logical_or
+
+?logical_or: logical_and
+           | logical_or OR logical_and -> logical_or
+
+?logical_and: comparison
+            | logical_and AND comparison -> logical_and
 
 ?comparison: sum
            | comparison ">" sum -> gt
            | comparison "<" sum -> lt
+           | comparison ">=" sum -> ge
+           | comparison "<=" sum -> le
            | comparison "==" sum -> eq
 
 ?sum: product
@@ -41,24 +52,34 @@ assign_attr: atom "." IDENTIFIER ":=" expression
 ?product: atom
         | product "*" atom -> mul
         | product "/" atom -> div
+        | product "%" atom -> mod
 
 ?atom: primary
      | atom "." IDENTIFIER -> get_attr
      | atom "(" [expr_list] ")" -> call_expr
+     | atom "[" expression "]" -> get_item
 
 ?primary: NUMBER -> number
         | STRING -> string
         | IDENTIFIER -> var
         | "(" expression ")"
+        | "[" [expr_list] "]" -> list_cons
+        | "{" [field_list] "}" -> struct_init
+
+field_list: field_init ("," field_init)*
+field_init: IDENTIFIER ":" expression
 
 expr_list: expression ("," expression)*
 
 // Tokens
+AND.2: "&&" | "and"
+OR.2: "||" | "or"
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_]*/
 NUMBER: /-?\d+/
-STRING: /".*?"/
+%import common.ESCAPED_STRING
+STRING: ESCAPED_STRING
 
 %import common.WS
-%import common.SH_COMMENT
+%import common.CPP_COMMENT
 %ignore WS
-%ignore SH_COMMENT
+%ignore CPP_COMMENT

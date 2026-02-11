@@ -1,0 +1,7 @@
+print("Hash:")
+print(sys.crypto.hash("Sovereignty"))
+
+print("Merkle:")
+leaves := ["A", "B", "C"]
+merkle := sys.crypto.merkle_root(leaves)
+print(merkle)

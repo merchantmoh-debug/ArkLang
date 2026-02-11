@@ -35,14 +35,20 @@ pub struct Interpreter;
 
 impl Interpreter {
     pub fn eval(node: &ArkNode, scope: &mut Scope) -> Result<Value, EvalError> {
-        match node {
+        let result = match node {
             ArkNode::Statement(stmt) => Interpreter::eval_statement(stmt, scope),
             ArkNode::Expression(expr) => Interpreter::eval_expression(expr, scope),
             ArkNode::Function(func_def) => {
-                scope.set(func_def.name.clone(), Value::Function(func_def.clone()));
+                // Interpreter deprecated for functions. VM is used.
+                scope.set(func_def.name.clone(), Value::Unit);
                 Ok(Value::Unit)
             }
             _ => Ok(Value::Unit),
+        };
+
+        match result {
+            Ok(Value::Return(val)) => Ok(*val),
+            other => other,
         }
     }
 
@@ -53,12 +59,39 @@ impl Interpreter {
                 scope.set(name.clone(), val);
                 Ok(Value::Unit)
             }
-            Statement::Return(expr) => Interpreter::eval_expression(expr, scope),
+            Statement::LetDestructure { names, value } => {
+                let result = Interpreter::eval_expression(value, scope)?;
+                match result {
+                    Value::List(items) => {
+                        if items.len() != names.len() {
+                            // Should be runtime error
+                            println!(
+                                "Destructuring mismatch: expected {} items, got {}",
+                                names.len(),
+                                items.len()
+                            );
+                            return Err(EvalError::NotExecutable);
+                        }
+                        for (i, val) in items.into_iter().enumerate() {
+                            scope.set(names[i].clone(), val);
+                        }
+                        Ok(Value::Unit)
+                    }
+                    _ => Err(EvalError::TypeMismatch("List".to_string(), result)),
+                }
+            }
+            Statement::Return(expr) => {
+                let val = Interpreter::eval_expression(expr, scope)?;
+                Ok(Value::Return(Box::new(val)))
+            }
             Statement::Block(stmts) => {
                 let mut last_val = Value::Unit;
                 for stmt in stmts {
-                    last_val = Interpreter::eval_statement(stmt, scope)?;
-                    // Todo: Handle early return check if we had return values in statements
+                    let val = Interpreter::eval_statement(stmt, scope)?;
+                    if let Value::Return(_) = val {
+                        return Ok(val);
+                    }
+                    last_val = val;
                 }
                 Ok(last_val)
             }
@@ -79,10 +112,16 @@ impl Interpreter {
                 if is_true {
                     for stmt in then_block {
                         result = Interpreter::eval_statement(stmt, scope)?;
+                        if let Value::Return(_) = result {
+                            return Ok(result);
+                        }
                     }
                 } else if let Some(stmts) = else_block {
                     for stmt in stmts {
                         result = Interpreter::eval_statement(stmt, scope)?;
+                        if let Value::Return(_) = result {
+                            return Ok(result);
+                        }
                     }
                 }
                 Ok(result)
@@ -101,13 +140,35 @@ impl Interpreter {
                     }
 
                     for stmt in body {
-                        Interpreter::eval_statement(stmt, scope)?;
+                        let val = Interpreter::eval_statement(stmt, scope)?;
+                        if let Value::Return(_) = val {
+                            return Ok(val);
+                        }
                     }
                 }
                 Ok(Value::Unit)
             }
+            Statement::SetField {
+                obj_name,
+                field,
+                value,
+            } => {
+                let val = Interpreter::eval_expression(value, scope)?;
+                let mut obj = scope
+                    .take(obj_name)
+                    .ok_or_else(|| EvalError::VariableNotFound(obj_name.clone()))?;
+
+                match &mut obj {
+                    Value::Struct(fields) => {
+                        fields.insert(field.clone(), val);
+                    }
+                    _ => return Err(EvalError::TypeMismatch("Struct".to_string(), obj)),
+                }
+                scope.set(obj_name.clone(), obj);
+                Ok(Value::Unit)
+            }
             Statement::Function(func_def) => {
-                scope.set(func_def.name.clone(), Value::Function(func_def.clone()));
+                scope.set(func_def.name.clone(), Value::Unit);
                 Ok(Value::Unit)
             }
         }
@@ -115,6 +176,23 @@ impl Interpreter {
 
     fn eval_expression(expr: &Expression, scope: &mut Scope) -> Result<Value, EvalError> {
         match expr {
+            Expression::StructInit { fields } => {
+                let mut data = std::collections::HashMap::new();
+                for (name, expr) in fields {
+                    let val = Interpreter::eval_expression(expr, scope)?;
+                    data.insert(name.clone(), val);
+                }
+                Ok(Value::Struct(data))
+            }
+            Expression::GetField { obj, field } => {
+                let obj_val = Interpreter::eval_expression(obj, scope)?;
+                match obj_val {
+                    Value::Struct(mut data) => data
+                        .remove(field)
+                        .ok_or_else(|| EvalError::VariableNotFound(field.clone())),
+                    _ => Err(EvalError::TypeMismatch("Struct".to_string(), obj_val)),
+                }
+            }
             Expression::Literal(s) => {
                 if let Ok(i) = s.parse::<i64>() {
                     Ok(Value::Integer(i))
@@ -127,7 +205,7 @@ impl Interpreter {
                 }
             }
             Expression::Variable(name) => scope
-                .get(name)
+                .get_or_move(name)
                 .ok_or_else(|| EvalError::VariableNotFound(name.clone())),
             Expression::Call {
                 function_hash,
@@ -145,31 +223,15 @@ impl Interpreter {
                 }
 
                 // User Function Lookup
-                if let Some(val) = scope.get(function_hash) {
-                    if let Value::Function(func_def) = val {
-                        // Create new scope with parent
-                        let mut call_scope = Scope::with_parent(scope);
-
-                        // Bind args
-                        if evaluated_args.len() != func_def.inputs.len() {
-                            println!(
-                                "Arity mismatch: expected {}, got {}",
-                                func_def.inputs.len(),
-                                evaluated_args.len()
-                            );
-                            return Err(EvalError::NotExecutable); // Arity mismatch
-                        }
-
-                        for (i, (param_name, _)) in func_def.inputs.iter().enumerate() {
-                            call_scope.set(param_name.clone(), evaluated_args[i].clone());
-                        }
-
-                        // Eval body
-                        // We need to recursively evaluate the AST node.
-                        // Since func_def.body is MastNode, we need to extract content.
-                        // Currently MastNode holds ArkNode.
-                        // Wait, func_def.body is Box<MastNode>.
-                        return Interpreter::eval(&func_def.body.content, &mut call_scope);
+                if let Some(val) = scope.get_or_move(function_hash) {
+                    if let Value::Function(_) = val {
+                        // Interpreter cannot execute Bytecode Functions directly.
+                        // This path should only be taken if running pure Interpreter mode, which is deprecated for functions.
+                        println!(
+                            "Interpreter Warning: Cannot execute bytecode function '{}' in tree-walker.",
+                            function_hash
+                        );
+                        return Err(EvalError::NotExecutable);
                     } else {
                         println!(
                             "Found variable '{}' but it is not a function: {:?}",
@@ -181,6 +243,13 @@ impl Interpreter {
                 }
 
                 Err(EvalError::NotExecutable)
+            }
+            Expression::List(items) => {
+                let mut values = Vec::new();
+                for item in items {
+                    values.push(Interpreter::eval_expression(item, scope)?);
+                }
+                Ok(Value::List(values))
             }
         }
     }

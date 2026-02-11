@@ -1,0 +1,299 @@
+    Checking ark-0-zheng v0.1.0 (C:\Users\Stran\.gemini\antigravity\scratch\ark-compiler-prime\core)
+error[E0106]: missing lifetime specifier
+ --> core\src\vm.rs:8:21
+  |
+8 |     pub scopes: Vec<Scope>, // Stack of scopes (Frames)
+  |                     ^^^^^ expected named lifetime parameter
+  |
+help: consider introducing a named lifetime parameter
+  |
+6 ~ pub struct VM<'a> {
+7 |     pub stack: Vec<Value>,
+8 ~     pub scopes: Vec<Scope<'a>>, // Stack of scopes (Frames)
+  |
+
+error[E0425]: cannot find function `intrinsic_not` in module `intrinsics`
+   --> core\src\vm.rs:77:43
+    |
+ 77 |                     let res = intrinsics::intrinsic_not(vec![a]).map_err(|e| format!("{:?}", e))?;
+    |                                           ^^^^^^^^^^^^^ help: a function with a similar name exists: `intrinsic_gt`
+    |
+   ::: core\src\intrinsics.rs:277:1
+    |
+277 | pub fn intrinsic_gt(args: Vec<Value>) -> Result<Value, EvalError> {
+    | ----------------------------------------------------------------- similarly named function `intrinsic_gt` defined here
+
+error[E0277]: the trait bound `runtime::Value: serde::Serialize` is not satisfied
+   --> core\src\bytecode.rs:4:35
+    |
+  4 | #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    |                                   ^^^^^^^^^ unsatisfied trait bound
+...
+  7 |     Push(Value),
+    |          ----- required by a bound introduced by this call
+    |
+help: the trait `Serialize` is not implemented for `runtime::Value`
+   --> core\src\runtime.rs:24:1
+    |
+ 24 | pub enum Value {
+    | ^^^^^^^^^^^^^^
+    = note: for local types consider adding `#[derive(serde::Serialize)]` to your `runtime::Value` type
+    = note: for types from other crates check whether the crate offers a `serde` feature flag
+    = help: the following other types implement trait `Serialize`:
+              &'a T
+              &'a mut T
+              ()
+              (T,)
+              (T0, T1)
+              (T0, T1, T2)
+              (T0, T1, T2, T3)
+              (T0, T1, T2, T3, T4)
+            and 137 others
+note: required by a bound in `serialize_newtype_variant`
+   --> C:\Users\Stran\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_core-1.0.228\src\ser\mod.rs:958:21
+    |
+950 |     fn serialize_newtype_variant<T>(
+    |        ------------------------- required by a bound in this associated function
+...
+958 |         T: ?Sized + Serialize;
+    |                     ^^^^^^^^^ required by this bound in `Serializer::serialize_newtype_variant`
+    = note: this error originates in the derive macro `Serialize` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `runtime::Value: serde::Deserialize<'de>` is not satisfied
+    --> core\src\bytecode.rs:7:10
+     |
+   7 |     Push(Value),
+     |          ^^^^^ unsatisfied trait bound
+     |
+help: the trait `Deserialize<'_>` is not implemented for `runtime::Value`
+    --> core\src\runtime.rs:24:1
+     |
+  24 | pub enum Value {
+     | ^^^^^^^^^^^^^^
+     = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `runtime::Value` type
+     = note: for types from other crates check whether the crate offers a `serde` feature flag
+     = help: the following other types implement trait `Deserialize<'de>`:
+               &'a Path
+               &'a [u8]
+               &'a str
+               ()
+               (T,)
+               (T0, T1)
+               (T0, T1, T2)
+               (T0, T1, T2, T3)
+             and 151 others
+note: required by a bound in `newtype_variant`
+    --> C:\Users\Stran\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_core-1.0.228\src\de\mod.rs:2182:12
+     |
+2180 |     fn newtype_variant<T>(self) -> Result<T, Self::Error>
+     |        --------------- required by a bound in this associated function
+2181 |     where
+2182 |         T: Deserialize<'de>,
+     |            ^^^^^^^^^^^^^^^^ required by this bound in `VariantAccess::newtype_variant`
+
+error[E0277]: the trait bound `runtime::Value: serde::Serialize` is not satisfied
+    --> core\src\bytecode.rs:46:24
+     |
+  46 | #[derive(Debug, Clone, Serialize, Deserialize)]
+     |                        ^^^^^^^^^ unsatisfied trait bound
+...
+  49 |     pub constants: Vec<Value>, // Using OpCode::Push(Value) directly for now, optimization later
+     |     --- required by a bound introduced by this call
+     |
+help: the trait `Serialize` is not implemented for `runtime::Value`
+    --> core\src\runtime.rs:24:1
+     |
+  24 | pub enum Value {
+     | ^^^^^^^^^^^^^^
+     = note: for local types consider adding `#[derive(serde::Serialize)]` to your `runtime::Value` type
+     = note: for types from other crates check whether the crate offers a `serde` feature flag
+     = help: the following other types implement trait `Serialize`:
+               &'a T
+               &'a mut T
+               ()
+               (T,)
+               (T0, T1)
+               (T0, T1, T2)
+               (T0, T1, T2, T3)
+               (T0, T1, T2, T3, T4)
+             and 137 others
+     = note: required for `Vec<runtime::Value>` to implement `Serialize`
+note: required by a bound in `ast::_::_serde::ser::SerializeStruct::serialize_field`
+    --> C:\Users\Stran\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_core-1.0.228\src\ser\mod.rs:1917:21
+     |
+1915 |     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
+     |        --------------- required by a bound in this associated function
+1916 |     where
+1917 |         T: ?Sized + Serialize;
+     |                     ^^^^^^^^^ required by this bound in `SerializeStruct::serialize_field`
+     = note: this error originates in the derive macro `Serialize` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `runtime::Value: serde::Deserialize<'de>` is not satisfied
+    --> core\src\bytecode.rs:49:20
+     |
+  49 |     pub constants: Vec<Value>, // Using OpCode::Push(Value) directly for now, optimization later
+     |                    ^^^^^^^^^^ unsatisfied trait bound
+     |
+help: the trait `Deserialize<'_>` is not implemented for `runtime::Value`
+    --> core\src\runtime.rs:24:1
+     |
+  24 | pub enum Value {
+     | ^^^^^^^^^^^^^^
+     = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `runtime::Value` type
+     = note: for types from other crates check whether the crate offers a `serde` feature flag
+     = help: the following other types implement trait `Deserialize<'de>`:
+               &'a Path
+               &'a [u8]
+               &'a str
+               ()
+               (T,)
+               (T0, T1)
+               (T0, T1, T2)
+               (T0, T1, T2, T3)
+             and 151 others
+     = note: required for `Vec<runtime::Value>` to implement `Deserialize<'_>`
+note: required by a bound in `next_element`
+    --> C:\Users\Stran\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_core-1.0.228\src\de\mod.rs:1771:12
+     |
+1769 |     fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
+     |        ------------ required by a bound in this associated function
+1770 |     where
+1771 |         T: Deserialize<'de>,
+     |            ^^^^^^^^^^^^^^^^ required by this bound in `SeqAccess::next_element`
+
+error[E0277]: the trait bound `runtime::Value: serde::Deserialize<'de>` is not satisfied
+    --> core\src\bytecode.rs:49:20
+     |
+  49 |     pub constants: Vec<Value>, // Using OpCode::Push(Value) directly for now, optimization later
+     |                    ^^^^^^^^^^ unsatisfied trait bound
+     |
+help: the trait `Deserialize<'_>` is not implemented for `runtime::Value`
+    --> core\src\runtime.rs:24:1
+     |
+  24 | pub enum Value {
+     | ^^^^^^^^^^^^^^
+     = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `runtime::Value` type
+     = note: for types from other crates check whether the crate offers a `serde` feature flag
+     = help: the following other types implement trait `Deserialize<'de>`:
+               &'a Path
+               &'a [u8]
+               &'a str
+               ()
+               (T,)
+               (T0, T1)
+               (T0, T1, T2)
+               (T0, T1, T2, T3)
+             and 151 others
+     = note: required for `Vec<runtime::Value>` to implement `Deserialize<'_>`
+note: required by a bound in `next_value`
+    --> C:\Users\Stran\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_core-1.0.228\src\de\mod.rs:1916:12
+     |
+1914 |     fn next_value<V>(&mut self) -> Result<V, Self::Error>
+     |        ---------- required by a bound in this associated function
+1915 |     where
+1916 |         V: Deserialize<'de>,
+     |            ^^^^^^^^^^^^^^^^ required by this bound in `MapAccess::next_value`
+
+error[E0277]: the trait bound `runtime::Value: serde::Deserialize<'de>` is not satisfied
+  --> core\src\bytecode.rs:46:35
+   |
+46 | #[derive(Debug, Clone, Serialize, Deserialize)]
+   |                                   ^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Deserialize<'_>` is not implemented for `runtime::Value`
+  --> core\src\runtime.rs:24:1
+   |
+24 | pub enum Value {
+   | ^^^^^^^^^^^^^^
+   = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `runtime::Value` type
+   = note: for types from other crates check whether the crate offers a `serde` feature flag
+   = help: the following other types implement trait `Deserialize<'de>`:
+             &'a Path
+             &'a [u8]
+             &'a str
+             ()
+             (T,)
+             (T0, T1)
+             (T0, T1, T2)
+             (T0, T1, T2, T3)
+           and 151 others
+   = note: required for `Vec<runtime::Value>` to implement `Deserialize<'_>`
+note: required by a bound in `ast::_::_serde::__private228::de::missing_field`
+  --> C:\Users\Stran\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde-1.0.228\src\private\de.rs:26:8
+   |
+24 | pub fn missing_field<'de, V, E>(field: &'static str) -> Result<V, E>
+   |        ------------- required by a bound in this function
+25 | where
+26 |     V: Deserialize<'de>,
+   |        ^^^^^^^^^^^^^^^^ required by this bound in `missing_field`
+   = note: this error originates in the derive macro `Deserialize` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no variant or associated item named `Program` found for enum `ArkNode` in the current scope
+  --> core\src\compiler.rs:32:22
+   |
+32 |             ArkNode::Program(stmts) => {
+   |                      ^^^^^^^ variant or associated item not found in `ArkNode`
+   |
+  ::: core\src\ast.rs:45:1
+   |
+45 | pub enum ArkNode {
+   | ---------------- variant or associated item `Program` not found for this enum
+
+error[E0599]: no variant named `Binary` found for enum `Expression`
+   --> core\src\compiler.rs:161:25
+    |
+161 |             Expression::Binary { op, left, right } => {
+    |                         ^^^^^^ variant not found in `Expression`
+    |
+   ::: core\src\ast.rs:92:1
+    |
+ 92 | pub enum Expression {
+    | ------------------- variant `Binary` not found here
+
+error[E0026]: variant `Expression::Call` does not have a field named `function`
+   --> core\src\compiler.rs:181:32
+    |
+181 |             Expression::Call { function, args } => {
+    |                                ^^^^^^^^
+    |                                |
+    |                                variant `Expression::Call` does not have this field
+    |                                help: `Expression::Call` has a field named `function_hash`
+
+error[E0027]: pattern does not mention field `function_hash`
+   --> core\src\compiler.rs:181:13
+    |
+181 |             Expression::Call { function, args } => {
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing field `function_hash`
+    |
+help: include the missing field in the pattern
+    |
+181 |             Expression::Call { function, args, function_hash } => {
+    |                                              +++++++++++++++
+help: if you don't care about this missing field, you can explicitly ignore it
+    |
+181 |             Expression::Call { function, args, function_hash: _ } => {
+    |                                              ++++++++++++++++++
+help: or always ignore missing fields here
+    |
+181 |             Expression::Call { function, args, .. } => {
+    |                                              ++++
+
+error[E0277]: `runtime::Value` doesn't implement `std::fmt::Display`
+  --> core\src\vm.rs:84:36
+   |
+84 |                     println!("{}", val);
+   |                               --   ^^^ `runtime::Value` cannot be formatted with the default formatter
+   |                               |
+   |                               required by this formatting parameter
+   |
+help: the trait `std::fmt::Display` is not implemented for `runtime::Value`
+  --> core\src\runtime.rs:24:1
+   |
+24 | pub enum Value {
+   | ^^^^^^^^^^^^^^
+   = note: in format strings you may be able to use `{:?}` (or {:#?} for pretty-print) instead
+   = note: this error originates in the macro `$crate::format_args_nl` which comes from the expansion of the macro `println` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+Some errors have detailed explanations: E0026, E0027, E0106, E0277, E0425, E0599.
+For more information about an error, try `rustc --explain E0026`.
+error: could not compile `ark-0-zheng` (lib) due to 13 previous errors

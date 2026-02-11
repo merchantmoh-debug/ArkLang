@@ -1,0 +1,11 @@
+Yo deepbeepmeep,
+
+I saw WanGP—getting 14B models on 6GB cards is serious reliability work.
+
+I’m building Ark because I was tired of Python eating 3GB of RAM just to boot a "lightweight" inference script.
+
+Ark is a full language and runtime that fits massive model pipelines into <500MB of System RAM. It uses linear types (no GC) and zero-copy FFI to push data directly from disk to GPU. It even runs browser-native, so you can host the full UI and the Engine without the Python overhead suffocating your VRAM.
+
+If you want to free up that system RAM so the GPU can breathe—or run larger contexts on the same hardware—check the repo. It’s designed exactly for this constraint.
+
+— Mohamad

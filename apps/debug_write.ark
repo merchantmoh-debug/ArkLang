@@ -1,0 +1,7 @@
+func main() {
+    print("DEBUG: Attempting to write to 'debug_output.txt'...")
+    sys.fs.write("debug_output.txt", "This is a test write from debug_write.ark")
+    print("DEBUG: Write command issued.")
+    return 0
+}
+main()

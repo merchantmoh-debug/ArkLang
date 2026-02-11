@@ -1,0 +1,49 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Function": {
+          "name": "factorial",
+          "inputs": [
+            [
+              "n",
+              {
+                "Shared": "Any"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": []
+              }
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Literal": "{'type': 'call', 'function': \"{'type': 'var', 'name': 'print'}\", 'args': [{'type': 'string', 'val': 'Starting Factorial Benchmark...'}]}"
+        }
+      },
+      {
+        "Let": {
+          "name": "result",
+          "ty": null,
+          "value": {
+            "Literal": "{'type': 'call', 'function': \"{'type': 'var', 'name': 'factorial'}\", 'args': [12]}"
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Literal": "{'type': 'call', 'function': \"{'type': 'var', 'name': 'print'}\", 'args': [{'type': 'var', 'name': 'result'}]}"
+        }
+      }
+    ]
+  }
+}

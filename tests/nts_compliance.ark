@@ -1,0 +1,6 @@
+// NTS Compliance Test
+print("Test 1: Clean Write (Should be silent)");
+sys_fs_write("tests/nts_clean.txt", "Clean Write");
+
+print("Test 2: Overwrite (Should trigger [Ark:NTS] WARNING)");
+sys_fs_write("tests/nts_clean.txt", "Dirty Overwrite");

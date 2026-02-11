@@ -1,0 +1,17 @@
+func is_alpha(char_str) {
+    return ((char_str >= "a") and (char_str <= "z")) or ((char_str >= "A") and (char_str <= "Z")) or (char_str == "_")
+}
+
+func main() {
+    print("Testing is_alpha...")
+    c := "s"
+    res := is_alpha(c)
+    print("is_alpha('s') = " + res)
+    
+    print("Checking 's' >= 'a': " + ("s" >= "a"))
+    print("Checking 's' <= 'z': " + ("s" <= "z"))
+    
+    c2 := "1"
+    print("is_alpha('1') = " + is_alpha(c2))
+}
+main()

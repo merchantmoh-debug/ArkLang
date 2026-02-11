@@ -1,0 +1,62 @@
+warning: unused imports: `Deserialize` and `Serialize`
+ --> core\src\bytecode.rs:2:13
+  |
+2 | use serde::{Deserialize, Serialize};
+  |             ^^^^^^^^^^^  ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::ast::FunctionDef`
+  --> core\src\runtime.rs:19:5
+   |
+19 | use crate::ast::FunctionDef;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unreachable pattern
+   --> core\src\vm.rs:164:17
+    |
+164 | ...   _ => return Err(format!("Unimplemente...
+    |       ^ no value can reach this
+    |
+note: multiple earlier patterns match some of the same values
+   --> core\src\vm.rs:164:17
+    |
+ 45 | ...         OpCode::Push(v) => self.stack.p...
+    |             --------------- matches some of the same values
+ 46 | ...         OpCode::Pop => {
+    |             ----------- matches some of the same values
+...
+ 50 | ...         OpCode::Add => self.binary_op(|...
+    |             ----------- matches some of the same values
+ 51 | ...         OpCode::Sub => self.binary_op(|...
+    |             ----------- matches some of the same values
+...
+164 | ...         _ => return Err(format!("Unimpl...
+    |             ^ ...and 19 other patterns collectively make this unreachable
+    = note: `#[warn(unreachable_patterns)]` (part of `#[warn(unused)]`) on by default
+
+warning: `ark-0-zheng` (lib) generated 3 warnings (run `cargo fix --lib -p ark-0-zheng` to apply 2 suggestions)
+warning: unused import: `ark_0_zheng::runtime::Scope`
+  --> core\src\bin\ark_loader.rs:21:5
+   |
+21 | use ark_0_zheng::runtime::Scope;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `val`
+  --> core\src\bin\ark_loader.rs:62:20
+   |
+62 |                 Ok(val) => {
+   |                    ^^^ help: if this is intentional, prefix it with an underscore: `_val`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `ark-0-zheng` (bin "ark_loader") generated 2 warnings (run `cargo fix --bin "ark_loader"` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
+     Running `target\debug\ark_loader.exe compiler.json apps/test_int.ark apps/compiler/test_int.mast`
+
+thread 'main' (8804) panicked at core\src\bin\ark_loader.rs:34:53:
+Failed to read file: Os { code: 2, kind: NotFound, message: "The system cannot find the file specified." }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+error: process didn't exit successfully: `target\debug\ark_loader.exe compiler.json apps/test_int.ark apps/compiler/test_int.mast` (exit code: 101)

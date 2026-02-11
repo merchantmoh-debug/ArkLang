@@ -1,0 +1,44 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [ { "Literal": "Test 1: Clean Write (Should be silent)" } ]
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "sys_fs_write",
+            "args": [
+              { "Literal": "nts_test_file.txt" },
+              { "Literal": "Clean Write content" }
+            ]
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [ { "Literal": "Test 2: Overwrite (Should trigger [Ark:NTS] WARNING)" } ]
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "sys_fs_write",
+            "args": [
+              { "Literal": "nts_test_file.txt" },
+              { "Literal": "Dirty Overwrite content" }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

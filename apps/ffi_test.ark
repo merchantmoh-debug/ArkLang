@@ -1,0 +1,20 @@
+print("Allocating 10 bytes...")
+buf := sys.mem.alloc(10)
+
+print("Checking Pointer 1...")
+buf := sys.mem.inspect(buf)
+
+print("Writing 255 to index 0...")
+buf := sys.mem.write(buf, 0, 255)
+
+print("Reading back...")
+// Destructuring assignment!
+// sys.mem.read returns [val, buf]
+let (val, buf) := sys.mem.read(buf, 0)
+
+print(val)
+
+print("Checking Pointer 2 (Visual Check)...")
+buf := sys.mem.inspect(buf)
+
+print("Verification Complete.")

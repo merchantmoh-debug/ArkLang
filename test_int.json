@@ -1,0 +1,148 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Function": {
+          "name": "main",
+          "inputs": [],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "Testing Integer Print:"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "1"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "Testing String Print:"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "1"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "Testing Add String+Int:"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Literal": "A"
+                                },
+                                {
+                                  "Literal": "1"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "Testing Add String+Bool:"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Literal": "B"
+                                },
+                                {
+                                  "Literal": "true"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "main",
+            "args": []
+          }
+        }
+      }
+    ]
+  }
+}

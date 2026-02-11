@@ -1,0 +1,76 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Function": {
+          "name": "main",
+          "inputs": [],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "DEBUG: Attempting to write to 'debug_output.txt'..."
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "sys.fs.write",
+                        "args": [
+                          {
+                            "Literal": "debug_output.txt"
+                          },
+                          {
+                            "Literal": "This is a test write from debug_write.ark"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "print",
+                        "args": [
+                          {
+                            "Literal": "DEBUG: Write command issued."
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "Return": {
+                      "Literal": "0"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "main",
+            "args": []
+          }
+        }
+      }
+    ]
+  }
+}
