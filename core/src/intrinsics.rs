@@ -13,7 +13,7 @@ use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::process::Command;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub struct IntrinsicRegistry;
 
@@ -50,6 +50,10 @@ impl IntrinsicRegistry {
             "intrinsic_len" | "sys.len" => Some(intrinsic_len),
             "intrinsic_struct_get" | "sys.struct.get" => Some(intrinsic_struct_get),
             "intrinsic_struct_set" | "sys.struct.set" => Some(intrinsic_struct_set),
+            "intrinsic_time_now" | "time.now" => Some(intrinsic_time_now),
+            "intrinsic_math_pow" | "math.pow" => Some(intrinsic_math_pow),
+            "intrinsic_math_sqrt" | "math.sqrt" => Some(intrinsic_math_sqrt),
+            "intrinsic_io_cls" | "io.cls" => Some(intrinsic_io_cls),
             _ => None,
         }
     }
@@ -152,6 +156,22 @@ impl IntrinsicRegistry {
         scope.set(
             "sys.struct.set".to_string(),
             Value::NativeFunction(intrinsic_struct_set),
+        );
+        scope.set(
+            "time.now".to_string(),
+            Value::NativeFunction(intrinsic_time_now),
+        );
+        scope.set(
+            "math.pow".to_string(),
+            Value::NativeFunction(intrinsic_math_pow),
+        );
+        scope.set(
+            "math.sqrt".to_string(),
+            Value::NativeFunction(intrinsic_math_sqrt),
+        );
+        scope.set(
+            "io.cls".to_string(),
+            Value::NativeFunction(intrinsic_io_cls),
         );
     }
 }
@@ -957,5 +977,105 @@ pub fn intrinsic_struct_set(args: Vec<Value>) -> Result<Value, RuntimeError> {
             "Struct".to_string(),
             struct_val,
         )),
+    }
+}
+
+pub fn intrinsic_time_now(_args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| RuntimeError::InvalidOperation("Time went backwards".to_string()))?;
+    Ok(Value::Integer(since_the_epoch.as_millis() as i64))
+}
+
+pub fn intrinsic_math_pow(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match (&args[0], &args[1]) {
+        (Value::Integer(base), Value::Integer(exp)) => {
+            let res = (*base as f64).powf(*exp as f64);
+            Ok(Value::Integer(res as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_math_sqrt(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => {
+            if *n < 0 {
+                 return Err(RuntimeError::InvalidOperation("Square root of negative number".to_string()));
+            }
+            let res = (*n as f64).sqrt();
+            Ok(Value::Integer(res as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_io_cls(_args: Vec<Value>) -> Result<Value, RuntimeError> {
+    print!("\x1b[2J\x1b[H");
+    Ok(Value::Unit)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::Value;
+
+    #[test]
+    fn test_time_now() {
+        let res = intrinsic_time_now(vec![]);
+        match res {
+            Ok(Value::Integer(t)) => assert!(t > 0),
+            _ => panic!("Expected Integer, got {:?}", res),
+        }
+    }
+
+    #[test]
+    fn test_math_pow() {
+        // 2^3 = 8
+        let args = vec![Value::Integer(2), Value::Integer(3)];
+        assert_eq!(intrinsic_math_pow(args).unwrap(), Value::Integer(8));
+
+        // 10^2 = 100
+        let args = vec![Value::Integer(10), Value::Integer(2)];
+        assert_eq!(intrinsic_math_pow(args).unwrap(), Value::Integer(100));
+
+        // 2^-1 = 0 (0.5 as integer)
+        let args = vec![Value::Integer(2), Value::Integer(-1)];
+        assert_eq!(intrinsic_math_pow(args).unwrap(), Value::Integer(0));
+    }
+
+    #[test]
+    fn test_math_sqrt() {
+        // sqrt(16) = 4
+        let args = vec![Value::Integer(16)];
+        assert_eq!(intrinsic_math_sqrt(args).unwrap(), Value::Integer(4));
+
+        // sqrt(10) = 3 (3.16... as integer)
+        let args = vec![Value::Integer(10)];
+        assert_eq!(intrinsic_math_sqrt(args).unwrap(), Value::Integer(3));
+
+        // sqrt(-1) -> Error
+        let args = vec![Value::Integer(-1)];
+        assert!(intrinsic_math_sqrt(args).is_err());
+    }
+
+    #[test]
+    fn test_io_cls() {
+        // Just verify it runs and returns Unit
+        let args = vec![];
+        assert_eq!(intrinsic_io_cls(args).unwrap(), Value::Unit);
     }
 }
