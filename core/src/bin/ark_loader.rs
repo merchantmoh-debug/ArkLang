@@ -56,8 +56,9 @@ fn main() {
                 ark_0_zheng::runtime::Value::List(ark_args),
             );
 
-            match Interpreter::eval(&node, &mut scope) {
-                Ok(val) => {
+            let mut interpreter = Interpreter::new();
+            match interpreter.eval(&node, &mut scope) {
+                Ok(_val) => {
                     // println!("Execution Result: {:?}", val);
                 }
                 Err(e) => eprintln!("Execution Error: {:?}", e),

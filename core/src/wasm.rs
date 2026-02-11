@@ -61,7 +61,8 @@ pub unsafe extern "C" fn ark_eval(input_ptr: *mut u8, input_len: usize) -> *mut 
     let response = match load_ark_program(input_str) {
         Ok(node) => {
             let mut scope = Scope::new();
-            match Interpreter::eval(&node, &mut scope) {
+            let mut interpreter = Interpreter::new();
+            match interpreter.eval(&node, &mut scope) {
                 Ok(val) => format!("Result: {:?}", val),
                 Err(e) => format!("Runtime Error: {:?}", e),
             }

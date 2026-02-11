@@ -48,8 +48,7 @@ impl Value {
             | Value::Unit
             | Value::Function(_)
             | Value::String(_) => false,
-            Value::String(_)
-            | Value::List(_)
+            Value::List(_)
             | Value::LinearObject { .. }
             | Value::Buffer(_)
             | Value::Struct(_) => true,

@@ -3,71 +3,106 @@
   <head>
     <meta charset="UTF-8" />
     <title>Ark-0 Sovereign Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;600&family=Inter:wght@200;400;700&display=swap" rel="stylesheet">
     <style>
       :root {
-        --bg-color: #0f172a;
-        --glass-bg: rgba(30, 41, 59, 0.7);
-        --glass-border: rgba(255, 255, 255, 0.1);
-        --accent: #38bdf8;
+        --bg-color: #050505;
+        --glass-bg: rgba(20, 20, 20, 0.8);
+        --glass-border: rgba(255, 255, 255, 0.05);
+        --accent: #00ff9d;
+        --secondary: #38bdf8;
         --text: #e2e8f0;
-        --font-mono: "Fira Code", "Roboto Mono", monospace;
+        --text-dim: #94a3b8;
+        --font-mono: "Fira Code", monospace;
+        --font-ui: "Inter", sans-serif;
       }
 
       body {
         margin: 0;
-        padding: 2rem;
+        padding: 0;
         background-color: var(--bg-color);
+        background-image: radial-gradient(circle at 50% 50%, #111 0%, #000 100%);
         color: var(--text);
-        font-family: "Inter", sans-serif;
+        font-family: var(--font-ui);
+        height: 100vh;
+        width: 100vw;
         display: flex;
         flex-direction: column;
-        align-items: center;
-        height: 100vh;
-        box-sizing: border-box;
         overflow: hidden;
       }
 
-      h1 {
-        font-weight: 200;
-        letter-spacing: 0.1em;
-        margin-bottom: 2rem;
-        text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+      /* TOP BAR */
+      header {
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 1.5rem;
+        border-bottom: 1px solid var(--glass-border);
+        background: rgba(0,0,0,0.5);
+        backdrop-filter: blur(5px);
       }
 
-      .container {
+      .brand {
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--text);
+        font-size: 0.9rem;
+      }
+      .brand span { color: var(--accent); }
+
+      .system-status {
         display: flex;
-        gap: 2rem;
-        width: 100%;
-        height: 100%;
-        max-width: 1200px;
+        gap: 1.5rem;
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--text-dim);
+      }
+      .status-item span { color: var(--accent); }
+
+      /* MAIN LAYOUT */
+      main {
+        flex: 1;
+        display: flex;
+        padding: 1rem;
+        gap: 1rem;
       }
 
       .pane {
         flex: 1;
         background: var(--glass-bg);
         border: 1px solid var(--glass-border);
-        border-radius: 1rem;
-        backdrop-filter: blur(10px);
+        border-radius: 8px;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        position: relative;
       }
 
       .pane-header {
-        padding: 1rem;
+        padding: 0.75rem 1rem;
         border-bottom: 1px solid var(--glass-border);
-        font-size: 0.9rem;
+        font-size: 0.75rem;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        background: rgba(0, 0, 0, 0.2);
+        letter-spacing: 0.1em;
+        color: var(--text-dim);
         display: flex;
         justify-content: space-between;
         align-items: center;
+        background: rgba(255, 255, 255, 0.02);
       }
 
-      textarea {
+      .pane-content {
         flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+
+      /* EDITOR */
+      textarea#input {
+        width: 100%;
+        height: 100%;
         background: transparent;
         border: none;
         color: var(--text);
@@ -76,62 +111,92 @@
         padding: 1rem;
         resize: none;
         outline: none;
-        line-height: 1.5;
+        line-height: 1.6;
+        box-sizing: border-box;
       }
 
+      /* OUTPUT */
       #output {
+        width: 100%;
+        height: 100%;
         padding: 1rem;
         font-family: var(--font-mono);
+        font-size: 0.9rem;
         white-space: pre-wrap;
         overflow-y: auto;
-        color: #a5f3fc;
+        color: var(--secondary);
+        box-sizing: border-box;
+      }
+
+      /* ACTION BAR (Bottom) */
+      footer {
+        height: 50px;
+        border-top: 1px solid var(--glass-border);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 0 1.5rem;
+        background: rgba(0,0,0,0.5);
       }
 
       .btn {
-        background: rgba(56, 189, 248, 0.1);
+        background: transparent;
         border: 1px solid var(--accent);
         color: var(--accent);
-        padding: 0.5rem 1.5rem;
-        border-radius: 0.5rem;
+        padding: 0.5rem 2rem;
+        border-radius: 4px;
         cursor: pointer;
-        transition: all 0.2s;
+        font-family: var(--font-mono);
         text-transform: uppercase;
         font-size: 0.8rem;
-        letter-spacing: 0.1em;
+        transition: all 0.2s;
       }
-
       .btn:hover {
         background: var(--accent);
-        color: var(--bg-color);
-        box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+        color: #000;
+        box-shadow: 0 0 20px rgba(0, 255, 157, 0.3);
       }
 
+      /* UTILS */
       .status-dot {
         width: 8px;
         height: 8px;
         border-radius: 50%;
+        background: #333;
+        display: inline-block;
+        margin-right: 6px;
+      }
+      .status-dot.active {
+        background: var(--accent);
+        box-shadow: 0 0 8px var(--accent);
+      }
+      .status-dot.error {
         background: #ef4444;
-        box-shadow: 0 0 5px #ef4444;
-        transition: all 0.3s;
+        box-shadow: 0 0 8px #ef4444;
       }
 
-      .status-dot.connected {
-        background: #22c55e;
-        box-shadow: 0 0 5px #22c55e;
-      }
+      /* SCROLLBAR */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
     </style>
   </head>
   <body>
-    <h1>ARK-0 // SOVEREIGN CONSOLE</h1>
+    <header>
+      <div class="brand">ARK <span>//</span> OMEGA-POINT v112.0</div>
+      <div class="system-status">
+        <div class="status-item">HEART: <span>SOUND</span></div>
+        <div class="status-item">OIS: <span>100/100</span></div>
+        <div class="status-item">MODE: <span>TURTLE</span></div>
+        <div class="status-item"><div class="status-dot" id="wasm-status"></div>RUNTIME</div>
+      </div>
+    </header>
 
-    <div class="container">
+    <main>
       <div class="pane">
-        <div class="pane-header">
-          <span>Input (MAST JSON)</span>
-          <button class="btn" onclick="runArk()">Execute</button>
-        </div>
-        <textarea id="input" spellcheck="false">
-{
+        <div class="pane-header">Source Input (JSON MAST)</div>
+        <div class="pane-content">
+          <textarea id="input" spellcheck="false">{
   "Statement": {
     "Block": [
       {
@@ -161,18 +226,21 @@
       }
     ]
   }
-}</textarea
-        >
+}</textarea>
+        </div>
       </div>
 
       <div class="pane">
-        <div class="pane-header">
-          <span>Output (Runtime)</span>
-          <div class="status-dot" id="status" title="WASM Runtime Status"></div>
+        <div class="pane-header">Sovereign Runtime Output</div>
+        <div class="pane-content">
+          <div id="output">Initializing Neural Link...</div>
         </div>
-        <div id="output">Initializing...</div>
       </div>
-    </div>
+    </main>
+
+    <footer>
+      <button class="btn" onclick="runArk()">EXECUTE [CTRL+ENTER]</button>
+    </footer>
 
     <script src="main.js"></script>
   </body>
