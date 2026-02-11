@@ -1,0 +1,59 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Function": {
+          "name": "make_struct",
+          "inputs": [],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "Return": {
+                      "StructInit": {
+                        "fields": [
+                          [
+                            "pos",
+                            {
+                              "Literal": "0"
+                            }
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "s",
+          "ty": null,
+          "value": {
+            "Call": {
+              "function_hash": "make_struct",
+              "args": []
+            }
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "p",
+          "ty": null,
+          "value": {
+            "Literal": "{'type': 'get_attr', 'full_path': 's.pos', 'object': {'type': 'var', 'name': 's'}, 'attr': 'pos'}"
+          }
+        }
+      }
+    ]
+  }
+}

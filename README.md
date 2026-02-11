@@ -2,8 +2,8 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Patent: US 63/935,467](https://img.shields.io/badge/Patent-US%2063%2F935%2C467-red)](PATENT_NOTICE)
-[![Build Status](https://img.shields.io/badge/Build-State_Zero-brightgreen)](core/build.log)
-[![Status: ACTIVE](https://img.shields.io/badge/Status-ACTIVE-brightgreen)](LAUNCH_READINESS_AUDIT.md)
+[![Build Status](https://img.shields.io/badge/Build-PASSING-brightgreen)](core/build.log)
+[![Status: BETA](https://img.shields.io/badge/Status-OUROBOROS_ALPHA-orange)](LAUNCH_READINESS_AUDIT.md)
 
 **© 2026 Mohamad Al-Zawahreh (dba Sovereign Systems). All Rights Reserved.**
 
@@ -15,9 +15,9 @@
 
 | Component | Version | Status | Access |
 | :--- | :--- | :--- | :--- |
-| **Ark Core (.rs)** | **v1.0.0** | **STABLE** | [Open Source (AGPLv3)](./LICENSE) |
-| **Neuro-Bridge (.py)** | **v1.0.0** | **ACTIVE** | [Open Source (AGPLv3)](./meta/bridge/ark_bridge.py) |
-| **Standard Lib** | **v0.9.0** | **BETA** | [Open Source](./core/src/intrinsics.rs) |
+| **Ark Core (.rs)** | **v1.1.0** | **STABLE** | [Open Source (AGPLv3)](./LICENSE) |
+| **Compiler (.ark)** | **v0.5.0** | **BETA** | [Self-Hosting in Progress](./apps/compiler) |
+| **Standard Lib** | **v0.9.0** | **ACTIVE** | [Open Source](./core/src/intrinsics.rs) |
 
 ---
 
@@ -54,18 +54,16 @@ graph TD
 
 ### 1. The Symbolic Core (Rust) 🦀
 *   **Zero-Cost Abstractions:** Built on the verifiable performance of Rust.
-*   **Merkle-ized Memory:** Every state change is hashed. Truth is immutable.
-*   **WASM Target:** Run anywhere—server, edge, or browser—without asking for permission.
+*   **Memory Model:** Hybrid Linear/Shared types for safety and usability.
+*   **Intrinsics:** Native FS, HTTP, and Crypto operations (`sys.fs`, `sys.net`, `sys.crypto`).
 
 ### 2. The Neuro-Bridge (Python) 🐍
 *   **Active Inference:** Direct connection to `gemini-2.5-flash-lite`.
 *   **Fallible Oracle:** The AI is treated as an untrusted oracle; its outputs are verified, constraining the "hallucination tax."
-*   **Sovereign API:** No SDKs. No telemetry. Raw HTTP/1.1 requests signed by *your* keys.
 
 ### 3. The Ark Language (.ark) 📜
 *   **Kinetic Syntax:** Algol-style infix notation for maximum readability.
-*   **Intrinsic Power:** Direct access to `intrinsic_ask_ai` for thought generation.
-*   **Self-Modifying:** The system can rewrite its own capabilities in real-time.
+*   **Self-Hosting:** The compiler is written in Ark itself (`apps/compiler`).
 
 ---
 
@@ -77,64 +75,22 @@ graph TD
 ### 1. Interactive REPL
 Enter the immediate mode to test symbolic constraints.
 ```bash
-$ python meta/ark.py run apps/example.ark
+$ python meta/compile.py apps/example.ark output.json
+$ cargo run --bin ark_loader -- output.json
 ```
 ```ark
 print("Hello Sovereign World")
 ```
 
-### 2. Running Verification Scripts
-Execute the verified `factorial` benchmark.
+### 2. Self-Hosting Compiler (The Ouroboros)
+We are currently bootstrapping the compiler.
 ```bash
-$ python meta/ark.py run meta/factorial.ark
-[Ark] Result: 3628800
+# 1. Compile the compiler using the Python bootstrap
+$ python meta/compile.py apps/compiler/compiler.ark compiler.json
+
+# 2. Run the compiler using the Rust runtime
+$ cargo run --bin ark_loader -- compiler.json input.ark output.json
 ```
-
-### 3. Neuro-Symbolic Awakening
-Invoke the AI directly from the language.
-```ark
-// meta/agi_awakening.ark
-response := intrinsic_ask_ai("Define Sovereignty in one sentence.")
-print(response)
-```
-*Output:*
-```
-"Sovereignty is the exclusive right to exercise supreme authority..."
-```
-*Output:*
-```
-"Sovereignty is the exclusive right to exercise supreme authority over a geographic region, group of people, or oneself."
-```
-
----
-
-## ⚙️ Version Compatibility
-
-| Ark Version | Rust Toolchain | Python Bridge | Google Model |
-| :--- | :--- | :--- | :--- |
-| **v1.0 (Sovereign)** | `1.80+` | `3.10+` | `Any (Gemini 2.0+, DeepSeek, OpenAI, Local)` |
-
----
-
-## 🌌 The Sovereign Ecosystem
-
-Ark is the legislative core of a broader Sovereign Stack. To build a complete autonomous agent, you need the Body, the Mind, and the Law.
-
-| Component | Role | Status | Repository |
-| :--- | :--- | :--- | :--- |
-| **Ark** | **The Law (Runtime)** | **ACTIVE** | [ark-compiler](https://github.com/merchantmoh-debug/ark-compiler) |
-| **Moonlight** | **The Body (Reflexes)** | **PRODUCTION** | [moonlight-kernel](https://github.com/merchantmoh-debug/moonlight-kernel) |
-| **Remember-Me** | **The Mind (Memory)** | **V2 LEGACY** | [Remember-Me-AI](https://github.com/merchantmoh-debug/Remember-Me-AI) |
-
-> *"Ark defines the rules. Moonlight executes the motion. Remember-Me retains the history."*
-
-### The Unified Stack
-In the Sovereign Architecture:
-1.  **Moonlight** provides the raw kinetic speed (Wasm/Rust).
-2.  **Ark** replaces the "Python Glue" as the deterministic orchestrator.
-3.  **Remember-Me** is the persistent vector store contacted via the Neuro-Bridge.
-
-Ark does not defeat Moonlight; it **commands** it.
 
 ---
 
@@ -152,6 +108,11 @@ Ark does not defeat Moonlight; it **commands** it.
 3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
 4.  Push to the branch (`git push origin feature/AmazingFeature`).
 5.  Open a Pull Request.
+
+**Current Needs:**
+- **Standard Library:** Implement `std/list`, `std/string`, `std/json`.
+- **Compiler Backend:** Optimize MAST generation.
+- **Documentation:** Expand the Field Manual.
 
 ---
 

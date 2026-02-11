@@ -1,0 +1,621 @@
+// --- Ark Parser (Self-Hosted) ---
+
+// --- Token Types (Must Match Lexer) ---
+TOKEN_EOF := 0
+TOKEN_IDENTIFIER := 1
+TOKEN_NUMBER := 2
+TOKEN_STRING := 3
+TOKEN_EQ := 4         // =
+TOKEN_PLUS := 5       // +
+TOKEN_MINUS := 6      // -
+TOKEN_STAR := 7       // *
+TOKEN_SLASH := 8      // /
+TOKEN_LPAREN := 9     // (
+TOKEN_RPAREN := 10    // )
+TOKEN_LBRACE := 11    // {
+TOKEN_RBRACE := 12    // }
+TOKEN_COMMA := 13     // ,
+TOKEN_COLON := 14     // :
+TOKEN_SEMICOLON := 15 // ;
+TOKEN_ASSIGN := 16    // :=
+TOKEN_GT := 17        // >
+TOKEN_LT := 18        // <
+TOKEN_GE := 19        // >=
+TOKEN_LE := 20        // <=
+TOKEN_EQ_EQ := 21     // ==
+TOKEN_NOT_EQ := 22    // !=
+TOKEN_AND := 23       // &&
+TOKEN_OR := 24        // ||
+TOKEN_KEYWORD_IF := 100
+TOKEN_KEYWORD_ELSE := 101
+TOKEN_KEYWORD_WHILE := 102
+TOKEN_KEYWORD_FUNC := 103
+TOKEN_KEYWORD_RETURN := 104
+TOKEN_KEYWORD_LET := 105
+
+// --- AST Node Types ---
+NODE_PROGRAM := 0
+NODE_FUNC_DEF := 1
+NODE_BLOCK := 2
+NODE_IF := 3
+NODE_WHILE := 4
+NODE_RETURN := 5
+NODE_LET := 6
+NODE_ASSIGN := 101 // Matching test runner
+NODE_EXPR_BINARY := 8
+NODE_EXPR_CALL := 9
+NODE_EXPR_LITERAL_INT := 10
+NODE_EXPR_LITERAL_STR := 11
+NODE_EXPR_VAR := 12
+NODE_EXPR_LITERAL_BOOL := 13
+
+// --- Parser State ---
+func parser_new(tok_input) {
+    return {
+        tokens: tok_input,
+        pos: 0
+    }
+}
+
+func parser_peek(parser) {
+    // parser is Linear. We must use sys.struct.get to peek fields.
+    // get tokens
+    let (tok_list, parser) := sys.struct.get(parser, "tokens")
+    
+    // get pos
+    let (pos, parser) := sys.struct.get(parser, "pos")
+    
+    // Attempt to get token
+    // We rely on EOF token being present.
+    let (tok, tok_list) := sys.list.get(tok_list, pos) 
+    
+    // Restore tokens
+    parser := sys.struct.set(parser, "tokens", tok_list)
+    
+    return [tok, parser]
+}
+
+func parser_advance(parser) {
+    // Read pos
+    let (pos, parser) := sys.struct.get(parser, "pos")
+    
+    // Update
+    new_pos := pos + 1
+    
+    // Set 
+    parser := sys.struct.set(parser, "pos", new_pos)
+    return parser
+}
+
+func parse_primary(parser) {
+    let (tok, p_peek) := parser_peek(parser)
+    let (ttype, tok) := sys.struct.get(tok, "type")
+    
+    // TOKEN_NUMBER := 2
+    if ttype == 2 {
+        let (val, tok) := sys.struct.get(tok, "value")
+        p_adv := parser_advance(p_peek)
+        node := { kind: NODE_EXPR_LITERAL_INT, value: val }
+        return [node, p_adv]
+    }
+    
+    // TOKEN_IDENTIFIER := 1
+    if ttype == 1 {
+        let (val, tok) := sys.struct.get(tok, "value")
+        p_after_id := parser_advance(p_peek)
+        
+        // Check for Call: Identifier + LPAREN
+        let (tok2, p_peek2) := parser_peek(p_after_id)
+        let (ttype2, tok2) := sys.struct.get(tok2, "type")
+        
+        // TOKEN_LPAREN := 9
+        if ttype2 == 9 {
+             p_after_paren := parser_advance(p_peek2)
+             
+             // Parse Args
+             args := []
+             ref_parser := [p_after_paren]
+             running := true
+             
+             while running {
+                 let (p, _) := sys.list.get(ref_parser, 0)
+                 let (t, p_pk) := parser_peek(p)
+                 let (tt, t) := sys.struct.get(t, "type")
+                 
+                 // TOKEN_RPAREN := 10
+                 if tt == 10 {
+                     running := false
+                     p_after_args := parser_advance(p_pk)
+                     ref_parser := [p_after_args]
+                 } else {
+                     // Check if not first arg (comma?) - Simplified: parse expr, then check comma
+                     // For now: Expr, optional comma
+                     let (arg_expr, p_next) := parse_expr(p_pk)  // Use p_pk
+                     args := sys.list.append(args, arg_expr)
+                     
+                     // Check Comma or RPAREN
+                     let (t2, p_pk2) := parser_peek(p_next)
+                     let (tt2, t2) := sys.struct.get(t2, "type")
+                     
+                     // TOKEN_COMMA := 13
+                     if tt2 == 13 {
+                         p_comma := parser_advance(p_pk2)
+                         ref_parser := [p_comma]
+                     } else {
+                         ref_parser := [p_next]
+                     }
+                 }
+             }
+             
+             let (final_parser, _) := sys.list.get(ref_parser, 0)
+             
+             node := {
+                kind: NODE_EXPR_CALL,
+                function: val,
+                args: args
+             }
+             return [node, final_parser]
+        }
+        
+        node := { kind: NODE_EXPR_VAR, name: val }
+        return [node, p_after_id]
+    }
+    
+    // Fallback error
+    // Consume 1 to avoid infinite loop if stuck
+    p_adv := parser_advance(p_peek)
+    return [{kind: 99, value: "unexpected_primary"}, p_adv]
+}
+
+func parse_func_args(parser) {
+    // Expect (
+    let (tok, p_peek) := parser_peek(parser)
+    let (ttype, tok) := sys.struct.get(tok, "type")
+    
+    // TOKEN_LPAREN := 9
+    // If we call this, we might have consumed func NAME already?
+    // Let's assume passed parser is AT '('.
+    
+    p_curr := parser
+    if ttype == 9 {
+        p_curr := parser_advance(p_peek)
+    } else {
+        // Error or logic issue
+        return [[], parser] 
+    }
+    
+    args := []
+    ref_parser := [p_curr]
+    running := true
+    
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (t, p_pk) := parser_peek(p)
+        let (tt, t) := sys.struct.get(t, "type")
+        
+        // TOKEN_RPAREN := 10
+        if tt == 10 {
+            running := false
+            p_final := parser_advance(p_pk)
+            ref_parser := [p_final]
+        } else if tt == 1 { // IDENTIFIER (Arg Name)
+             let (name, t) := sys.struct.get(t, "value")
+             args := sys.list.append(args, name)
+             p_next := parser_advance(p_pk)
+             
+             // Check Comma
+             let (t2, p_pk2) := parser_peek(p_next)
+             let (tt2, t2) := sys.struct.get(t2, "type")
+             
+             if tt2 == 13 { // COMPO
+                 p_comma := parser_advance(p_pk2)
+                 ref_parser := [p_comma]
+             } else {
+                 ref_parser := [p_next]
+             }
+        } else {
+            // Unexpected token in args
+            running := false
+            ref_parser := [p_pk]
+        }
+    }
+    
+    let (final_parser, _) := sys.list.get(ref_parser, 0)
+    return [args, final_parser]
+}
+
+func parse_func_def(parser) {
+    // Consumes 'func'
+    let (tok, p_func) := parser_peek(parser)
+    p_after_func := parser_advance(p_func)
+    
+    // Identifier
+    let (tok2, p_peek2) := parser_peek(p_after_func)
+    let (name, tok2) := sys.struct.get(tok2, "value")
+    p_after_name := parser_advance(p_peek2)
+    
+    // Args
+    let (args, p_after_args) := parse_func_args(p_after_name)
+    
+    // Body (Block)
+    // parse_block expects {
+    let (body_stmts, p_after_body) := parse_block(p_after_args)
+    
+    node := {
+        kind: NODE_FUNC_DEF,
+        name: name,
+        args: args,
+        body: body_stmts
+    }
+    
+    return [node, p_after_body]
+}
+
+func parse_factor(parser) {
+    // Left side: parse_primary
+    let (lhs, p_curr) := parse_primary(parser)
+    
+    // Check for * or /
+    // parser must be threaded.
+    // We need a loop.
+    
+    ref_parser := [p_curr]
+    ref_lhs := [lhs]
+    
+    running := true
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_peek) := parser_peek(p)
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        
+        // TOKEN_STAR := 7, TOKEN_SLASH := 8
+        is_op := false
+        if ttype == 7 { is_op := true }
+        if ttype == 8 { is_op := true }
+        
+        if is_op {
+            // Consume Op
+            p_after_op := parser_advance(p_peek)
+            
+            // Parse RHS (Primary)
+            let (rhs, p_after_rhs) := parse_primary(p_after_op)
+            
+            // Compose Binary Node
+            let (prev_lhs, _) := sys.list.get(ref_lhs, 0)
+            
+            // Op Name
+            op_name := "mul"
+            if ttype == 8 { op_name := "div" }
+            
+            node := {
+                kind: NODE_EXPR_BINARY,
+                left: prev_lhs,
+                right: rhs,
+                op: op_name
+            }
+            
+            // Update Refs
+            ref_lhs := [node]
+            ref_parser := [p_after_rhs]
+        } else {
+            running := false
+            ref_parser := [p_peek] // Keep p_peek (didn't consume op)
+            // Wait, parse_primary returned p_curr. 
+            // Loop started with p (which is p_curr).
+            // We peeked p. If not op, we return p.
+            // Correct.
+        }
+    }
+    
+    let (final_lhs, _) := sys.list.get(ref_lhs, 0)
+    let (final_parser, _) := sys.list.get(ref_parser, 0)
+    
+    return [final_lhs, final_parser]
+}
+
+func parse_term(parser) {
+    // Left side: parse_factor
+    let (lhs, p_curr) := parse_factor(parser)
+    
+    // Check for + or -
+    ref_parser := [p_curr]
+    ref_lhs := [lhs]
+    
+    running := true
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_peek) := parser_peek(p)
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        
+        // TOKEN_PLUS := 5, TOKEN_MINUS := 6
+        is_op := false
+        if ttype == 5 { is_op := true }
+        if ttype == 6 { is_op := true }
+        
+        if is_op {
+            // Consume Op
+            p_after_op := parser_advance(p_peek)
+            
+            // Parse RHS (Factor)
+            let (rhs, p_after_rhs) := parse_factor(p_after_op)
+            
+            // Compose Binary Node
+            let (prev_lhs, _) := sys.list.get(ref_lhs, 0)
+            
+            // Op Name
+            op_name := "add"
+            if ttype == 6 { op_name := "sub" }
+            
+            node := {
+                kind: NODE_EXPR_BINARY,
+                left: prev_lhs,
+                right: rhs,
+                op: op_name
+            }
+            
+            // Update Refs
+            ref_lhs := [node]
+            ref_parser := [p_after_rhs]
+        } else {
+            running := false
+            ref_parser := [p_peek]
+        }
+    }
+    
+    let (final_lhs, _) := sys.list.get(ref_lhs, 0)
+    let (final_parser, _) := sys.list.get(ref_parser, 0)
+    
+    return [final_lhs, final_parser]
+}
+
+func parse_expr(parser) {
+    return parse_term(parser)
+}
+
+func parse_block(parser) {
+    // Consume {
+    let (tok, p_brace) := parser_peek(parser)
+    p_curr := parser_advance(p_brace)
+    
+    // Loop until } or EOF
+    children := []
+    ref_parser := [p_curr]
+    
+    running := true
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_peek) := parser_peek(p)
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        
+        // TOKEN_RBRACE := 12, TOKEN_EOF := 0
+        if ttype == 12 {
+            running := false
+            p_after_block := parser_advance(p_peek)
+            ref_parser := [p_after_block]
+        } else if ttype == 0 {
+            running := false
+            ref_parser := [p_peek] // Stop at EOF
+        } else {
+            let (stmt, p_next) := parse_stmt(p_peek)
+            children := sys.list.append(children, stmt)
+            ref_parser := [p_next]
+        }
+    }
+    
+    let (final_parser, _) := sys.list.get(ref_parser, 0)
+    
+    return [children, final_parser]
+}
+
+func parse_if(parser) {
+    // Consumes 'if' (Caller did peek, passed parser pointing to 'if')
+    // Wait, caller of parse_stmt peeks. If we call parse_if, we should expect parser to be AT 'if'.
+    // parse_stmt logic: peek -> is 'if' -> call parse_if. 
+    // parse_stmt should pass the parser *at* 'if', so parse_if consumes it.
+    
+    let (tok, p_if) := parser_peek(parser)
+    p_after_if := parser_advance(p_if)
+    
+    // Condition
+    let (cond, p_after_cond) := parse_expr(p_after_if)
+    
+    // Block (Then)
+    // parse_block expects starting at '{'
+    let (then_stmts, p_after_then) := parse_block(p_after_cond)
+    
+    // Check Else
+    let (tok2, p_peek2) := parser_peek(p_after_then)
+    let (ttype2, tok2) := sys.struct.get(tok2, "type")
+    
+    // TOKEN_KEYWORD_ELSE := 101
+    else_block := [] // Empty list if no else
+    // But we need Option logic or just empty list for block?
+    // Runtime 'If' node expects `else_block: Option<List<Stmt>>`? 
+    // In `runtime.rs`, `Statement::If` has `else_block: Option<Vec<Statement>>`.
+    // Ark lists are dynamic. We can pass [] or undefined?
+    // Let's pass the list directly. Runtime might check length?
+    // Wait, Runtime `eval.rs`: `else_block` is `Option`.
+    // We can't easily construct Rust `Option` from here. 
+    // Ark Compiler `compile.py` converts Ark List to Rust Vec.
+    // How to represent Option?
+    // If I pass `else_block: []`, compiler might convert to `Some([])` or fail?
+    // `compile.py` likely expects `else_block` to be a list if present.
+    // If missing, `compile.py` sets it to `None`?
+    // Looking at `compile.py` (checked earlier): `_compile_if` handles it.
+    // Let's assume we pass `else_block` field if it exists.
+    
+    p_final := p_after_then
+    has_else := false
+    
+    if ttype2 == 101 {
+        // Consumes 'else'
+        p_after_else := parser_advance(p_peek2)
+        
+        let (tok3, p_peek3) := parser_peek(p_after_else)
+        let (ttype3, tok3) := sys.struct.get(tok3, "type")
+        
+        // If 'else if' -> Recursion?
+        // TOKEN_KEYWORD_IF := 100
+        if ttype3 == 100 {
+            // Recurse: parse_if
+            let (nested_if, p_after_nested) := parse_if(p_after_else)
+            // Wrap in block? `else if` is just one stmt.
+            else_block := [nested_if] 
+            p_final := p_after_nested
+            has_else := true
+        } else {
+            // Block
+            let (stmts, p_after_else_block) := parse_block(p_after_else)
+            else_block := stmts
+            p_final := p_after_else_block
+            has_else := true
+        }
+    }
+    
+    node := {
+        kind: NODE_IF,
+        condition: cond,
+        then_block: then_stmts
+    }
+    
+    if has_else {
+        node := sys.struct.set(node, "else_block", else_block)
+    }
+    
+    return [node, p_final]
+}
+
+func parse_while(parser) {
+    // Consumes 'while'
+    let (tok, p_while) := parser_peek(parser)
+    p_after_while := parser_advance(p_while)
+    
+    let (cond, p_after_cond) := parse_expr(p_after_while)
+    let (stmts, p_final) := parse_block(p_after_cond)
+    
+    node := {
+        kind: NODE_WHILE,
+        condition: cond,
+        body: stmts
+    }
+    
+    return [node, p_final]
+}
+
+func parse_return(parser) {
+    // Consumes 'return'
+    let (tok, p_ret) := parser_peek(parser)
+    p_after_ret := parser_advance(p_ret)
+    
+    let (val, p_final) := parse_expr(p_after_ret)
+    
+    node := {
+        kind: NODE_RETURN,
+        value: val
+    }
+    
+    return [node, p_final]
+}
+
+func parse_stmt(parser) {
+    // Look ahead to decide
+    let (tok, p_stmt_peek) := parser_peek(parser)
+    let (ttype, tok) := sys.struct.get(tok, "type")
+    
+    // Dispatch based on Token Type
+    
+    // TOKEN_KEYWORD_IF := 100
+    if ttype == 100 {
+        return parse_if(p_stmt_peek)
+    }
+    
+    // TOKEN_KEYWORD_WHILE := 102
+    if ttype == 102 {
+        return parse_while(p_stmt_peek)
+    }
+    
+    // TOKEN_KEYWORD_RETURN := 104
+    if ttype == 104 {
+        return parse_return(p_stmt_peek)
+    }
+    
+    // Assignments (Identifier)
+    if ttype == TOKEN_IDENTIFIER {
+        // ... (Existing Assignment Logic) ...
+        // Check for function call? `my_func()` is Stmt?
+        // Assignments logic handles `x := ...`
+        // What if `x = ...` (Reassignment)? Not supported yet?
+        // Assignment Logic below:
+
+        // Assume Assignment: IDENT := EXPR
+        // Advance past Identifier (Consumes p_stmt_peek)
+        p_after_id := parser_advance(p_stmt_peek)
+        
+        // Expect :=
+        let (tok2, p_stmt_peek2) := parser_peek(p_after_id)
+        let (ttype2, tok2) := sys.struct.get(tok2, "type")
+        
+        // TOKEN_ASSIGN := 16
+        if ttype2 == TOKEN_ASSIGN {
+             // Advance past :=
+             p_after_assign := parser_advance(p_stmt_peek2)
+             
+             // Parse Expr (Expression!)
+             // Previously: let (tok3, p_stmt_peek3) := parser_peek(p_after_assign) ...
+             
+             let (expr_node, p_after_expr) := parse_expr(p_after_assign)
+             
+             // Get ID Name from first token
+             let (id_name, tok) := sys.struct.get(tok, "value")
+             
+             node := {
+                kind: NODE_ASSIGN,
+                name: id_name,
+                value: expr_node
+             }
+             
+             return [node, p_after_expr]
+        } else {
+             // Fallback if Identifier but NO :=
+             p_adv := parser_advance(p_stmt_peek2)
+             return [{kind: 99, value: "expected_assign"}, p_adv]
+        }
+    }
+    
+    // Fallback: Skip one token
+    p_adv := parser_advance(p_stmt_peek)
+    return [{kind: 99, value: "skipped"}, p_adv]
+}
+
+func parse_program(tokens) {
+    parser := parser_new(tokens)
+    ref_parser := [parser]
+    children := []
+    
+    running := true
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        
+        let (tok, p_prog_peek) := parser_peek(p)
+        
+        let (ttype, tok) := sys.struct.get(tok, "type")
+        if ttype == TOKEN_EOF {
+            running := false
+            ref_parser := [p_prog_peek]
+        } else if ttype == 103 { // TOKEN_KEYWORD_FUNC
+            let (node, p_next) := parse_func_def(p_prog_peek)
+            children := sys.list.append(children, node)
+            ref_parser := [p_next]
+        } else {
+            // Use parse_stmt
+            let (node, p_next) := parse_stmt(p_prog_peek)
+            children := sys.list.append(children, node)
+            ref_parser := [p_next]
+        }
+    }
+    
+    return {
+        kind: NODE_PROGRAM,
+        children: children
+    }
+}

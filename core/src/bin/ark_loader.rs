@@ -34,10 +34,32 @@ fn main() {
 
     match load_ark_program(&json_content) {
         Ok(node) => {
-            println!("MAST Loaded Successfully.");
+            // println!("MAST Loaded Successfully.");
             let mut scope = Scope::new();
+
+            // Inject sys.args (List of Strings)
+            let mut ark_args = Vec::new();
+            for arg in args {
+                ark_args.push(ark_0_zheng::runtime::Value::String(arg));
+            }
+            // We need to set this in a global or intrinsic accessible way.
+            // But intrinsics don't capture scope.
+            // Option 1: Add to Scope as "sys.args" variable.
+            // Option 2: Add to Intrinsic Registry STATE (Registry is stateless).
+            // Option 3: Add to Scope, and users access via variable `sys_args` (not intrinsic).
+            // Python prototype used `sys.argv`.
+            // Let's inject it as a variable "sys_args" in the root scope.
+            // Users can do: `args := sys_args`
+
+            scope.set(
+                "sys_args".to_string(),
+                ark_0_zheng::runtime::Value::List(ark_args),
+            );
+
             match Interpreter::eval(&node, &mut scope) {
-                Ok(val) => println!("Execution Result: {:?}", val),
+                Ok(val) => {
+                    // println!("Execution Result: {:?}", val);
+                }
                 Err(e) => eprintln!("Execution Error: {:?}", e),
             }
         }

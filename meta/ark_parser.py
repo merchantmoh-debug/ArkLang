@@ -18,6 +18,11 @@ import lark
 from lark import Transformer, v_args
 
 class ArkTransformer(Transformer):
+    def param_list(self, args):
+        # args is list of IDENTIFIER tokens
+        # Default type is Any (Shared) or Integer (Linear check handles validation)
+        return [(str(t), {"type_name": "Any"}) for t in args]
+
     def number(self, n):
         return int(n[0])
 
@@ -31,21 +36,47 @@ class ArkTransformer(Transformer):
         return args[0]
     
     def call_expr(self, args):
-        name = str(args[0])
-        # args[1] is the expr_list Tree or None if empty?
-        # With [expr_list], if present it's args[1].
-        # But expr_list returns a list of exprs.
-        # Let's handle args.
-        params = []
+        func = args[0]
+        name = str(func)
+        if isinstance(func, dict):
+             if func.get("type") == "var":
+                name = func["name"]
+             elif func.get("type") == "get_attr":
+                name = func["full_path"]
+            
         if len(args) > 1:
             params = args[1]
         return {"type": "call", "function": name, "args": params}
+
+    def get_item(self, args):
+        # Sugar for: sys.list.get(base, index)
+        return {"type": "call", "function": "sys.list.get", "args": [args[0], args[1]]}
+
+    def get_attr(self, args):
+        obj = args[0]
+        attr = str(args[1])
+        
+        # Try to resolve full path string for intrinsics/static calls
+        base_path = ""
+        if isinstance(obj, dict):
+            if obj.get("type") == "var":
+                base_path = obj["name"]
+            elif obj.get("type") == "get_attr":
+                base_path = obj["full_path"]
+        
+        full_path = f"{base_path}.{attr}" if base_path else attr
+        
+        return {"type": "get_attr", "full_path": full_path, "object": obj, "attr": attr}
 
     def expr_list(self, args):
         return args
 
     def add(self, args):
         return {"op": "add", "left": args[0], "right": args[1]}
+
+    def list_cons(self, items):
+        elements = items[0] if items and items[0] is not None else []
+        return {"type": "list", "value": elements}
 
     def sub(self, args):
         return {"op": "sub", "left": args[0], "right": args[1]}
@@ -74,20 +105,23 @@ class ArkTransformer(Transformer):
         return (name, ty)
 
     def function_def(self, args):
-        # fn name(args) -> type { block }
+        # function_def: "func" IDENTIFIER "(" [param_list] ")" "{" block "}"
         name = str(args[0])
-        raw_args = args[1] if args[1] else []
         
-        # raw_args is now [(name, type), (name, type)...] directly from arg_list
-        inputs = raw_args 
-            
-        ret_type = args[2] if len(args) > 2 else {"type_name": "Unit"}
-        body = args[3] if len(args) > 3 else []
+        if len(args) == 3:
+            params = args[1] 
+            body = args[2]
+        else:
+            params = []
+            body = args[1]
+
+        # Return type not in grammar yet, assume Unit or inferred
+        ret_type = {"type_name": "Unit"}
         
         return {
             "type": "function_def",
             "name": name,
-            "inputs": inputs,
+            "inputs": params,
             "output": ret_type,
             "body": body
         }

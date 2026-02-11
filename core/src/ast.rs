@@ -64,6 +64,15 @@ pub enum Statement {
         ty: Option<ArkType>,
         value: Expression,
     },
+    LetDestructure {
+        names: Vec<String>,
+        value: Expression,
+    },
+    SetField {
+        obj_name: String,
+        field: String,
+        value: Expression,
+    },
     Return(Expression),
     Block(Vec<Statement>),
     Expression(Expression),
@@ -86,5 +95,13 @@ pub enum Expression {
     Call {
         function_hash: String,
         args: Vec<Expression>,
+    },
+    List(Vec<Expression>),
+    StructInit {
+        fields: Vec<(String, Expression)>,
+    },
+    GetField {
+        obj: Box<Expression>,
+        field: String,
     },
 }

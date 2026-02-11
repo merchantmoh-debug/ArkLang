@@ -9,6 +9,8 @@ import http.server
 import socketserver
 import threading
 from lark import Lark
+import hashlib
+import ctypes
 
 # --- Types ---
 
@@ -104,6 +106,17 @@ def sys_fs_write(args: List[ArkValue]):
         return ArkValue(None, "Unit")
     except Exception as e:
         raise Exception(f"Error writing to file {path}: {e}")
+
+def sys_fs_read(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.fs.read expects a string path argument")
+    path = args[0].val
+    try:
+        with open(path, "r") as f:
+            content = f.read()
+        return ArkValue(content, "String")
+    except Exception as e:
+        raise Exception(f"Error reading file {path}: {e}")
 
 def ask_ai(args: List[ArkValue]):
     if not args or args[0].type != "String":
@@ -230,7 +243,133 @@ def sys_time_sleep(args: List[ArkValue]):
     if len(args) != 1 or args[0].type not in ["Integer", "Float"]:
         raise Exception("sys.time.sleep expects a number (seconds)")
     time.sleep(args[0].val)
+    time.sleep(args[0].val)
     return ArkValue(None, "Unit")
+
+def sys_crypto_hash(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.crypto.hash expects a string")
+    
+    data = args[0].val.encode('utf-8')
+    digest = hashlib.sha256(data).hexdigest()
+    return ArkValue(digest, "String")
+
+def sys_crypto_merkle_root(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "List":
+        raise Exception("sys.crypto.merkle_root expects a list of strings")
+    
+    # Extract strings
+    leaves = []
+    for item in args[0].val:
+        if item.type != "String":
+            raise Exception("sys.crypto.merkle_root list must contain strings")
+        leaves.append(item.val)
+        
+    if not leaves:
+        return ArkValue("", "String")
+        
+    # Hash leaves
+    current_level = [hashlib.sha256(s.encode('utf-8')).hexdigest() for s in leaves]
+    
+    while len(current_level) > 1:
+        next_level = []
+        for i in range(0, len(current_level), 2):
+            left = current_level[i]
+            right = current_level[i+1] if i+1 < len(current_level) else left
+            
+            combined = (left + right).encode('utf-8')
+            next_level.append(hashlib.sha256(combined).hexdigest())
+        current_level = next_level
+        
+    return ArkValue(current_level[0], "String")
+
+def sys_mem_alloc(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "Integer": raise Exception("sys.mem.alloc expects size")
+    size = args[0].val
+    buf = bytearray(size)
+    return ArkValue(buf, "Buffer")
+
+def sys_list_get(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.list.get expects list/str, index")
+    lst = args[0] # List or String value
+    idx = args[1].val
+    
+    if lst.type == "List":
+        val = lst.val[idx] # This might be ArkValue
+        return ArkValue([val, lst], "List")
+    elif lst.type == "String":
+        # String indexing returns [char_str, original_string]
+        s = lst.val
+        char_str = s[idx]
+        return ArkValue([ArkValue(char_str, "String"), lst], "List")
+    else:
+        raise Exception("Expected List or String")
+
+def sys_mem_inspect(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "Buffer": raise Exception("sys.mem.inspect expects buffer")
+    buf = args[0].val
+    addr = ctypes.addressof((ctypes.c_char * len(buf)).from_buffer(buf))
+    print(f"<Buffer Inspect: ptr={hex(addr)}, len={len(buf)}>")
+    return args[0] # Pass-through ownership
+
+def sys_mem_read(args: List[ArkValue]):
+    if len(args) != 2 or args[0].type != "Buffer": raise Exception("sys.mem.read expects buffer, index")
+    buf = args[0].val
+    idx = args[1].val
+    val = int(buf[idx])
+    return ArkValue([ArkValue(val, "Integer"), args[0]], "List")
+
+def sys_mem_write(args: List[ArkValue]):
+    if len(args) != 3: raise Exception("sys.mem.write expects buffer, index, val")
+    buf = args[0].val
+    idx = args[1].val
+    val = args[2].val
+    buf[idx] = val
+    return ArkValue(buf, "Buffer") # Linear style
+
+def sys_list_append(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.list.append expects list, item")
+    lst = args[0]
+    if lst.type != "List": raise Exception("sys.list.append expects List")
+    item = args[1]
+    # In Python, lists are mutable ref.
+    lst.val.append(item)
+    return lst # Return the list (linear threading)
+
+def sys_len(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sys.len expects 1 argument")
+    val = args[0]
+    
+    length = 0
+    if val.type in ["String", "List", "Buffer"]:
+        length = len(val.val)
+        return ArkValue([ArkValue(length, "Integer"), val], "List")
+    
+    raise Exception(f"sys.len not supported for {val.type}")
+
+def sys_and(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.and expects 2 arguments")
+    # Truthy check: Integer != 0, Boolean == True
+    def is_truthy(v):
+        if v.type == "Integer": return v.val != 0
+        if v.type == "Boolean": return v.val
+        return False
+    
+    left = is_truthy(args[0])
+    right = is_truthy(args[1])
+    return ArkValue(left and right, "Boolean")
+
+def sys_or(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.or expects 2 arguments")
+    def is_truthy(v):
+        if v.type == "Integer": return v.val != 0
+        if v.type == "Boolean": return v.val
+        return False
+    
+    left = is_truthy(args[0])
+    right = is_truthy(args[1])
+    return ArkValue(left or right, "Boolean")
+
 
 INTRINSICS = {
     "print": core_print,
@@ -238,11 +377,40 @@ INTRINSICS = {
     "get": core_get,
     "sys.exec": sys_exec,
     "sys.fs.write": sys_fs_write,
+    "sys.fs.read": sys_fs_read,
     "sys.net.http.serve": sys_net_http_serve,
     "sys.time.sleep": sys_time_sleep,
     "intrinsic_ask_ai": ask_ai,
+    "intrinsic_ask_ai": ask_ai,
     "intrinsic_extract_code": extract_code,
+    "sys.crypto.hash": sys_crypto_hash,
+    "sys.crypto.merkle_root": sys_crypto_merkle_root,
+    "intrinsic_crypto_hash": sys_crypto_hash, 
+    "intrinsic_merkle_root": sys_crypto_merkle_root,
+    "sys.mem.alloc": sys_mem_alloc,
+
+    "sys.mem.read": sys_mem_read,
+    "sys.mem.write": sys_mem_write,
+    "intrinsic_buffer_alloc": sys_mem_alloc,
+    "intrinsic_buffer_inspect": sys_mem_inspect,
+    "sys.mem.inspect": sys_mem_inspect,
+    "intrinsic_buffer_read": sys_mem_read,
+    "intrinsic_buffer_write": sys_mem_write,
+    "sys.list.get": sys_list_get,
+    "intrinsic_list_get": sys_list_get,
+    "sys.list.append": sys_list_append,
+    "intrinsic_list_append": sys_list_append,
+    "sys.len": sys_len,
+    "intrinsic_len": sys_len,
+    "intrinsic_and": sys_and,
+    "intrinsic_and": sys_and,
+    "intrinsic_or": sys_or,
+    "intrinsic_ge": lambda args: eval_binop("ge", args[0], args[1]),
+    "intrinsic_le": lambda args: eval_binop("le", args[0], args[1]),
+    "intrinsic_gt": lambda args: eval_binop("gt", args[0], args[1]),
+    "intrinsic_lt": lambda args: eval_binop("lt", args[0], args[1]),
 }
+
 
 
 # --- Evaluator ---
@@ -421,6 +589,15 @@ def eval_node(node, scope):
         right = eval_node(node.children[1], scope)
         return eval_binop(node.data, left, right)
 
+    if node.data == "list_cons":
+        items = []
+        if node.children:
+            # Check if child is expr_list
+            child = node.children[0]
+            if hasattr(child, "data") and child.data == "expr_list":
+                items = [eval_node(c, scope) for c in child.children]
+        return ArkValue(items, "List")
+
     return ArkValue(None, "Unit")
 
 def call_user_func(func: ArkFunction, args: List[ArkValue], instance: Optional[ArkValue] = None):
@@ -469,8 +646,11 @@ def eval_binop(op, left, right):
     if op == "sub": return ArkValue(l - r, "Integer")
     if op == "mul": return ArkValue(l * r, "Integer")
     if op == "div": return ArkValue(l // r, "Integer")
+    if op == "div": return ArkValue(l // r, "Integer")
     if op == "lt": return ArkValue(l < r, "Boolean")
     if op == "gt": return ArkValue(l > r, "Boolean")
+    if op == "le": return ArkValue(l <= r, "Boolean")
+    if op == "ge": return ArkValue(l >= r, "Boolean")
     if op == "eq": return ArkValue(l == r, "Boolean")
     return ArkValue(None, "Unit")
 

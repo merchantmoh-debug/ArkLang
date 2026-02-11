@@ -1,0 +1,5 @@
+
+path := "benchmarks/factorial.ark"
+content := sys.fs.read(path)
+print("File Content:")
+print(content)

@@ -10,6 +10,7 @@ use crate::eval::EvalError;
 use crate::runtime::Value;
 use reqwest::blocking::Client;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::process::Command;
 use std::time::Duration;
@@ -24,14 +25,32 @@ impl IntrinsicRegistry {
             "intrinsic_add" => Some(intrinsic_add),
             "intrinsic_sub" => Some(intrinsic_sub),
             "intrinsic_mul" => Some(intrinsic_mul),
+            "intrinsic_div" => Some(intrinsic_div),
+            "intrinsic_mod" => Some(intrinsic_mod),
             "intrinsic_gt" => Some(intrinsic_gt),
             "intrinsic_lt" => Some(intrinsic_lt),
+            "intrinsic_ge" => Some(intrinsic_ge),
+            "intrinsic_le" => Some(intrinsic_le),
             "intrinsic_eq" => Some(intrinsic_eq),
+            "intrinsic_and" => Some(intrinsic_and),
+            "intrinsic_or" => Some(intrinsic_or),
             "intrinsic_print" => Some(intrinsic_print),
             "print" => Some(intrinsic_print),
             "intrinsic_ask_ai" => Some(intrinsic_ask_ai),
             "sys_exec" | "intrinsic_exec" => Some(intrinsic_exec),
-            "sys_fs_write" | "intrinsic_fs_write" => Some(intrinsic_fs_write),
+            "sys_fs_write" | "intrinsic_fs_write" | "sys.fs.write" => Some(intrinsic_fs_write),
+            "sys_fs_read" | "intrinsic_fs_read" | "sys.fs.read" => Some(intrinsic_fs_read),
+            "intrinsic_crypto_hash" | "sys.crypto.hash" => Some(intrinsic_crypto_hash),
+            "intrinsic_merkle_root" | "sys.crypto.merkle_root" => Some(intrinsic_merkle_root),
+            "intrinsic_buffer_alloc" | "sys.mem.alloc" => Some(intrinsic_buffer_alloc),
+            "intrinsic_buffer_inspect" | "sys.mem.inspect" => Some(intrinsic_buffer_inspect),
+            "intrinsic_buffer_read" | "sys.mem.read" => Some(intrinsic_buffer_read),
+            "intrinsic_buffer_write" | "sys.mem.write" => Some(intrinsic_buffer_write),
+            "intrinsic_list_get" | "sys.list.get" | "sys.str.get" => Some(intrinsic_list_get),
+            "intrinsic_list_append" | "sys.list.append" => Some(intrinsic_list_append),
+            "intrinsic_len" | "sys.len" => Some(intrinsic_len),
+            "intrinsic_struct_get" | "sys.struct.get" => Some(intrinsic_struct_get),
+            "intrinsic_struct_set" | "sys.struct.set" => Some(intrinsic_struct_set),
             _ => None,
         }
     }
@@ -48,7 +67,7 @@ fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, EvalError> {
             return Err(EvalError::TypeMismatch(
                 "String".to_string(),
                 args[0].clone(),
-            ))
+            ));
         }
     };
 
@@ -116,7 +135,7 @@ fn intrinsic_exec(args: Vec<Value>) -> Result<Value, EvalError> {
             return Err(EvalError::TypeMismatch(
                 "String".to_string(),
                 args[0].clone(),
-            ))
+            ));
         }
     };
 
@@ -149,7 +168,7 @@ fn intrinsic_fs_write(args: Vec<Value>) -> Result<Value, EvalError> {
             return Err(EvalError::TypeMismatch(
                 "String".to_string(),
                 args[0].clone(),
-            ))
+            ));
         }
     };
     let content = match &args[1] {
@@ -158,7 +177,7 @@ fn intrinsic_fs_write(args: Vec<Value>) -> Result<Value, EvalError> {
             return Err(EvalError::TypeMismatch(
                 "String".to_string(),
                 args[1].clone(),
-            ))
+            ));
         }
     };
 
@@ -217,14 +236,51 @@ fn intrinsic_mul(args: Vec<Value>) -> Result<Value, EvalError> {
     }
 }
 
+fn intrinsic_div(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => {
+            if *b == 0 {
+                return Err(EvalError::NotExecutable); // Div by zero
+            }
+            Ok(Value::Integer(a / b))
+        }
+        _ => Err(EvalError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+fn intrinsic_mod(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => {
+            if *b == 0 {
+                return Err(EvalError::NotExecutable); // Mod by zero
+            }
+            Ok(Value::Integer(a % b))
+        }
+        _ => Err(EvalError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
 fn intrinsic_gt(args: Vec<Value>) -> Result<Value, EvalError> {
     if args.len() != 2 {
         return Err(EvalError::NotExecutable);
     }
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(if a > b { 1 } else { 0 })),
+        (Value::String(a), Value::String(b)) => Ok(Value::Integer(if a > b { 1 } else { 0 })),
         _ => Err(EvalError::TypeMismatch(
-            "Integer".to_string(),
+            "Integer or String".to_string(),
             args[0].clone(),
         )),
     }
@@ -236,8 +292,37 @@ fn intrinsic_lt(args: Vec<Value>) -> Result<Value, EvalError> {
     }
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(if a < b { 1 } else { 0 })),
+        (Value::String(a), Value::String(b)) => Ok(Value::Integer(if a < b { 1 } else { 0 })),
         _ => Err(EvalError::TypeMismatch(
-            "Integer".to_string(),
+            "Integer or String".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+fn intrinsic_ge(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(if a >= b { 1 } else { 0 })),
+        (Value::String(a), Value::String(b)) => Ok(Value::Integer(if a >= b { 1 } else { 0 })),
+        _ => Err(EvalError::TypeMismatch(
+            "Integer or String".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+fn intrinsic_le(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+    match (&args[0], &args[1]) {
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(if a <= b { 1 } else { 0 })),
+        (Value::String(a), Value::String(b)) => Ok(Value::Integer(if a <= b { 1 } else { 0 })),
+        _ => Err(EvalError::TypeMismatch(
+            "Integer or String".to_string(),
             args[0].clone(),
         )),
     }
@@ -249,16 +334,446 @@ fn intrinsic_eq(args: Vec<Value>) -> Result<Value, EvalError> {
     }
     match (&args[0], &args[1]) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(if a == b { 1 } else { 0 })),
+        (Value::String(a), Value::String(b)) => Ok(Value::Integer(if a == b { 1 } else { 0 })),
+        (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Integer(if a == b { 1 } else { 0 })),
+        _ => Ok(Value::Integer(0)), // Default inequality for mismatched types/objects
+    }
+}
+
+fn intrinsic_and(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+    // Truthy check: Integer != 0, Boolean == true
+    let is_truthy = |v: &Value| match v {
+        Value::Integer(n) => *n != 0,
+        Value::Boolean(b) => *b,
+        _ => false,
+    };
+
+    let left = is_truthy(&args[0]);
+    let right = is_truthy(&args[1]);
+
+    Ok(Value::Boolean(left && right))
+}
+
+fn intrinsic_or(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+    let is_truthy = |v: &Value| match v {
+        Value::Integer(n) => *n != 0,
+        Value::Boolean(b) => *b,
+        _ => false,
+    };
+
+    let left = is_truthy(&args[0]);
+    let right = is_truthy(&args[1]);
+
+    Ok(Value::Boolean(left || right))
+}
+
+fn intrinsic_print(args: Vec<Value>) -> Result<Value, EvalError> {
+    for arg in args {
+        print_value(&arg);
+    }
+    println!(); // Newline at the end
+    Ok(Value::Unit)
+}
+
+fn print_value(v: &Value) {
+    match v {
+        Value::Integer(i) => print!("{}", i),
+        Value::String(s) => print!("{}", s),
+        Value::Boolean(b) => print!("{}", b),
+        Value::Unit => print!("unit"),
+        Value::LinearObject { id, .. } => print!("<LinearObject:{}>", id),
+        Value::Function(f) => print!("<Function:{}>", f.name),
+        Value::List(l) => {
+            print!("[");
+            for (i, item) in l.iter().enumerate() {
+                if i > 0 {
+                    print!(", ");
+                }
+                print_value(item);
+            }
+            print!("]");
+        }
+        Value::Buffer(b) => print!("<Buffer: len={}, ptr={:p}>", b.len(), b.as_ptr()),
+        Value::Struct(fields) => {
+            print!("{{");
+            for (i, (k, v)) in fields.iter().enumerate() {
+                if i > 0 {
+                    print!(", ");
+                }
+                print!("{}: ", k);
+                print_value(v);
+            }
+            print!("}}");
+        }
+        Value::Return(val) => print_value(val),
+    }
+}
+fn intrinsic_fs_read(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 1 {
+        return Err(EvalError::NotExecutable);
+    }
+    let path_str = match &args[0] {
+        Value::String(s) => s,
+        _ => {
+            return Err(EvalError::TypeMismatch(
+                "String".to_string(),
+                args[0].clone(),
+            ));
+        }
+    };
+
+    println!("[Ark:FS] Reading from {}", path_str);
+    let content = fs::read_to_string(path_str).map_err(|_| EvalError::NotExecutable)?;
+    Ok(Value::String(content))
+}
+
+fn intrinsic_crypto_hash(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 1 {
+        return Err(EvalError::NotExecutable);
+    }
+    let data = match &args[0] {
+        Value::String(s) => s,
+        _ => {
+            return Err(EvalError::TypeMismatch(
+                "String".to_string(),
+                args[0].clone(),
+            ));
+        }
+    };
+
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    Ok(Value::String(hex::encode(result)))
+}
+
+fn intrinsic_merkle_root(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 1 {
+        return Err(EvalError::NotExecutable);
+    }
+
+    let list = match &args[0] {
+        Value::List(l) => l,
+        _ => return Err(EvalError::TypeMismatch("List".to_string(), args[0].clone())),
+    };
+
+    // Extract strings from list
+    let mut leaves: Vec<String> = Vec::new();
+    for item in list {
+        match item {
+            Value::String(s) => leaves.push(s.clone()),
+            _ => {
+                return Err(EvalError::TypeMismatch(
+                    "String inside List".to_string(),
+                    item.clone(),
+                ));
+            }
+        }
+    }
+
+    if leaves.is_empty() {
+        return Ok(Value::String("".to_string()));
+    }
+
+    // Hash leaves first
+    let mut current_level: Vec<String> = leaves
+        .into_iter()
+        .map(|s| {
+            let mut hasher = Sha256::new();
+            hasher.update(s);
+            hex::encode(hasher.finalize())
+        })
+        .collect();
+
+    while current_level.len() > 1 {
+        let mut next_level = Vec::new();
+
+        for i in (0..current_level.len()).step_by(2) {
+            let left = &current_level[i];
+            let right = if i + 1 < current_level.len() {
+                &current_level[i + 1]
+            } else {
+                left // Duplicate last if odd
+            };
+
+            let mut hasher = Sha256::new();
+            // Hash(left + right)
+            hasher.update(left);
+            hasher.update(right);
+            next_level.push(hex::encode(hasher.finalize()));
+        }
+        current_level = next_level;
+    }
+
+    Ok(Value::String(current_level[0].clone()))
+}
+
+fn intrinsic_buffer_alloc(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 1 {
+        return Err(EvalError::NotExecutable);
+    }
+    let size = match &args[0] {
+        Value::Integer(n) => *n as usize,
+        _ => {
+            return Err(EvalError::TypeMismatch(
+                "Integer".to_string(),
+                args[0].clone(),
+            ));
+        }
+    };
+    let buf = vec![0u8; size];
+    Ok(Value::Buffer(buf))
+}
+
+fn intrinsic_buffer_inspect(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 1 {
+        return Err(EvalError::NotExecutable);
+    }
+    match args.into_iter().next().unwrap() {
+        Value::Buffer(b) => {
+            let ptr = b.as_ptr();
+            println!("<Buffer Inspect: ptr={:p}, len={}>", ptr, b.len());
+            Ok(Value::Buffer(b))
+        }
+        v => Err(EvalError::TypeMismatch("Buffer".to_string(), v)),
+    }
+}
+
+fn intrinsic_buffer_read(args: Vec<Value>) -> Result<Value, EvalError> {
+    // args: [buffer, index]
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+    let mut args = args;
+    let index_val = args.pop().unwrap();
+    let buf_val = args.pop().unwrap();
+
+    let index = match index_val {
+        Value::Integer(n) => n,
+        _ => return Err(EvalError::TypeMismatch("Integer".to_string(), index_val)),
+    };
+
+    match buf_val {
+        Value::Buffer(b) => {
+            if index < 0 || index >= b.len() as i64 {
+                return Err(EvalError::NotExecutable);
+            }
+            let val = b[index as usize] as i64;
+            let list = vec![Value::Integer(val), Value::Buffer(b)];
+            Ok(Value::List(list))
+        }
+        v => Err(EvalError::TypeMismatch("Buffer".to_string(), v)),
+    }
+}
+
+fn intrinsic_buffer_write(args: Vec<Value>) -> Result<Value, EvalError> {
+    // args: [buffer, index, value] BUT Value::Buffer is cloned in args?
+    // CRITICAL ISSUE: Value passed to intrinsic is a CLONE if not Linear.
+    // In Rust AST/Eval, we pass "Vec<Value>" which owns the values.
+    // If the Buffer IS the value, we are modifying the local copy in `args`.
+    // We need to mutate the original. But `intrinsic` signature consumes args.
+    // THE ONLY WAY to mutate is if the intrinsic returns the modified buffer
+    // OR if we use Reference types (which we don't have yet)
+    // OR if Buffer internally uses Arc<Mutex<Vec>> or Unsafe Pointer.
+    // A "Bio-Bridge" needs shared memory.
+    // "Pointer Swapping" strategy:
+    // We can't mutate `args[0]` and have it reflect caller unless we return it.
+    // BUT `intrinsic_buffer_write(buf, i, v)` -> returns `buf`?
+    // That's functional style.
+    // S-Lang "Linear Types" - we consume the buffer and return a new one (same data, effectively).
+    // Let's implement that: Consume Buffer, Mutate in place, Return Buffer.
+    // This aligns with "Zombie Killer" Linear constraints too!
+
+    if args.len() != 3 {
+        return Err(EvalError::NotExecutable);
+    }
+
+    // We need to destructure args to get ownership of Buffer
+    // args is Vec<Value>.
+    let mut args = args; // Allow move
+    let val_to_write = args.pop().unwrap(); // value
+    let idx_val = args.pop().unwrap(); // index
+    let buf_val = args.pop().unwrap(); // buffer
+
+    let index = match idx_val {
+        Value::Integer(n) => n as usize,
+        _ => return Err(EvalError::TypeMismatch("Integer".to_string(), idx_val)),
+    };
+
+    let byte_val = match val_to_write {
+        Value::Integer(n) => n as u8,
+        _ => return Err(EvalError::TypeMismatch("Integer".to_string(), val_to_write)),
+    };
+
+    match buf_val {
+        Value::Buffer(mut b) => {
+            if index >= b.len() {
+                return Err(EvalError::NotExecutable);
+            }
+            b[index] = byte_val;
+            Ok(Value::Buffer(b)) // Return modified buffer (Linear Threading)
+        }
+        _ => Err(EvalError::TypeMismatch("Buffer".to_string(), buf_val)),
+    }
+}
+
+fn intrinsic_list_get(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+    let mut args = args;
+    let index_val = args.pop().unwrap();
+    let list_val = args.pop().unwrap();
+
+    let index = match index_val {
+        Value::Integer(n) => n,
+        _ => return Err(EvalError::TypeMismatch("Integer".to_string(), index_val)),
+    };
+
+    match list_val {
+        Value::List(list) => {
+            if index < 0 || index >= list.len() as i64 {
+                return Err(EvalError::NotExecutable);
+            }
+            let val = list[index as usize].clone();
+            let new_list_val = Value::List(list);
+
+            Ok(Value::List(vec![val, new_list_val]))
+        }
+        Value::String(s) => {
+            if index < 0 || index >= s.len() as i64 {
+                return Err(EvalError::NotExecutable);
+            }
+            // Unicode safety: chars().nth() is O(N). optimized: as_bytes?
+            // Ark strings are UTF-8. Indexing by byte or char?
+            // Python does char. Rust String is UTF-8.
+            // Let's use bytes for O(1) if we assume ASCII, or chars if we want correctness.
+            // Standard: chars.
+            if let Some(c) = s.chars().nth(index as usize) {
+                let char_str = c.to_string();
+                // Return [char_str, original_string]
+                Ok(Value::List(vec![Value::String(char_str), Value::String(s)]))
+            } else {
+                Err(EvalError::NotExecutable)
+            }
+        }
         _ => Err(EvalError::TypeMismatch(
-            "Integer".to_string(),
+            "List or String".to_string(),
+            list_val,
+        )),
+    }
+}
+
+fn intrinsic_list_append(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+    // args: [list, item]
+    // consume args
+    let mut args = args;
+    let item = args.pop().unwrap();
+    let list_val = args.pop().unwrap();
+
+    match list_val {
+        Value::List(mut list) => {
+            // Linear append: Modify in place if we owned it (we do, because args passed by value)
+            list.push(item);
+            Ok(Value::List(list))
+        }
+        _ => Err(EvalError::TypeMismatch("List".to_string(), list_val)),
+    }
+}
+
+fn intrinsic_len(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 1 {
+        return Err(EvalError::NotExecutable);
+    }
+    let mut args = args;
+    let val = args.pop().unwrap();
+
+    let len = match &val {
+        Value::String(s) => s.len() as i64,
+        Value::List(l) => l.len() as i64,
+        Value::Buffer(b) => b.len() as i64,
+        _ => return Err(EvalError::TypeMismatch("Sequence".to_string(), val)),
+    };
+
+    Ok(Value::List(vec![Value::Integer(len), val]))
+}
+
+fn intrinsic_struct_get(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 2 {
+        return Err(EvalError::NotExecutable);
+    }
+
+    // arg[0]: struct
+    // arg[1]: field name (string)
+
+    let field = match &args[1] {
+        Value::String(s) => s.clone(),
+        _ => {
+            return Err(EvalError::TypeMismatch(
+                "String Key".to_string(),
+                args[1].clone(),
+            ));
+        }
+    };
+
+    match &args[0] {
+        Value::Struct(data) => {
+            if let Some(val) = data.get(&field) {
+                // Return [val, struct]
+                // We must CLONE the val (if copyable) or move it out?
+                // data.get returns reference. We clone it.
+                // If val is Linear and not copyable, this clone might be invalid in strict linear system?
+                // But for now, Value::clone() works.
+                // The original struct is returned intact.
+                Ok(Value::List(vec![val.clone(), args[0].clone()]))
+            } else {
+                Err(EvalError::VariableNotFound(field))
+            }
+        }
+        _ => Err(EvalError::TypeMismatch(
+            "Struct".to_string(),
             args[0].clone(),
         )),
     }
 }
 
-fn intrinsic_print(args: Vec<Value>) -> Result<Value, EvalError> {
-    for arg in args {
-        println!("[Ark:Out] {:?}", arg);
+fn intrinsic_struct_set(args: Vec<Value>) -> Result<Value, EvalError> {
+    if args.len() != 3 {
+        return Err(EvalError::NotExecutable);
     }
-    Ok(Value::Unit)
+
+    // arg[0]: struct
+    // arg[1]: field name
+    // arg[2]: new value
+
+    let field = match &args[1] {
+        Value::String(s) => s.clone(),
+        _ => {
+            return Err(EvalError::TypeMismatch(
+                "String Key".to_string(),
+                args[1].clone(),
+            ));
+        }
+    };
+
+    match &args[0] {
+        Value::Struct(data) => {
+            let mut new_data = data.clone();
+            new_data.insert(field, args[2].clone());
+            Ok(Value::Struct(new_data))
+        }
+        _ => Err(EvalError::TypeMismatch(
+            "Struct".to_string(),
+            args[0].clone(),
+        )),
+    }
 }

@@ -1,0 +1,143 @@
+
+// --- Ark Code Generator (AST -> MAST JSON) ---
+
+// --- Helpers ---
+
+func int_to_str(n) {
+    if n == 0 { return "0" }
+    
+    rem := n - ((n / 10) * 10)
+    
+    c := "0"
+    if rem == 1 { c := "1" }
+    if rem == 2 { c := "2" }
+    if rem == 3 { c := "3" }
+    if rem == 4 { c := "4" }
+    if rem == 5 { c := "5" }
+    if rem == 6 { c := "6" }
+    if rem == 7 { c := "7" }
+    if rem == 8 { c := "8" }
+    if rem == 9 { c := "9" }
+    
+    rest := n / 10
+    if rest == 0 { return c }
+    
+    return int_to_str(rest) + c
+}
+
+func json_quote(s) {
+    return "\"" + s + "\""
+}
+
+// --- Codegen Logic ---
+
+func codegen_expr(node) {
+    let (kind, node) := sys.struct.get(node, "kind")
+    
+    if kind == 10 { // LITERAL_INT
+        let (val, node) := sys.struct.get(node, "value")
+        return "{\"Literal\": \"" + val + "\"}"
+    }
+    
+    if kind == 12 { // VAR
+        let (name, node) := sys.struct.get(node, "name")
+        return "{\"Variable\": \"" + name + "\"}"
+    }
+    
+    if kind == 8 { // BINARY
+        let (op, node) := sys.struct.get(node, "op")
+        let (left, node) := sys.struct.get(node, "left")
+        let (right, node) := sys.struct.get(node, "right")
+        
+        l_json := codegen_expr(left)
+        r_json := codegen_expr(right)
+        
+        // Integer Ops:
+        // 1: Add, 2: Sub, 3: Mul, 4: Div
+        
+        fname := "intrinsic_add" // Default
+        if op == 2 { fname := "intrinsic_sub" }
+        if op == 3 { fname := "intrinsic_mul" }
+        if op == 4 { fname := "intrinsic_div" }
+        
+        return "{\"Call\": {\"name\": \"" + fname + "\", \"args\": [" + l_json + ", " + r_json + "]}}"
+    }
+
+    return "{\"Error\": \"UnknownExpr\"}"
+}
+
+func codegen_stmt(node) {
+    let (kind, node) := sys.struct.get(node, "kind")
+    
+    if kind == 101 { // ASSIGN / LET
+        let (name, node) := sys.struct.get(node, "name")
+        let (val, node) := sys.struct.get(node, "value")
+        
+        val_json := codegen_expr(val)
+        return "{\"Let\": {\"name\": \"" + name + "\", \"value\": " + val_json + "}}"
+    }
+    
+    if kind == 5 { // RETURN
+        let (val, node) := sys.struct.get(node, "value")
+        val_json := codegen_expr(val)
+        return "{\"Return\": " + val_json + "}"
+    }
+    
+    return "{\"Error\": \"UnknownStmt\"}"
+}
+
+func codegen_block(stmts) {
+    json := ""
+    let (count, stmts) := sys.len(stmts)
+    i := 0
+    
+    while i < count {
+        let (stmt, stmts) := sys.list.get(stmts, i)
+        stmt_json := codegen_stmt(stmt)
+        
+        if i > 0 {
+            json := json + ", "
+        }
+        json := json + stmt_json
+        
+        i := i + 1
+    }
+    return json
+}
+
+func codegen_func(node) {
+    let (name, node) := sys.struct.get(node, "name")
+    let (args, node) := sys.struct.get(node, "args")
+    let (body, node) := sys.struct.get(node, "body")
+    
+    args_json := ""
+    let (acount, args) := sys.len(args)
+    i := 0
+    while i < acount {
+        let (arg, args) := sys.list.get(args, i)
+        arg_obj := "[\"" + arg + "\", {\"Linear\": \"Integer\"}]"
+        
+        if i > 0 { args_json := args_json + ", " }
+        args_json := args_json + arg_obj
+        i := i + 1
+    }
+    
+    stmts_json := codegen_block(body)
+    
+    return "{\"Function\": {\"name\": \"" + name + "\", \"inputs\": [" + args_json + "], \"output\": {\"Linear\": \"Integer\"}, \"body\": {\"content\": {\"Statement\": {\"Block\": [" + stmts_json + "]}}}}}"
+}
+
+func codegen_program(ast) {
+    let (children, ast) := sys.struct.get(ast, "children")
+    let (count, children) := sys.len(children)
+    
+    if count > 0 {
+        let (child, children) := sys.list.get(children, 0)
+        let (kind, child) := sys.struct.get(child, "kind")
+        if kind == 1 { // FUNC_DEF
+             return codegen_func(child)
+        }
+    }
+    
+    return "{\"Error\": \"EmptyOrInvalidProgram\"}"
+}
