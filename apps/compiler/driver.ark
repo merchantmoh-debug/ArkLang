@@ -43,13 +43,10 @@ func main() {
     print("Parser Finished.")
     
     // 5. Codegen
+    // mast_json := codegen_program(ast)
     print("Starting Codegen...")
     mast_json := codegen_program(ast)
     print("Codegen Finished.")
-    
-    // Debug Codegen Output
-    let (mast_len, _) := sys.len(mast_json)
-    print("MAST JSON Length: " + int_to_str(mast_len))
     
     // 6. Write Output
     print("Writing Output to: '" + output_path + "'")

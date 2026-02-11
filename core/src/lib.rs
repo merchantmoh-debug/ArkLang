@@ -19,15 +19,12 @@
 pub mod ast;
 #[cfg(feature = "ipc")]
 pub mod bridge;
-pub mod bytecode;
 pub mod checker;
-pub mod compiler;
-// pub mod eval; // Deprecated by VM
+pub mod eval;
 pub mod intrinsics;
 pub mod loader;
-// pub mod repl; // Deprecated interpreter REPL
+pub mod repl;
 pub mod runtime;
 pub mod types;
-pub mod vm;
-// pub mod wasm; // Requires Interpreter
-// pub use wasm::*;
+pub mod wasm;
+pub use wasm::*;

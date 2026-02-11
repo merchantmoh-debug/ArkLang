@@ -588,9 +588,6 @@ func parse_stmt(parser) {
 }
 
 func parse_program(tokens) {
-    let (count, tokens) := sys.len(tokens)
-    print("Parser Input Tokens: " + int_to_str(count))
-
     parser := parser_new(tokens)
     ref_parser := [parser]
     children := []
@@ -616,9 +613,6 @@ func parse_program(tokens) {
             ref_parser := [p_next]
         }
     }
-    
-    let (child_count, _) := sys.len(children)
-    print("Parser Output Nodes: " + int_to_str(child_count))
     
     return {
         kind: NODE_PROGRAM,

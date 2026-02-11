@@ -16,8 +16,38 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
-use ark_0_zheng::repl;
+use ark_0_zheng::{checker, eval, loader, repl, runtime}; // Added checker import
+use std::env;
+use std::fs;
 
 fn main() {
-    repl::start();
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() > 1 {
+        let filename = &args[1];
+        // println!("Loading Ark Program: {}", filename);
+
+        match fs::read_to_string(filename) {
+            Ok(json_content) => match loader::load_ark_program(&json_content) {
+                Ok(node) => {
+                    // Phase 3: The Linear Shield
+                    if let Err(e) = checker::LinearChecker::check(&node) {
+                        println!("[Ark:TypeCheck] Error: {}", e);
+                        return;
+                    }
+
+                    let mut scope = runtime::Scope::new();
+                    let mut interpreter = eval::Interpreter::new();
+                    match interpreter.eval(&node, &mut scope) {
+                        Ok(_) => {} // Success
+                        Err(e) => println!("Runtime Error: {}", e),
+                    }
+                }
+                Err(e) => println!("Failed to load program: {}", e),
+            },
+            Err(e) => println!("Failed to read file: {}", e),
+        }
+    } else {
+        repl::start();
+    }
 }

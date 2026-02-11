@@ -27,10 +27,9 @@ class ArkCompiler:
         # Debugging
         # print(f"DEBUG AST: {ast}")
         if hasattr(ast, 'data'):
-             # print(f"AST IS TREE: {ast.data}")
+             print(f"AST IS TREE: {ast.data}")
              # If AST is a Tree, it means start rule wasn't transformed?
              # But ArkTransformer has start method.
-             pass
         
         program_node = ast.get("program", [])
         
@@ -40,8 +39,7 @@ class ArkCompiler:
             # Debug
             # print(f"Processing stmt type: {type(stmt)}")
             if hasattr(stmt, 'data'):
-                # print(f"STMT IS TREE: {stmt.data} - {stmt}")
-                pass
+                print(f"STMT IS TREE: {stmt.data} - {stmt}")
             
             compiled_stmt = self.compile_stmt(stmt)
             if compiled_stmt:
@@ -328,9 +326,9 @@ class ArkCompiler:
                      }
                  }
             if kind == "logical_or":
-                 return self.compile_binop("intrinsic_or", expr.children[0], expr.children[2])
+                 return self.compile_binop("intrinsic_or", expr.children[0], expr.children[1])
             if kind == "logical_and":
-                 return self.compile_binop("intrinsic_and", expr.children[0], expr.children[2])
+                 return self.compile_binop("intrinsic_and", expr.children[0], expr.children[1])
             
             # Binary Ops that slipped through Transformer
             bin_ops = {
