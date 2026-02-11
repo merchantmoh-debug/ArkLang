@@ -1,0 +1,6 @@
+func main() {
+    print("Attempting to read system file...")
+    sys.fs.read("/etc/passwd")
+    return 0
+}
+main()

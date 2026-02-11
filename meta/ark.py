@@ -13,6 +13,28 @@ import hashlib
 import ctypes
 import html
 
+# --- Security ---
+
+class SandboxViolation(Exception):
+    pass
+
+def check_path_security(path):
+    if os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() == "true":
+        return
+
+    # Path Traversal Check
+    # Resolving path to absolute path
+    abs_path = os.path.abspath(path)
+    cwd = os.getcwd()
+
+    # Check if path is within CWD (or is CWD itself)
+    if not abs_path.startswith(cwd):
+        raise SandboxViolation(f"Access outside working directory is forbidden: {path}")
+
+def check_exec_security():
+    if os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() != "true":
+        raise SandboxViolation("System command execution is disabled in sandbox mode.")
+
 # --- Types ---
 
 @dataclass
@@ -87,10 +109,11 @@ def core_get(args: List[ArkValue]):
     return ArkValue(None, "Unit") # Should not be reached
 
 def sys_exec(args: List[ArkValue]):
+    check_exec_security()
     if not args or args[0].type != "String":
         raise Exception("sys.exec expects a string command")
     command = args[0].val
-    print(f"WARNING: Executing system command: {command}", file=sys.stderr)
+    # print(f"WARNING: Executing system command: {command}", file=sys.stderr)
     try:
         result = os.popen(command).read()
         return ArkValue(result, "String")
@@ -101,6 +124,7 @@ def sys_fs_write(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "String" or args[1].type != "String":
         raise Exception("sys.fs.write expects two string arguments: path and content")
     path = args[0].val
+    check_path_security(path)
     content = args[1].val
     try:
         with open(path, "w") as f:
@@ -113,6 +137,7 @@ def sys_fs_read(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.fs.read expects a string path argument")
     path = args[0].val
+    check_path_security(path)
     try:
         with open(path, "r") as f:
             content = f.read()
@@ -182,6 +207,7 @@ def extract_code(args: List[ArkValue]):
     return ArkValue("", "String") # Return empty string if no code block found
 
 def sys_net_http_serve(args: List[ArkValue]):
+    check_exec_security()
     # print(f"DEBUG: sys.net.http.serve args: {[a.type for a in args]}")
     if len(args) != 2 or args[0].type != "Integer" or args[1].type != "Function":
         print(f"DEBUG: sys.net.http.serve args: {[a.type for a in args]}")
@@ -438,9 +464,17 @@ def eval_node(node, scope):
             # If missing, body is children[1]
             params = []
             body_idx = 1
-            if len(node.children) > 1 and hasattr(node.children[1], "data") and node.children[1].data == "param_list":
-                params = [t.value for t in node.children[1].children]
-                body_idx = 2
+
+            # Check for optional param_list
+            if len(node.children) > 1:
+                child1 = node.children[1]
+                if child1 is None:
+                    # [ID, None, Block]
+                    body_idx = 2
+                elif hasattr(child1, "data") and child1.data == "param_list":
+                    # [ID, ParamList, Block]
+                    params = [t.value for t in child1.children]
+                    body_idx = 2
             
             body = node.children[body_idx]
             func = ArkValue(ArkFunction(name, params, body, scope), "Function")
@@ -681,10 +715,15 @@ def run_file(path):
     except ReturnException as e:
         print(f"Error: Return statement outside function")
     except Exception as e:
-        print(f"Runtime Error: {e}")
+        # If it's a SandboxViolation, print it clearly
+        if isinstance(e, SandboxViolation):
+            print(f"SandboxViolation: {e}", file=sys.stderr)
+        else:
+            print(f"Runtime Error: {e}", file=sys.stderr)
         # print(f"DEBUG: Scope vars: {scope.vars.keys()}")
         import traceback
         # traceback.print_exc() 
+        sys.exit(1)
 
 
 if __name__ == "__main__":
