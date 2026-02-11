@@ -62,7 +62,8 @@ else:
         pass
 
 def run_repl():
-    print("Ark REPL (v112.0) - Type 'exit' to quit.")
+    print("ARK OMEGA-POINT v112.0 REPL")
+    print("Type 'exit' to quit, 'help' for commands.")
 
     # Initialize Scope
     scope = ark.Scope()
@@ -126,6 +127,8 @@ def run_repl():
                 pass
             atexit.register(readline.write_history_file, history_file)
 
+    buffer = []
+
     while True:
         try:
             if session:
@@ -137,8 +140,25 @@ def run_repl():
 
             if not text.strip():
                 continue
-            if text.strip() in ['exit', 'quit']:
+
+            # Handle exit
+            if not buffer and text.strip() in ['exit', 'quit']:
                 break
+
+            # Handle help
+            if not buffer and text.strip() == 'help':
+                print("\nAvailable Commands:")
+                print("  exit, quit  - Quit REPL")
+                print("  help        - Show this help")
+                print("\nAvailable Intrinsics:")
+                # Simple word wrap for display
+                intrinsics = sorted(ark.INTRINSICS.keys())
+                print(", ".join(intrinsics))
+                print("")
+                continue
+
+            buffer.append(text)
+            full_text = "\n".join(buffer)
 
             # Parse
             try:

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 import json
 import os
@@ -13,13 +14,17 @@ except ImportError:
     sys.exit(1)
 
 class ArkLSP:
+    """
+    A basic Language Server Protocol (LSP) stub implementation for Ark.
+    Communicates via JSON-RPC over stdio.
+    """
     def __init__(self):
         # Determine the path to the grammar file relative to this script
         self.grammar_path = os.path.join(os.path.dirname(__file__), "ark.lark")
         try:
             with open(self.grammar_path, "r") as f:
                 grammar = f.read()
-            # Use LALR parser as in meta/ark.py
+            # Use LALR parser as in meta/ark.py for consistency
             self.parser = Lark(grammar, start="start", parser="lalr")
             logging.info(f"Loaded grammar from {self.grammar_path}")
         except Exception as e:
@@ -27,34 +32,41 @@ class ArkLSP:
             self.parser = None
 
     def run(self):
+        """
+        Main loop: Read headers, read body, handle message.
+        """
         logging.info("Ark LSP started")
         while True:
             headers = {}
             try:
+                # Read headers (Content-Length: ...)
                 while True:
                     line = sys.stdin.buffer.readline()
                     if not line: # EOF
                         return
                     line = line.decode('ascii').strip()
-                    if not line: # End of headers
+                    if not line: # End of headers (blank line)
                         break
                     parts = line.split(":", 1)
                     if len(parts) == 2:
-                        headers[parts[0].strip()] = parts[1].strip()
+                        # Normalize header keys to lowercase for case-insensitive lookup
+                        headers[parts[0].strip().lower()] = parts[1].strip()
 
-                if "Content-Length" in headers:
-                    length = int(headers["Content-Length"])
+                # Read body based on Content-Length
+                if "content-length" in headers:
+                    length = int(headers["content-length"])
                     body = sys.stdin.buffer.read(length).decode('utf-8')
                     request = json.loads(body)
                     self.handle_message(request)
             except Exception as e:
                 logging.error(f"Error in run loop: {e}")
-                # Don't break, try to recover or wait for next message
-                # But if stdin is broken, we might loop infinitely.
-                # Usually LSP servers exit on stdin close (handled by 'if not line').
+                # Don't break on errors, try to recover for next message
                 pass
 
     def handle_message(self, msg):
+        """
+        Dispatch message based on 'method'.
+        """
         method = msg.get("method")
         msg_id = msg.get("id")
         params = msg.get("params", {})
@@ -85,6 +97,9 @@ class ArkLSP:
                 self.validate(params["textDocument"]["uri"], text)
 
     def validate(self, uri, text):
+        """
+        Validate source code using Lark parser and publish diagnostics.
+        """
         if not self.parser:
             return
 
@@ -95,7 +110,7 @@ class ArkLSP:
             # Line/Col are 1-based in Lark, 0-based in LSP
             line = e.line - 1
             col = e.column - 1
-            # Try to determine length
+            # Try to determine length of the problematic token
             length = 1
             if hasattr(e.token, "value"):
                 length = len(e.token.value)
