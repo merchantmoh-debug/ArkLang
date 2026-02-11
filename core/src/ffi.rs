@@ -25,6 +25,8 @@ use std::os::raw::{c_char};
 /// Evaluates a JSON string representing an Ark AST.
 /// Returns a pointer to a C-string containing the result (Debug formatted).
 /// The caller must free the returned string using `ark_free_string`.
+///
+/// Implements the FFI interface requested for external app integration.
 #[no_mangle]
 pub extern "C" fn ark_eval_string(json_ptr: *const c_char) -> *mut c_char {
     if json_ptr.is_null() {
@@ -34,7 +36,7 @@ pub extern "C" fn ark_eval_string(json_ptr: *const c_char) -> *mut c_char {
     let c_str = unsafe { CStr::from_ptr(json_ptr) };
     let json_str = match c_str.to_str() {
         Ok(s) => s,
-        Err(_) => return CString::new("Error: Invalid UTF-8").unwrap().into_raw(),
+        Err(e) => return CString::new(format!("Error: Invalid UTF-8: {}", e)).unwrap().into_raw(),
     };
 
     let node = match load_ark_program(json_str) {
