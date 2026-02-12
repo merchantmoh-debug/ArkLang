@@ -1,4 +1,4 @@
-﻿use crate::bytecode::{Chunk, OpCode};
+use crate::bytecode::{Chunk, OpCode};
 use crate::intrinsics;
 use crate::runtime::{RuntimeError, Scope, Value};
 use std::rc::Rc;
@@ -14,19 +14,28 @@ pub struct VM<'a> {
     pub frames: Vec<CallFrame>,
     pub ip: usize,
     pub chunk: Rc<Chunk>,
+    pub security_level: u8,
 }
 
 impl<'a> VM<'a> {
-    pub fn new(chunk: Chunk) -> Self {
+    pub fn new(chunk: Chunk, hash: &str, security_level: u8) -> Result<Self, RuntimeError> {
+        // Security Check: Verify Code Hash on Blockchain
+        if security_level > 0 {
+            if !crate::blockchain::verify_code_hash(hash) {
+                return Err(RuntimeError::UntrustedCode);
+            }
+        }
+
         let mut global_scope = Scope::new();
         crate::intrinsics::IntrinsicRegistry::register_all(&mut global_scope);
-        Self {
+        Ok(Self {
             stack: Vec::new(),
             scopes: vec![global_scope],
             frames: Vec::new(),
             ip: 0,
             chunk: Rc::new(chunk),
-        }
+            security_level,
+        })
     }
 
     pub fn run(&mut self) -> Result<Value, String> {
@@ -295,5 +304,35 @@ impl<'a> VM<'a> {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bytecode::Chunk;
+
+    #[test]
+    fn test_vm_security_level_zero_allows_anything() {
+        let chunk = Chunk::new();
+        // Security level 0 should allow "UNTRUSTED" hash
+        let vm = VM::new(chunk, "UNTRUSTED", 0);
+        assert!(vm.is_ok());
+    }
+
+    #[test]
+    fn test_vm_security_level_one_blocks_untrusted() {
+        let chunk = Chunk::new();
+        // Security level 1 should block "UNTRUSTED" hash
+        let vm = VM::new(chunk, "UNTRUSTED", 1);
+        assert!(matches!(vm, Err(RuntimeError::UntrustedCode)));
+    }
+
+    #[test]
+    fn test_vm_security_level_one_allows_trusted() {
+        let chunk = Chunk::new();
+        // Security level 1 should allow trusted hash (anything not "UNTRUSTED" in our mock)
+        let vm = VM::new(chunk, "TRUSTED_HASH", 1);
+        assert!(vm.is_ok());
     }
 }
