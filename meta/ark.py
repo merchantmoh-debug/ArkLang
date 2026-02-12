@@ -698,6 +698,35 @@ def eval_node(node, scope):
                 items = [eval_node(c, scope) for c in child.children]
         return ArkValue(items, "List")
 
+    if node.data == "get_item":
+        # children[0] is the collection (list/string/buffer)
+        # children[1] is the index (expression)
+
+        collection = eval_node(node.children[0], scope)
+        index_val = eval_node(node.children[1], scope)
+
+        if index_val.type != "Integer":
+             raise Exception(f"Index must be Integer, got {index_val.type}")
+        idx = index_val.val
+
+        if collection.type == "List":
+            if idx < 0 or idx >= len(collection.val):
+                raise Exception(f"List index out of range: {idx}")
+            return collection.val[idx]
+
+        if collection.type == "String":
+            if idx < 0 or idx >= len(collection.val):
+                 raise Exception(f"String index out of range: {idx}")
+            return ArkValue(collection.val[idx], "String")
+
+        if collection.type == "Buffer":
+            if idx < 0 or idx >= len(collection.val):
+                 raise Exception(f"Buffer index out of range: {idx}")
+            # Return integer byte value
+            return ArkValue(int(collection.val[idx]), "Integer")
+
+        raise Exception(f"Cannot index type {collection.type}")
+
     return ArkValue(None, "Unit")
 
 def call_user_func(func: ArkFunction, args: List[ArkValue], instance: Optional[ArkValue] = None):
