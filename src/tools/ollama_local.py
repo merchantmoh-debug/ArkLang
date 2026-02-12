@@ -13,18 +13,25 @@ def call_local_ollama(
 ) -> str:
     """
     Call a local Ollama-style endpoint at /api/generate.
-
-    Args:
-        prompt: The prompt to send.
-        model: Model name (e.g., 'qwen3:0.6b').
-        host: Base URL of the local server (default http://127.0.0.1:11434).
-        stream: Whether to request streaming from the server.
-        options: Extra options passed through to the backend.
-
-    Returns:
-        The generated text response from the local model.
+    
+    Security: Restricts 'host' to generic local loopback addresses to prevent SSRF.
     """
-    url = f"{host.rstrip('/')}/api/generate"
+    # SSRF Protection: Only allow local loopback
+    allowed_hosts = ["http://127.0.0.1", "http://localhost", "https://127.0.0.1", "https://localhost"]
+    clean_host = host.rstrip('/')
+    
+    # Check if host starts with any allowed prefix
+    if not any(clean_host.startswith(allowed) for allowed in allowed_hosts):
+         # Also allow specific port 11434 checks if needed, but simplest is prefix
+         # Actually, let's be strict.
+         if not (clean_host == "http://127.0.0.1:11434" or clean_host == "http://localhost:11434"):
+             # Fallback for custom ports on localhost: check hostname parsing
+             from urllib.parse import urlparse
+             parsed = urlparse(clean_host)
+             if parsed.hostname not in ("127.0.0.1", "localhost"):
+                  return f"[Security Block] Host '{host}' is not allowed. Localhost only."
+
+    url = f"{clean_host}/api/generate"
     payload = {
         "model": model,
         "prompt": prompt,

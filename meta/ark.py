@@ -536,8 +536,13 @@ def sys_net_http_serve(args: List[ArkValue]):
     print(f"Starting Ark Web Server on port {port}...")
     
     # To allow `call_user_func` to be accessible within the handler,
-    # we pass it as a global or ensure it's imported/defined in the scope where this intrinsic runs.
-    # For this example, we assume `call_user_func` is available in the module's global scope.
+    # we inject it into the class namespace or use a global reference.
+    # A safer way is to assign it to the class directly.
+    
+    # We need a reference to the global `call_user_func` defined later in this file.
+    # Since Python looks up globals at runtime, it *should* work if this function is called after definition.
+    # However, to satisfy static checkers and be explicit:
+    global call_user_func
 
     class ArkHttpHandler(http.server.SimpleHTTPRequestHandler):
         def do_GET(self):
