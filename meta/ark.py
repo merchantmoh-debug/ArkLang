@@ -216,6 +216,64 @@ def extract_code(args: List[ArkValue]):
         return ArkValue(matches[0], "String")
     return ArkValue("", "String") # Return empty string if no code block found
 
+def intrinsic_math_pow(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("math.pow expects 2 arguments")
+    base = args[0].val
+    exp = args[1].val
+    return ArkValue(int(math.pow(base, exp)), "Integer")
+
+def intrinsic_math_sqrt(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.sqrt expects 1 argument")
+    val = args[0].val
+    return ArkValue(int(math.sqrt(val)), "Integer")
+
+def intrinsic_math_sin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.sin expects 1 argument")
+    return ArkValue(int(math.sin(args[0].val)), "Integer")
+
+def intrinsic_math_cos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.cos expects 1 argument")
+    return ArkValue(int(math.cos(args[0].val)), "Integer")
+
+def intrinsic_math_tan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.tan expects 1 argument")
+    return ArkValue(int(math.tan(args[0].val)), "Integer")
+
+def intrinsic_math_asin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.asin expects 1 argument")
+    return ArkValue(int(math.asin(args[0].val)), "Integer")
+
+def intrinsic_math_acos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.acos expects 1 argument")
+    return ArkValue(int(math.acos(args[0].val)), "Integer")
+
+def intrinsic_math_atan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.atan expects 1 argument")
+    return ArkValue(int(math.atan(args[0].val)), "Integer")
+
+def intrinsic_math_atan2(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("math.atan2 expects 2 arguments")
+    return ArkValue(int(math.atan2(args[0].val, args[1].val)), "Integer")
+
+def sys_net_http_request(args: List[ArkValue]):
+    check_exec_security()
+    if not args or args[0].type != "String":
+        raise Exception("sys.net.http.request expects url string")
+    url = args[0].val
+
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req) as response:
+            status = response.getcode()
+            body = response.read().decode('utf-8')
+            return ArkValue([ArkValue(status, "Integer"), ArkValue(body, "String")], "List")
+    except urllib.error.HTTPError as e:
+        status = e.code
+        body = e.read().decode('utf-8')
+        return ArkValue([ArkValue(status, "Integer"), ArkValue(body, "String")], "List")
+    except Exception as e:
+        return ArkValue([ArkValue(0, "Integer"), ArkValue(str(e), "String")], "List")
+
 def sys_net_http_serve(args: List[ArkValue]):
     check_exec_security()
     # print(f"DEBUG: sys.net.http.serve args: {[a.type for a in args]}")

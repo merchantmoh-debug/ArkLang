@@ -1,0 +1,12 @@
+i := 0
+while (1) {
+    sys.time.sleep(1)
+    res := sys.net.http.request("http://localhost:8000/block")
+    status := res[0]
+    if (status == 200) {
+        print("Block submitted: " + i)
+        i := i + 1
+    } else {
+        print("Miner: Connection failed or ignored")
+    }
+}
