@@ -19,6 +19,8 @@ import urllib.request
 import urllib.error
 import urllib.parse
 import codecs
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives import serialization
 
 # --- Security ---
 
@@ -216,6 +218,22 @@ def extract_code(args: List[ArkValue]):
         return ArkValue(matches[0], "String")
     return ArkValue("", "String") # Return empty string if no code block found
 
+def sys_net_http_request(args: List[ArkValue]):
+    check_exec_security()
+    if len(args) != 2 or args[0].type != "String" or args[1].type != "String":
+        raise Exception("sys.net.http.request expects url and method")
+    url = args[0].val
+    method = args[1].val
+
+    try:
+        req = urllib.request.Request(url, method=method)
+        with urllib.request.urlopen(req) as response:
+            body = response.read().decode('utf-8')
+            status = response.status
+            return ArkValue([ArkValue(status, "Integer"), ArkValue(body, "String")], "List")
+    except Exception as e:
+        return ArkValue([ArkValue(0, "Integer"), ArkValue(str(e), "String")], "List")
+
 def sys_net_http_serve(args: List[ArkValue]):
     check_exec_security()
     # print(f"DEBUG: sys.net.http.serve args: {[a.type for a in args]}")
@@ -324,6 +342,60 @@ def sys_crypto_merkle_root(args: List[ArkValue]):
         
     return ArkValue(current_level[0], "String")
 
+def sys_crypto_ed25519_gen(args: List[ArkValue]):
+    if len(args) != 0:
+        raise Exception("sys.crypto.ed25519.gen expects 0 arguments")
+
+    priv = ed25519.Ed25519PrivateKey.generate()
+    pub = priv.public_key()
+
+    priv_bytes = priv.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    pub_bytes = pub.public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw
+    )
+
+    return ArkValue([
+        ArkValue(priv_bytes.hex(), "String"),
+        ArkValue(pub_bytes.hex(), "String")
+    ], "List")
+
+def sys_crypto_ed25519_sign(args: List[ArkValue]):
+    if len(args) != 2:
+        raise Exception("sys.crypto.ed25519.sign expects msg(string) and priv(hex string)")
+
+    msg = args[0].val.encode('utf-8')
+    priv_hex = args[1].val
+
+    try:
+        priv_bytes = bytes.fromhex(priv_hex)
+        priv = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
+        sig = priv.sign(msg)
+        return ArkValue(sig.hex(), "String")
+    except Exception as e:
+        raise Exception(f"Ed25519 Sign Error: {e}")
+
+def sys_crypto_ed25519_verify(args: List[ArkValue]):
+    if len(args) != 3:
+        raise Exception("sys.crypto.ed25519.verify expects msg(string), sig(hex string), pub(hex string)")
+
+    msg = args[0].val.encode('utf-8')
+    sig_hex = args[1].val
+    pub_hex = args[2].val
+
+    try:
+        sig_bytes = bytes.fromhex(sig_hex)
+        pub_bytes = bytes.fromhex(pub_hex)
+        pub = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+        pub.verify(sig_bytes, msg)
+        return ArkValue(True, "Boolean")
+    except Exception:
+        return ArkValue(False, "Boolean")
+
 def sys_mem_alloc(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "Integer": raise Exception("sys.mem.alloc expects size")
     size = args[0].val
@@ -418,6 +490,57 @@ def sys_html_escape(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
+
+def intrinsic_math_pow(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("pow expects base, exp")
+    return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
+
+def intrinsic_math_sqrt(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sqrt expects 1 arg")
+    return ArkValue(int(math.sqrt(args[0].val)), "Integer")
+
+def intrinsic_math_sin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sin expects 1 arg")
+    angle = args[0].val / 10000.0
+    res = math.sin(angle)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_cos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("cos expects 1 arg")
+    angle = args[0].val / 10000.0
+    res = math.cos(angle)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_tan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("tan expects 1 arg")
+    angle = args[0].val / 10000.0
+    res = math.tan(angle)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_asin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("asin expects 1 arg")
+    val = args[0].val / 10000.0
+    res = math.asin(val)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_acos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("acos expects 1 arg")
+    val = args[0].val / 10000.0
+    res = math.acos(val)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_atan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("atan expects 1 arg")
+    val = args[0].val / 10000.0
+    res = math.atan(val)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_atan2(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("atan2 expects 2 args")
+    y = args[0].val / 10000.0
+    x = args[1].val / 10000.0
+    res = math.atan2(y, x)
+    return ArkValue(int(res * 10000.0), "Integer")
 
 # --- New Intrinsics for LSP ---
 
@@ -548,6 +671,9 @@ INTRINSICS = {
     # System
     "sys.crypto.hash": sys_crypto_hash,
     "sys.crypto.merkle_root": sys_crypto_merkle_root,
+    "sys.crypto.ed25519.gen": sys_crypto_ed25519_gen,
+    "sys.crypto.ed25519.sign": sys_crypto_ed25519_sign,
+    "sys.crypto.ed25519.verify": sys_crypto_ed25519_verify,
     "sys.exec": sys_exec,
     "sys.fs.read": sys_fs_read,
     "sys.fs.write": sys_fs_write,
