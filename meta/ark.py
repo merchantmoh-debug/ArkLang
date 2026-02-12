@@ -31,6 +31,9 @@ EVENT_QUEUE = queue.Queue()
 class SandboxViolation(Exception):
     pass
 
+class LinearityViolation(Exception):
+    pass
+
 def check_path_security(path):
     if os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() == "true":
         return
@@ -83,13 +86,23 @@ class Scope:
 
     def get(self, name: str) -> Optional[ArkValue]:
         if name in self.vars:
-            return self.vars[name]
+            val = self.vars[name]
+            if val.type == "Moved":
+                raise LinearityViolation(f"Use of moved variable '{name}'")
+            return val
         if self.parent:
             return self.parent.get(name)
         return None
 
     def set(self, name: str, val: ArkValue):
         self.vars[name] = val
+
+    def mark_moved(self, name: str):
+        if name in self.vars:
+            self.vars[name] = ArkValue(None, "Moved")
+            return
+        if self.parent:
+            self.parent.mark_moved(name)
 
 # --- Intrinsics ---
 
@@ -1308,6 +1321,7 @@ def eval_node(node, scope):
             func_val = eval_node(node.children[0], scope)
             
             args = []
+            arg_list_node = None
             if len(node.children) > 1:
                 arg_list_node = node.children[1]
                 if hasattr(arg_list_node, "children"):
@@ -1325,6 +1339,17 @@ def eval_node(node, scope):
             # If `print` is not in scope, `eval_node` returns Unit + Error (currently).
             
             if func_val.type == "Intrinsic":
+                intrinsic_name = func_val.val
+                if intrinsic_name in LINEAR_SPECS:
+                    consumed_indices = LINEAR_SPECS[intrinsic_name]
+                    if arg_list_node and hasattr(arg_list_node, "children"):
+                        for idx in consumed_indices:
+                            if idx < len(arg_list_node.children):
+                                arg_node = arg_list_node.children[idx]
+                                if hasattr(arg_node, "data") and arg_node.data == "var":
+                                    var_name = arg_node.children[0].value
+                                    scope.mark_moved(var_name)
+
                 return INTRINSICS[func_val.val](args)
                 
             if func_val.type == "Function":
