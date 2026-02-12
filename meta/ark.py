@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import time
+import math
 import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
@@ -409,6 +410,61 @@ def sys_html_escape(args: List[ArkValue]):
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
 
+def intrinsic_math_pow(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("math.pow expects 2 arguments")
+    base = args[0].val
+    exp = args[1].val
+    return ArkValue(int(math.pow(base, exp)), "Integer")
+
+def intrinsic_math_sqrt(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.sqrt expects 1 argument")
+    val = args[0].val
+    if val < 0: raise Exception("math.sqrt expects non-negative integer")
+    return ArkValue(int(math.sqrt(val)), "Integer")
+
+def intrinsic_math_sin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.sin expects 1 argument")
+    val = args[0].val
+    res = math.sin(val / 10000.0)
+    return ArkValue(int(res * 10000), "Integer")
+
+def intrinsic_math_cos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.cos expects 1 argument")
+    val = args[0].val
+    res = math.cos(val / 10000.0)
+    return ArkValue(int(res * 10000), "Integer")
+
+def intrinsic_math_tan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.tan expects 1 argument")
+    val = args[0].val
+    res = math.tan(val / 10000.0)
+    return ArkValue(int(res * 10000), "Integer")
+
+def intrinsic_math_asin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.asin expects 1 argument")
+    val = args[0].val
+    res = math.asin(val / 10000.0)
+    return ArkValue(int(res * 10000), "Integer")
+
+def intrinsic_math_acos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.acos expects 1 argument")
+    val = args[0].val
+    res = math.acos(val / 10000.0)
+    return ArkValue(int(res * 10000), "Integer")
+
+def intrinsic_math_atan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.atan expects 1 argument")
+    val = args[0].val
+    res = math.atan(val / 10000.0)
+    return ArkValue(int(res * 10000), "Integer")
+
+def intrinsic_math_atan2(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("math.atan2 expects 2 arguments")
+    y = args[0].val
+    x = args[1].val
+    res = math.atan2(y / 10000.0, x / 10000.0)
+    return ArkValue(int(res * 10000), "Integer")
+
 INTRINSICS = {
     # Core
     "get": core_get,
@@ -449,6 +505,15 @@ INTRINSICS = {
     "intrinsic_list_append": sys_list_append,
     "intrinsic_list_get": sys_list_get,
     "intrinsic_lt": lambda args: eval_binop("lt", args[0], args[1]),
+    "intrinsic_math_pow": intrinsic_math_pow,
+    "intrinsic_math_sqrt": intrinsic_math_sqrt,
+    "intrinsic_math_sin": intrinsic_math_sin,
+    "intrinsic_math_cos": intrinsic_math_cos,
+    "intrinsic_math_tan": intrinsic_math_tan,
+    "intrinsic_math_asin": intrinsic_math_asin,
+    "intrinsic_math_acos": intrinsic_math_acos,
+    "intrinsic_math_atan": intrinsic_math_atan,
+    "intrinsic_math_atan2": intrinsic_math_atan2,
     "intrinsic_merkle_root": sys_crypto_merkle_root,
     "intrinsic_or": sys_or,
     "intrinsic_time_now": sys_time_now,
