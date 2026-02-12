@@ -4,11 +4,7 @@ import re
 import time
 import math
 import json
-<<<<<<< HEAD
 import codecs
-=======
-import math
->>>>>>> pr-69
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import http.server
@@ -22,7 +18,6 @@ import socket
 import urllib.request
 import urllib.error
 import urllib.parse
-import codecs
 import queue
 
 # --- Global Event Queue ---
@@ -471,7 +466,6 @@ def sys_time_now(args: List[ArkValue]):
     if len(args) != 0:
         raise Exception("sys.time.now expects 0 arguments")
     return ArkValue(int(time.time() * 1000), "Integer")
-    return ArkValue(int(time.time() * 1000), "Integer")
 
 def sys_crypto_hash(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
@@ -628,6 +622,13 @@ def sys_struct_set(args: List[ArkValue]):
 
     raise Exception(f"sys.struct.set not supported for type {struct_val.type}")
 
+def sys_struct_has(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.struct.has expects obj, field")
+    obj = args[0]
+    field = args[1].val
+    if obj.type != "Instance": return ArkValue(False, "Boolean")
+    return ArkValue(field in obj.val.fields, "Boolean")
+
 def sys_mem_inspect(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "Buffer": raise Exception("sys.mem.inspect expects buffer")
     buf = args[0].val
@@ -717,57 +718,126 @@ def sys_html_escape(args: List[ArkValue]):
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
 
-<<<<<<< HEAD
+def sys_fs_write_buffer(args: List[ArkValue]):
+    if len(args) != 2 or args[0].type != "String" or args[1].type != "Buffer":
+        raise Exception("sys.fs.write_buffer expects string path and buffer")
+    path = args[0].val
+    check_path_security(path)
+    buf = args[1].val
+    try:
+        with open(path, "wb") as f:
+            f.write(buf)
+        return ArkValue(None, "Unit")
+    except Exception as e:
+        raise Exception(f"Error writing buffer to {path}: {e}")
+
+def sys_fs_read_buffer(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.fs.read_buffer expects string path")
+    path = args[0].val
+    check_path_security(path)
+    try:
+        with open(path, "rb") as f:
+            content = bytearray(f.read())
+        return ArkValue(content, "Buffer")
+    except Exception as e:
+        raise Exception(f"Error reading buffer from {path}: {e}")
+
+def math_sin_scaled(args: List[ArkValue]):
+    if len(args) != 3: raise Exception("math.sin_scaled expects 3 args")
+    angle = args[0].val
+    scale_in = args[1].val
+    scale_out = args[2].val
+    if scale_in == 0: raise Exception("Scale in is 0")
+    res = math.sin(angle / scale_in) * scale_out
+    return ArkValue(int(round(res)), "Integer")
+
+def math_cos_scaled(args: List[ArkValue]):
+    if len(args) != 3: raise Exception("math.cos_scaled expects 3 args")
+    angle = args[0].val
+    scale_in = args[1].val
+    scale_out = args[2].val
+    if scale_in == 0: raise Exception("Scale in is 0")
+    res = math.cos(angle / scale_in) * scale_out
+    return ArkValue(int(round(res)), "Integer")
+
+def math_pi_scaled(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.pi_scaled expects 1 arg")
+    scale = args[0].val
+    res = math.pi * scale
+    return ArkValue(int(round(res)), "Integer")
+
+def sys_str_from_code(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sys.str.from_code expects 1 arg")
+    code = args[0].val
+    return ArkValue(chr(code), "String")
+
+# --- Chain Intrinsics (Mock/Prototype) ---
+
+def sys_chain_height(args: List[ArkValue]):
+    if len(args) != 0: raise Exception("sys.chain.height expects 0 args")
+    # In a real node, this would query the local blockchain state
+    # For prototype simulation, we can check a local file or return a mock
+    return ArkValue(1, "Integer")
+
+def sys_chain_get_balance(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.chain.get_balance expects address")
+    # Mock balance for simulation
+    addr = args[0].val
+    if addr.startswith("ark"):
+        return ArkValue(1000, "Integer")
+    return ArkValue(0, "Integer")
+
+def sys_chain_submit_tx(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.chain.submit_tx expects signed_tx_hex")
+    # In simulation, we just print/log it
+    tx_hex = args[0].val
+    print(f"[CHAIN] Submitted TX: {tx_hex[:16]}...")
+    return ArkValue(True, "Boolean")
+
+def sys_chain_verify_tx(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
+    # Mock verification
+    return ArkValue(True, "Boolean")
+
+
 def intrinsic_math_pow(args: List[ArkValue]):
-    if len(args) != 2: raise Exception("pow expects base, exp")
+    if len(args) != 2: raise Exception("math.pow expects 2 args")
     return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
 
 def intrinsic_math_sqrt(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("sqrt expects 1 arg")
+    if len(args) != 1: raise Exception("math.sqrt expects 1 arg")
     return ArkValue(int(math.sqrt(args[0].val)), "Integer")
 
 def intrinsic_math_sin(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("sin expects 1 arg")
-    angle = args[0].val / 10000.0
-    res = math.sin(angle)
-    return ArkValue(int(res * 10000.0), "Integer")
+    if len(args) != 1: raise Exception("math.sin expects 1 arg")
+    return ArkValue(int(math.sin(args[0].val)), "Integer")
 
 def intrinsic_math_cos(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("cos expects 1 arg")
-    angle = args[0].val / 10000.0
-    res = math.cos(angle)
-    return ArkValue(int(res * 10000.0), "Integer")
+    if len(args) != 1: raise Exception("math.cos expects 1 arg")
+    return ArkValue(int(math.cos(args[0].val)), "Integer")
 
 def intrinsic_math_tan(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("tan expects 1 arg")
-    angle = args[0].val / 10000.0
-    res = math.tan(angle)
-    return ArkValue(int(res * 10000.0), "Integer")
+    if len(args) != 1: raise Exception("math.tan expects 1 arg")
+    return ArkValue(int(math.tan(args[0].val)), "Integer")
 
 def intrinsic_math_asin(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("asin expects 1 arg")
-    val = args[0].val / 10000.0
-    res = math.asin(val)
-    return ArkValue(int(res * 10000.0), "Integer")
+    if len(args) != 1: raise Exception("math.asin expects 1 arg")
+    return ArkValue(int(math.asin(args[0].val)), "Integer")
 
 def intrinsic_math_acos(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("acos expects 1 arg")
-    val = args[0].val / 10000.0
-    res = math.acos(val)
-    return ArkValue(int(res * 10000.0), "Integer")
+    if len(args) != 1: raise Exception("math.acos expects 1 arg")
+    return ArkValue(int(math.acos(args[0].val)), "Integer")
 
 def intrinsic_math_atan(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("atan expects 1 arg")
-    val = args[0].val / 10000.0
-    res = math.atan(val)
-    return ArkValue(int(res * 10000.0), "Integer")
+    if len(args) != 1: raise Exception("math.atan expects 1 arg")
+    return ArkValue(int(math.atan(args[0].val)), "Integer")
 
 def intrinsic_math_atan2(args: List[ArkValue]):
-    if len(args) != 2: raise Exception("atan2 expects 2 args")
-    y = args[0].val / 10000.0
-    x = args[1].val / 10000.0
-    res = math.atan2(y, x)
-    return ArkValue(int(res * 10000.0), "Integer")
+    if len(args) != 2: raise Exception("math.atan2 expects 2 args")
+    return ArkValue(int(math.atan2(args[0].val, args[1].val)), "Integer")
 
 # --- New Intrinsics for LSP ---
 
@@ -856,96 +926,6 @@ def sys_exit(args: List[ArkValue]):
         code = args[0].val
     sys.exit(code)
 
-def sys_struct_get(args: List[ArkValue]):
-    if len(args) != 2: raise Exception("sys.struct.get expects obj, field")
-    obj = args[0]
-    field = args[1].val
-
-    if obj.type != "Instance":
-         raise Exception(f"sys.struct.get expects Instance, got {obj.type}")
-
-    val = obj.val.fields.get(field)
-    if val is None:
-        raise Exception(f"Field {field} not found on struct")
-
-    return ArkValue([val, obj], "List")
-
-def sys_struct_set(args: List[ArkValue]):
-    if len(args) != 3: raise Exception("sys.struct.set expects obj, field, val")
-    obj = args[0]
-    field = args[1].val
-    val = args[2]
-
-    if obj.type != "Instance":
-         raise Exception(f"sys.struct.set expects Instance, got {obj.type}")
-
-    obj.val.fields[field] = val
-    return obj
-
-def sys_struct_has(args: List[ArkValue]):
-    if len(args) != 2: raise Exception("sys.struct.has expects obj, field")
-    obj = args[0]
-    field = args[1].val
-    if obj.type != "Instance": return ArkValue(False, "Boolean")
-    return ArkValue(field in obj.val.fields, "Boolean")
-
-def intrinsic_math_pow(args: List[ArkValue]):
-    if len(args) != 2: raise Exception("math.pow expects 2 args")
-    return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
-
-def intrinsic_math_sqrt(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("math.sqrt expects 1 arg")
-    return ArkValue(int(math.sqrt(args[0].val)), "Integer")
-
-def intrinsic_math_sin(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("math.sin expects 1 arg")
-    return ArkValue(int(math.sin(args[0].val)), "Integer")
-
-def intrinsic_math_cos(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("math.cos expects 1 arg")
-    return ArkValue(int(math.cos(args[0].val)), "Integer")
-
-def intrinsic_math_tan(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("math.tan expects 1 arg")
-    return ArkValue(int(math.tan(args[0].val)), "Integer")
-
-def intrinsic_math_asin(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("math.asin expects 1 arg")
-    return ArkValue(int(math.asin(args[0].val)), "Integer")
-
-def intrinsic_math_acos(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("math.acos expects 1 arg")
-    return ArkValue(int(math.acos(args[0].val)), "Integer")
-
-def intrinsic_math_atan(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("math.atan expects 1 arg")
-    return ArkValue(int(math.atan(args[0].val)), "Integer")
-
-def intrinsic_math_atan2(args: List[ArkValue]):
-    if len(args) != 2: raise Exception("math.atan2 expects 2 args")
-    return ArkValue(int(math.atan2(args[0].val, args[1].val)), "Integer")
-
-def sys_net_http_request(args: List[ArkValue]):
-    check_exec_security()
-    if len(args) < 2:
-        raise Exception("sys.net.http.request expects method, url, [body]")
-    method = args[0].val
-    url = args[1].val
-    body = None
-    if len(args) > 2:
-        body = args[2].val.encode('utf-8')
-
-    req = urllib.request.Request(url, data=body, method=method)
-    try:
-        with urllib.request.urlopen(req) as response:
-            status = response.getcode()
-            content = response.read().decode('utf-8')
-            return ArkValue([ArkValue(status, "Integer"), ArkValue(content, "String")], "List")
-    except urllib.error.HTTPError as e:
-        return ArkValue([ArkValue(e.code, "Integer"), ArkValue(e.read().decode('utf-8'), "String")], "List")
-    except Exception as e:
-        return ArkValue([ArkValue(0, "Integer"), ArkValue(str(e), "String")], "List")
-
 def sys_io_read_file_async(args: List[ArkValue]):
     if len(args) != 2: raise Exception("sys.io.read_file_async expects path, callback")
     path = args[0].val
@@ -1011,90 +991,7 @@ def sys_func_apply(args: List[ArkValue]):
     raise Exception(f"Cannot apply {func.type}")
 
 
-# --- Chain Intrinsics (Mock/Prototype) ---
-
-def sys_chain_height(args: List[ArkValue]):
-    if len(args) != 0: raise Exception("sys.chain.height expects 0 args")
-    # In a real node, this would query the local blockchain state
-    # For prototype simulation, we can check a local file or return a mock
-    return ArkValue(1, "Integer")
-
-def sys_chain_get_balance(args: List[ArkValue]):
-    if len(args) != 1 or args[0].type != "String":
-        raise Exception("sys.chain.get_balance expects address")
-    # Mock balance for simulation
-    addr = args[0].val
-    if addr.startswith("ark"):
-        return ArkValue(1000, "Integer")
-    return ArkValue(0, "Integer")
-
-def sys_chain_submit_tx(args: List[ArkValue]):
-    if len(args) != 1 or args[0].type != "String":
-        raise Exception("sys.chain.submit_tx expects signed_tx_hex")
-    # In simulation, we just print/log it
-    tx_hex = args[0].val
-    print(f"[CHAIN] Submitted TX: {tx_hex[:16]}...")
-    return ArkValue(True, "Boolean")
-
-def sys_chain_verify_tx(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
-    # Mock verification
-    return ArkValue(True, "Boolean")
-=======
-def sys_fs_write_buffer(args: List[ArkValue]):
-    if len(args) != 2 or args[0].type != "String" or args[1].type != "Buffer":
-        raise Exception("sys.fs.write_buffer expects string path and buffer")
-    path = args[0].val
-    check_path_security(path)
-    buf = args[1].val
-    try:
-        with open(path, "wb") as f:
-            f.write(buf)
-        return ArkValue(None, "Unit")
-    except Exception as e:
-        raise Exception(f"Error writing buffer to {path}: {e}")
-
-def sys_fs_read_buffer(args: List[ArkValue]):
-    if len(args) != 1 or args[0].type != "String":
-        raise Exception("sys.fs.read_buffer expects string path")
-    path = args[0].val
-    check_path_security(path)
-    try:
-        with open(path, "rb") as f:
-            content = bytearray(f.read())
-        return ArkValue(content, "Buffer")
-    except Exception as e:
-        raise Exception(f"Error reading buffer from {path}: {e}")
-
-def math_sin_scaled(args: List[ArkValue]):
-    if len(args) != 3: raise Exception("math.sin_scaled expects 3 args")
-    angle = args[0].val
-    scale_in = args[1].val
-    scale_out = args[2].val
-    if scale_in == 0: raise Exception("Scale in is 0")
-    res = math.sin(angle / scale_in) * scale_out
-    return ArkValue(int(round(res)), "Integer")
-
-def math_cos_scaled(args: List[ArkValue]):
-    if len(args) != 3: raise Exception("math.cos_scaled expects 3 args")
-    angle = args[0].val
-    scale_in = args[1].val
-    scale_out = args[2].val
-    if scale_in == 0: raise Exception("Scale in is 0")
-    res = math.cos(angle / scale_in) * scale_out
-    return ArkValue(int(round(res)), "Integer")
-
-def math_pi_scaled(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("math.pi_scaled expects 1 arg")
-    scale = args[0].val
-    res = math.pi * scale
-    return ArkValue(int(round(res)), "Integer")
-
-def sys_str_from_code(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("sys.str.from_code expects 1 arg")
-    code = args[0].val
-    return ArkValue(chr(code), "String")
->>>>>>> pr-69
+intrinsic_time_now = sys_time_now
 
 INTRINSICS = {
     # Core
@@ -1432,7 +1329,6 @@ def eval_node(node, scope):
         return ArkValue(int(node.children[0].value), "Integer")
     
     if node.data == "string":
-    if node.data == "string":
         # Use literal_eval to handle escapes (\n, \t, etc)
         import ast
         try:
@@ -1440,7 +1336,6 @@ def eval_node(node, scope):
         except:
              # Fallback if literal_eval fails (e.g. strict syntax issues), though unlikely for valid strings
              s = node.children[0].value[1:-1]
-        return ArkValue(s, "String")
         return ArkValue(s, "String")
         
     if node.data in ["add", "sub", "mul", "div", "mod", "lt", "gt", "le", "ge", "eq", "neq"]:

@@ -1,0 +1,74 @@
+func split_lines(s) {
+    lines := []
+    current := ""
+    i := 0
+    l := len(s)
+
+    while i < l {
+        char := s[i]
+        if char == "\n" {
+            sys.list.append(lines, current)
+            current := ""
+        } else {
+            current := current + char
+        }
+        i := i + 1
+    }
+
+    if len(current) > 0 {
+        sys.list.append(lines, current)
+    }
+
+    return lines
+}
+
+func list_files(dir) {
+    cmd := "find " + dir + " -type f"
+    output := sys.exec(cmd)
+    return split_lines(output)
+}
+
+func build() {
+    print("Listing source files in core/src...")
+    files := list_files("core/src")
+
+    i := 0
+    l := len(files)
+    while i < l {
+        f := files[i]
+        print("Found source file: " + f)
+        i := i + 1
+    }
+
+    print("Running cargo build...")
+    res := sys.exec("cargo build")
+    print(res)
+}
+
+func clean() {
+    print("Running cargo clean...")
+    res := sys.exec("cargo clean")
+    print(res)
+}
+
+func test() {
+    print("Running cargo test...")
+    res := sys.exec("cargo test")
+    print(res)
+}
+
+// Main logic
+args := sys_args
+cmd := "build"
+
+if len(args) > 1 {
+    cmd := args[1]
+}
+
+if cmd == "clean" {
+    clean()
+} else if cmd == "test" {
+    test()
+} else {
+    build()
+}

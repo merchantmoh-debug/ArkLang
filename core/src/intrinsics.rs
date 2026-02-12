@@ -313,7 +313,8 @@ impl IntrinsicRegistry {
             "sys.audio.synth_tone".to_string(),
             Value::NativeFunction(intrinsic_audio_synth_tone),
         );
-
+    }
+}
 
 pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
@@ -1444,7 +1445,6 @@ pub fn intrinsic_str_from_code(args: Vec<Value>) -> Result<Value, RuntimeError> 
         Ok(Value::String(c.to_string()))
     } else {
         Err(RuntimeError::InvalidOperation("Invalid Char Code".to_string()))
-    }
     }
 }
 
