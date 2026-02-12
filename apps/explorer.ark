@@ -76,7 +76,8 @@ func view_home() {
     html := html + "<div class='card'><h2>Chain Stats</h2>"
     html := html + "<p><strong>Height:</strong> " + int_to_str(block_height) + "</p>"
     html := html + "<p><strong>Difficulty:</strong> " + int_to_str(difficulty) + "</p>"
-    html := html + "<p><strong>Last Block:</strong> " + last_block_hash + "</p></div>"
+    html := html + "<p><strong>Last Block:</strong> " + last_block_hash + "</p>"
+    html := html + "<p><a href='/graph'>View Memory Graph</a></p></div>"
 
     html := html + "<h2>Recent Blocks</h2>"
 
@@ -164,6 +165,35 @@ func view_tx(id) {
     return view_404()
 }
 
+func view_graph() {
+    dot := "digraph MemoryGraph {\n  rankdir=RL;\n  node [shape=box];\n"
+
+    i := 0
+    while i < len(blocks) {
+        b := blocks[i]
+        label := "Block #" + int_to_str(b.index) + "\\n" + string_slice(b.hash, 0, 8) + "..."
+        dot := dot + "  b" + int_to_str(b.index) + " [label=\"" + label + "\"];\n"
+
+        j := 0
+        while j < len(blocks) {
+            other := blocks[j]
+            if other.hash == b.prev {
+                dot := dot + "  b" + int_to_str(b.index) + " -> b" + int_to_str(other.index) + ";\n"
+            }
+            j := j + 1
+        }
+        i := i + 1
+    }
+    dot := dot + "}"
+
+    html := view_header("Memory Graph")
+    html := html + "<h2>DAG Visualization (DOT)</h2>"
+    html := html + "<p>Copy the code below into a Graphviz viewer.</p>"
+    html := html + "<textarea rows='20' cols='80' readonly>" + dot + "</textarea>"
+    html := html + view_footer()
+    return html
+}
+
 func view_404() {
     return "<html><body><h1>404 Not Found</h1><p><a href='/'>Home</a></p></body></html>"
 }
@@ -175,6 +205,10 @@ func handle_request(path) {
 
     if path == "/" {
         return view_home()
+    }
+
+    if path == "/graph" {
+        return view_graph()
     }
 
     if string_starts_with(path, "/block/") {
