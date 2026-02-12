@@ -1,0 +1,203 @@
+// apps/explorer.ark
+// Web Explorer for the Ark Blockchain (Mocked)
+
+// Polyfill booleans
+true := 1 == 1
+false := 1 == 0
+
+print("Starting Ark Explorer...")
+
+// --- String Helpers ---
+
+func string_len(s) {
+    return len(s)
+}
+
+func string_slice(s, start, end) {
+    res := ""
+    i := start
+    while i < end {
+        res := res + s[i]
+        i := i + 1
+    }
+    return res
+}
+
+func string_starts_with(s, prefix) {
+    sl := len(s)
+    pl := len(prefix)
+    if pl > sl { return false }
+
+    i := 0
+    while i < pl {
+        if s[i] != prefix[i] {
+            return false
+        }
+        i := i + 1
+    }
+    return true
+}
+
+func int_to_str(n) {
+    return sys.json.stringify(n)
+}
+
+// --- Mock Data ---
+
+block_height := 10500
+difficulty := 4
+last_block_hash := "00000000abcdef1234567890abcdef12"
+
+// Blocks
+b1 := { index: 10500, hash: "00000000abcdef1234567890abcdef12", prev: "00000000abcdef1234567890abcdef11", ts: 1678900000, txs_count: 2 }
+b2 := { index: 10499, hash: "00000000abcdef1234567890abcdef11", prev: "00000000abcdef1234567890abcdef10", ts: 1678899000, txs_count: 1 }
+
+blocks := [b1, b2]
+
+// Txs
+tx1 := { id: "tx123abc", from: "Alice", to: "Bob", amount: 50, sig: "s1gN4tur3..." }
+tx2 := { id: "tx456def", from: "Bob", to: "Charlie", amount: 10, sig: "s1gN4tur3_2..." }
+
+txs := [tx1, tx2]
+
+// --- Views ---
+
+func view_header(title) {
+    return "<html><head><title>" + title + "</title><style>body{font-family:sans-serif;padding:20px;} .card{border:1px solid #ddd;padding:15px;margin-bottom:10px;border-radius:5px;} h1{color:#333;}</style></head><body><h1>" + title + "</h1>"
+}
+
+func view_footer() {
+    return "<p><a href='/'>Home</a></p></body></html>"
+}
+
+func view_home() {
+    html := view_header("Ark Explorer")
+
+    html := html + "<div class='card'><h2>Chain Stats</h2>"
+    html := html + "<p><strong>Height:</strong> " + int_to_str(block_height) + "</p>"
+    html := html + "<p><strong>Difficulty:</strong> " + int_to_str(difficulty) + "</p>"
+    html := html + "<p><strong>Last Block:</strong> " + last_block_hash + "</p></div>"
+
+    html := html + "<h2>Recent Blocks</h2>"
+
+    i := 0
+    while i < len(blocks) {
+        b := blocks[i]
+        html := html + "<div class='card'>"
+        html := html + "<h3>Block #" + int_to_str(b.index) + "</h3>"
+        html := html + "<p>Hash: <a href='/block/" + int_to_str(b.index) + "'>" + b.hash + "</a></p>"
+        html := html + "</div>"
+        i := i + 1
+    }
+
+    html := html + view_footer()
+    return html
+}
+
+func view_block(idx_str) {
+    found := false
+    target_block := {}
+
+    i := 0
+    while i < len(blocks) {
+        b := blocks[i]
+        if int_to_str(b.index) == idx_str {
+            target_block := b
+            found := true
+            i := len(blocks)
+        }
+        i := i + 1
+    }
+
+    if found {
+        html := view_header("Block #" + idx_str)
+        html := html + "<div class='card'>"
+        html := html + "<p><strong>Hash:</strong> " + target_block.hash + "</p>"
+        html := html + "<p><strong>Previous:</strong> " + target_block.prev + "</p>"
+        html := html + "<p><strong>Timestamp:</strong> " + int_to_str(target_block.ts) + "</p>"
+        html := html + "<p><strong>Transactions:</strong> " + int_to_str(target_block.txs_count) + "</p>"
+        html := html + "</div>"
+
+        html := html + "<h3>Transactions</h3><ul>"
+        j := 0
+        while j < len(txs) {
+            t := txs[j]
+            html := html + "<li><a href='/tx/" + t.id + "'>" + t.id + "</a> (" + int_to_str(t.amount) + " ARK)</li>"
+            j := j + 1
+        }
+        html := html + "</ul>"
+
+        html := html + view_footer()
+        return html
+    }
+
+    return view_404()
+}
+
+func view_tx(id) {
+    found := false
+    target_tx := {}
+
+    i := 0
+    while i < len(txs) {
+        t := txs[i]
+        if t.id == id {
+            target_tx := t
+            found := true
+            i := len(txs)
+        }
+        i := i + 1
+    }
+
+    if found {
+        html := view_header("Transaction " + id)
+        html := html + "<div class='card'>"
+        html := html + "<p><strong>From:</strong> " + target_tx.from + "</p>"
+        html := html + "<p><strong>To:</strong> " + target_tx.to + "</p>"
+        html := html + "<p><strong>Amount:</strong> " + int_to_str(target_tx.amount) + " ARK</p>"
+        html := html + "<p><strong>Signature:</strong> " + target_tx.sig + "</p>"
+        html := html + "</div>"
+        html := html + view_footer()
+        return html
+    }
+
+    return view_404()
+}
+
+func view_404() {
+    return "<html><body><h1>404 Not Found</h1><p><a href='/'>Home</a></p></body></html>"
+}
+
+// --- Router ---
+
+func handle_request(path) {
+    print("Request: " + path)
+
+    if path == "/" {
+        return view_home()
+    }
+
+    if string_starts_with(path, "/block/") {
+        idx_str := string_slice(path, 7, len(path))
+        return view_block(idx_str)
+    }
+
+    if string_starts_with(path, "/tx/") {
+        id_str := string_slice(path, 4, len(path))
+        return view_tx(id_str)
+    }
+
+    return view_404()
+}
+
+// --- Main ---
+
+port := 8080
+sys.net.http.serve(port, handle_request)
+
+print("Explorer running on port " + int_to_str(port))
+print("Press Ctrl+C to stop.")
+
+while true {
+    sys.time.sleep(1)
+}

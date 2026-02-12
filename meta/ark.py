@@ -216,6 +216,28 @@ def extract_code(args: List[ArkValue]):
         return ArkValue(matches[0], "String")
     return ArkValue("", "String") # Return empty string if no code block found
 
+def sys_net_http_request(args: List[ArkValue]):
+    check_exec_security()
+    if len(args) < 2:
+        raise Exception("sys.net.http.request expects method, url, [body]")
+    method = args[0].val
+    url = args[1].val
+    body = None
+    if len(args) > 2:
+        body = args[2].val.encode('utf-8')
+
+    req = urllib.request.Request(url, data=body, method=method)
+    try:
+        with urllib.request.urlopen(req) as response:
+            status = response.getcode()
+            content = response.read().decode('utf-8')
+            return ArkValue([ArkValue(status, "Integer"), ArkValue(content, "String")], "List")
+    except urllib.error.HTTPError as e:
+        content = e.read().decode('utf-8')
+        return ArkValue([ArkValue(e.code, "Integer"), ArkValue(content, "String")], "List")
+    except Exception as e:
+        raise Exception(f"HTTP Request failed: {e}")
+
 def sys_net_http_serve(args: List[ArkValue]):
     check_exec_security()
     # print(f"DEBUG: sys.net.http.serve args: {[a.type for a in args]}")
@@ -594,15 +616,6 @@ INTRINSICS = {
     "intrinsic_list_append": sys_list_append,
     "intrinsic_list_get": sys_list_get,
     "intrinsic_lt": lambda args: eval_binop("lt", args[0], args[1]),
-    "intrinsic_math_pow": intrinsic_math_pow,
-    "intrinsic_math_sqrt": intrinsic_math_sqrt,
-    "intrinsic_math_sin": intrinsic_math_sin,
-    "intrinsic_math_cos": intrinsic_math_cos,
-    "intrinsic_math_tan": intrinsic_math_tan,
-    "intrinsic_math_asin": intrinsic_math_asin,
-    "intrinsic_math_acos": intrinsic_math_acos,
-    "intrinsic_math_atan": intrinsic_math_atan,
-    "intrinsic_math_atan2": intrinsic_math_atan2,
     "intrinsic_merkle_root": sys_crypto_merkle_root,
     "intrinsic_or": sys_or,
     "intrinsic_time_now": sys_time_now,
