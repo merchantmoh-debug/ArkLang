@@ -1,11 +1,79 @@
-while (1) {
-    sys.time.sleep(2)
-    res := sys.net.http.request("http://localhost:8000/height")
-    status := res[0]
-    if (status == 200) {
-        height := res[1]
-        print("Wallet synced: Height " + height)
-    } else {
-        print("Wallet: Connection failed")
+// Ark Wallet CLI
+
+// Mock Chain Logic
+func chain_get_balance(addr) {
+    return 1000
+}
+
+chain := {
+    get_balance: chain_get_balance
+}
+
+// Helper to safely get arguments
+func get_arg(i) {
+    len_args := len(sys_args)
+    if (i >= len_args) {
+        return ""
     }
+    return get(sys_args, i)
+}
+
+// Main Logic
+cmd := get_arg(1)
+
+if (cmd == "gen") {
+    keys := sys.crypto.ed25519.gen()
+    priv := get(keys, 0)
+    pub := get(keys, 1)
+    print("Generated Ed25519 Keypair:")
+    print("Private Key: " + priv)
+    print("Public Key:  " + pub)
+}
+if (cmd == "sign") {
+    msg := get_arg(2)
+    priv := get_arg(3)
+    if (msg == "" or priv == "") {
+        print("Usage: wallet sign <msg> <priv>")
+    } else {
+        sig := sys.crypto.ed25519.sign(msg, priv)
+        print("Signature: " + sig)
+    }
+}
+if (cmd == "verify") {
+    msg := get_arg(2)
+    sig := get_arg(3)
+    pub := get_arg(4)
+    if (msg == "" or sig == "" or pub == "") {
+        print("Usage: wallet verify <msg> <sig> <pub>")
+    } else {
+        valid := sys.crypto.ed25519.verify(msg, sig, pub)
+        if (valid) {
+            print("Signature Valid: true")
+        } else {
+            print("Signature Valid: false")
+        }
+    }
+}
+if (cmd == "balance") {
+    addr := get_arg(2)
+    if (addr == "") {
+        print("Usage: wallet balance <addr>")
+    } else {
+        // We use the struct method style call?
+        // chain.get_balance(addr) -> parsed as call_expr(get_attr(chain, get_balance), [addr])
+        // get_attr returns the function. call_expr calls it.
+        bal := chain.get_balance(addr)
+        print("Address: " + addr)
+        print("Balance: " + bal)
+    }
+}
+if (cmd == "") {
+    print("Ark Wallet CLI v1.0")
+    print("Usage: ark run apps/wallet.ark <command> [args]")
+    print("")
+    print("Commands:")
+    print("  gen                        Generate a new Ed25519 keypair")
+    print("  sign <msg> <priv>          Sign a message with private key")
+    print("  verify <msg> <sig> <pub>   Verify a signature")
+    print("  balance <addr>             Check wallet balance")
 }
