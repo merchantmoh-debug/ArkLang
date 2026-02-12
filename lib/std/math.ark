@@ -1,0 +1,15 @@
+// Standard Library: Math
+// Fixed-Point Trigonometry (Scale: 10000)
+
+math := {
+    pi: 31415,
+    sin: intrinsic_math_sin,
+    cos: intrinsic_math_cos,
+    tan: intrinsic_math_tan,
+    asin: intrinsic_math_asin,
+    acos: intrinsic_math_acos,
+    atan: intrinsic_math_atan,
+    atan2: intrinsic_math_atan2,
+    pow: intrinsic_math_pow,
+    sqrt: intrinsic_math_sqrt
+}
