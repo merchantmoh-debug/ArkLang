@@ -1,0 +1,3 @@
+// This should NOT be allowed if we want to protect the codebase
+sys.fs.write("meta/ark.py.attack", "corrupted")
+print("Successfully wrote to meta/ark.py.attack")

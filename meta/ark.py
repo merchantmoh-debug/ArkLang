@@ -42,7 +42,7 @@ class SandboxViolation(Exception):
 class LinearityViolation(Exception):
     pass
 
-def check_path_security(path):
+def check_path_security(path, is_write=False):
     if os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() == "true":
         return
 
@@ -54,6 +54,29 @@ def check_path_security(path):
     # Check if path is within CWD (or is CWD itself)
     if not abs_path.startswith(cwd):
         raise SandboxViolation(f"Access outside working directory is forbidden: {path} (Resolved to: {abs_path})")
+
+    if is_write:
+        # Protect system files from being overwritten in sandbox mode
+        # meta/ark.py is located in the 'meta' directory of the repo root
+        meta_dir = os.path.dirname(os.path.realpath(__file__))
+        repo_root = os.path.dirname(meta_dir)
+
+        # Protected directories
+        protected_dirs = ["meta", "core", "lib", "src", "tests"]
+        for d in protected_dirs:
+            protected_path = os.path.realpath(os.path.join(repo_root, d))
+            if abs_path.startswith(protected_path):
+                raise SandboxViolation(f"Writing to protected directory is forbidden: {d}")
+
+        # Protected root files
+        protected_files = [
+            "Cargo.toml", "README.md", "LICENSE", "requirements.txt",
+            "MANUAL.md", "ARK_OMEGA_POINT.md", "SWARM_PLAN.md", "CLA.md"
+        ]
+        for f in protected_files:
+            protected_file_path = os.path.realpath(os.path.join(repo_root, f))
+            if abs_path == protected_file_path:
+                raise SandboxViolation(f"Writing to protected file is forbidden: {f}")
 
 def check_exec_security():
     if os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() != "true":
@@ -161,7 +184,7 @@ def sys_fs_write(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "String" or args[1].type != "String":
         raise Exception("sys.fs.write expects two string arguments: path and content")
     path = args[0].val
-    check_path_security(path)
+    check_path_security(path, is_write=True)
     content = args[1].val
     try:
         with open(path, "w") as f:
@@ -1048,7 +1071,7 @@ def sys_fs_write_buffer(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "String" or args[1].type != "Buffer":
         raise Exception("sys.fs.write_buffer expects string path and buffer")
     path = args[0].val
-    check_path_security(path)
+    check_path_security(path, is_write=True)
     buf = args[1].val
     try:
         # Ensure we can import from same directory
