@@ -13,6 +13,11 @@ from lark import Lark
 import hashlib
 import ctypes
 import html
+import socket
+import urllib.request
+import urllib.error
+import urllib.parse
+import codecs
 
 # --- Security ---
 
@@ -413,27 +418,60 @@ def sys_html_escape(args: List[ArkValue]):
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
 
-def sys_struct_get(args: List[ArkValue]):
-    if len(args) != 2: raise Exception("sys.struct.get expects instance, field_name")
-    obj = args[0]
-    field = args[1].val
-    if obj.type != "Instance": raise Exception(f"Expected Instance, got {obj.type}")
+def sys_net_http_request(args: List[ArkValue]):
+    check_exec_security()
+    if len(args) < 2: raise Exception("sys.net.http.request expects method, url, [body]")
+    method = args[0].val
+    url = args[1].val
+    data = None
+    if len(args) > 2 and args[2].type == "String":
+        data = args[2].val.encode('utf-8')
 
-    val = obj.val.fields.get(field)
-    if val is None: raise Exception(f"Field {field} not found")
+    headers = {'User-Agent': 'Ark/1.0'}
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req) as response:
+            status = response.status
+            content = response.read().decode('utf-8')
+            return ArkValue([ArkValue(status, "Integer"), ArkValue(content, "String")], "List")
+    except urllib.error.HTTPError as e:
+        content = e.read().decode('utf-8')
+        return ArkValue([ArkValue(e.code, "Integer"), ArkValue(content, "String")], "List")
+    except Exception as e:
+         raise Exception(f"HTTP Request failed: {e}")
 
-    # Return [val, obj]
-    return ArkValue([val, obj], "List")
+def sys_net_socket_connect(args: List[ArkValue]):
+    check_exec_security()
+    if len(args) != 2: raise Exception("sys.net.socket.connect expects host, port")
+    host = args[0].val
+    port = args[1].val
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((host, port))
+    return ArkValue(s, "Socket")
 
-def sys_struct_set(args: List[ArkValue]):
-    if len(args) != 3: raise Exception("sys.struct.set expects instance, field_name, value")
-    obj = args[0]
-    field = args[1].val
-    val = args[2]
-    if obj.type != "Instance": raise Exception("Expected Instance")
+def sys_net_socket_send(args: List[ArkValue]):
+    check_exec_security()
+    if len(args) != 2: raise Exception("sys.net.socket.send expects socket, data")
+    sock = args[0].val
+    data = args[1].val
+    if isinstance(data, str): data = data.encode('utf-8')
+    sock.sendall(data)
+    return ArkValue(None, "Unit")
 
-    obj.val.fields[field] = val
-    return obj
+def sys_net_socket_recv(args: List[ArkValue]):
+    check_exec_security()
+    if len(args) != 2: raise Exception("sys.net.socket.recv expects socket, buf_size")
+    sock = args[0].val
+    size = args[1].val
+    data = sock.recv(size)
+    return ArkValue(data.decode('utf-8'), "String")
+
+def sys_net_socket_close(args: List[ArkValue]):
+    check_exec_security()
+    if len(args) != 1: raise Exception("sys.net.socket.close expects socket")
+    sock = args[0].val
+    sock.close()
+    return ArkValue(None, "Unit")
 
 INTRINSICS = {
     # Core
@@ -454,7 +492,12 @@ INTRINSICS = {
     "sys.mem.inspect": sys_mem_inspect,
     "sys.mem.read": sys_mem_read,
     "sys.mem.write": sys_mem_write,
+    "sys.net.http.request": sys_net_http_request,
     "sys.net.http.serve": sys_net_http_serve,
+    "sys.net.socket.close": sys_net_socket_close,
+    "sys.net.socket.connect": sys_net_socket_connect,
+    "sys.net.socket.recv": sys_net_socket_recv,
+    "sys.net.socket.send": sys_net_socket_send,
     "sys.str.get": sys_list_get,
     "sys.struct.get": sys_struct_get,
     "sys.struct.set": sys_struct_set,
@@ -726,9 +769,8 @@ def eval_node(node, scope):
     if node.data == "string":
         # Remove quotes
         raw = node.children[0].value[1:-1]
-        # Unescape string
-        import codecs
         try:
+            # decode unicode_escape
             s = codecs.decode(raw, 'unicode_escape')
         except:
             s = raw
