@@ -1,0 +1,71 @@
+// Test Suite: Math (Trigonometry)
+// Depends on lib/std/math.ark
+
+func assert_range(val, min, max, msg) {
+    if val >= min && val <= max {
+        print("PASS: " + msg + " (" + val + ")")
+    } else {
+        print("FAIL: " + msg + " (" + val + " not in " + min + ".." + max + ")")
+        crash := 1 / 0
+    }
+}
+
+func assert_eq(val, expected, msg) {
+    if val == expected {
+        print("PASS: " + msg + " (" + val + ")")
+    } else {
+        print("FAIL: " + msg + " (Expected " + expected + ", Got " + val + ")")
+        crash := 1 / 0
+    }
+}
+
+func test_trig() {
+    print("Testing Trigonometry (Scale: 10000)...")
+
+    // PI check
+    pi := math.pi
+    assert_eq(pi, 31415, "math.pi")
+
+    // SIN(0) = 0
+    assert_eq(math.sin(0), 0, "sin(0)")
+
+    // SIN(PI/2) = 1.0 (10000)
+    // PI/2 = 15707
+    sin_pi_2 := math.sin(15707)
+    assert_range(sin_pi_2, 9999, 10001, "sin(pi/2)")
+
+    // COS(0) = 1.0 (10000)
+    assert_eq(math.cos(0), 10000, "cos(0)")
+
+    // COS(PI) = -1.0 (-10000)
+    cos_pi := math.cos(31415)
+    assert_range(cos_pi, -10001, -9999, "cos(pi)")
+
+    // TAN(PI/4) = 1.0 (10000)
+    // PI/4 = 7853
+    tan_pi_4 := math.tan(7853)
+    assert_range(tan_pi_4, 9990, 10010, "tan(pi/4)")
+
+    // ASIN(1.0) = PI/2
+    asin_1 := math.asin(10000)
+    assert_range(asin_1, 15700, 15715, "asin(1)")
+
+    // ACOS(0) = PI/2
+    acos_0 := math.acos(0)
+    assert_range(acos_0, 15700, 15715, "acos(0)")
+
+    // ATAN(1.0) = PI/4
+    atan_1 := math.atan(10000)
+    assert_range(atan_1, 7850, 7860, "atan(1)")
+
+    // ATAN2(1, 1) = PI/4
+    atan2_1_1 := math.atan2(10000, 10000)
+    assert_range(atan2_1_1, 7850, 7860, "atan2(1,1)")
+}
+
+func main() {
+    test_trig()
+    print("=== MATH TEST COMPLETE ===")
+}
+
+main()
