@@ -170,4 +170,44 @@ The Ark ecosystem includes a native **Language Server Protocol (LSP)** implement
 
 ---
 
+## §6 | OLLAMA INTEGRATION (THE LOCAL MIND)
+
+The Ark system integrates with local LLMs (e.g., Ollama) to ensure sovereign intelligence that functions without internet dependency.
+
+### 6.1 Architecture
+*   **Tooling:** `src/tools/ollama_local.py` provides a direct bridge to local inference endpoints (default: `http://127.0.0.1:11434`).
+*   **Agent Core:** The `GeminiAgent` (`src/agent.py`) can be configured to route all cognition through an OpenAI-compatible backend (via `OPENAI_BASE_URL`), effectively replacing cloud models with local weights.
+*   **Models:** Tested with `qwen3:0.6b` and `llama3` for efficient local reasoning.
+
+---
+
+## §7 | SOVEREIGN SHELL (THE IRON HAND)
+
+The **Sovereign Shell** capability allows the Ark Runtime to inspect, modify, and execute its own substrate. This fulfills the "Mechanic's Ear" philosophy—the system must be able to fix itself.
+
+### 7.1 Capabilities
+*   **Self-Modification:** `sys.fs.write` allows the runtime to generate new code or update existing modules.
+*   **Execution:** `sys.exec` grants the runtime access to the host shell (guarded by `ALLOW_DANGEROUS_LOCAL_EXECUTION`).
+*   **The Iron Hand Protocol:** Implemented in `apps/iron_hand.ark`, this protocol demonstrates the loop: `Intent -> AI Generation -> Code Extraction -> Execution`.
+
+---
+
+## §8 | LINEAR TYPES (RESOURCE SAFETY)
+
+To ensure zero-overhead safety without a Garbage Collector, Ark employs a **Linear Type System** for critical resources (Buffers).
+
+### 8.1 The Law of Linearity
+*   **Single Ownership:** A linear resource (e.g., `Buffer`) must be used exactly once.
+*   **Consumption:** Operations like `sys.mem.write(buf, ...)` consume the original `buf` and return a new handle.
+*   **Enforcement:** The `Checker` (`core/src/checker.rs`) tracks `active_linears` and `declared_linears`. Any dropped or double-used resource triggers a compile-time error.
+
+### 8.2 Linear APIs
+| API | Linearity | Description |
+| :--- | :--- | :--- |
+| `sys.mem.alloc` | Produces `[Linear]` | Creates a new tracked resource. |
+| `sys.mem.write` | Consumes `[Linear]` -> Returns `[Linear]` | In-place modification. |
+| `sys.mem.read` | Uses `[Linear]` -> Returns `[Val, Linear]` | Read access without consumption. |
+
+---
+
 **© 2026 SOVEREIGN SYSTEMS | AD MAJOREM DEI GLORIAM**
