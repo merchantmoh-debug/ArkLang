@@ -4,11 +4,7 @@ import re
 import time
 import math
 import json
-<<<<<<< HEAD
 import codecs
-=======
-import math
->>>>>>> pr-69
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import http.server
@@ -27,6 +23,7 @@ import queue
 
 # --- Global Event Queue ---
 EVENT_QUEUE = queue.Queue()
+ARK_AI_MODE = None
 
 # --- Security ---
 
@@ -163,23 +160,58 @@ def sys_fs_read(args: List[ArkValue]):
     except Exception as e:
         raise Exception(f"Error reading file {path}: {e}")
 
-def ask_ai(args: List[ArkValue]):
-    if not args or args[0].type != "String":
-        raise Exception("ask_ai expects a string prompt")
-    prompt = args[0].val
-    
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise Exception("GOOGLE_API_KEY environment variable not set")
+def detect_ai_mode():
+    global ARK_AI_MODE
+    if ARK_AI_MODE:
+        return ARK_AI_MODE
 
+    # 1. Try Ollama (Local)
+    try:
+        # Check /api/tags (GET) to see if Ollama is running
+        req = urllib.request.Request("http://localhost:11434/api/tags", method="GET")
+        with urllib.request.urlopen(req, timeout=0.5) as response:
+            if response.getcode() == 200:
+                print("Ollama Detected. Enabling Local AI Mode.")
+                ARK_AI_MODE = "OLLAMA"
+                return ARK_AI_MODE
+    except Exception:
+        pass
+
+    # 2. Check Google API Key
+    if os.environ.get("GOOGLE_API_KEY"):
+        print("Google API Key Detected. Enabling Cloud AI Mode.")
+        ARK_AI_MODE = "GEMINI"
+        return ARK_AI_MODE
+
+    # 3. Fallback
+    print("No AI Provider Detected. Using Mock Mode.")
+    ARK_AI_MODE = "MOCK"
+    return ARK_AI_MODE
+
+def ask_ollama(prompt: str):
+    url = "http://localhost:11434/api/generate"
+    headers = {"Content-Type": "application/json"}
+    # Using llama3 as default zero-config model.
+    # Ideally we'd parse /api/tags to find an available model if llama3 is missing.
+    data = {
+        "model": "llama3",
+        "prompt": prompt,
+        "stream": False
+    }
+    
+    try:
+        req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req) as response:
+            res_json = json.loads(response.read().decode("utf-8"))
+            return ArkValue(res_json.get("response", ""), "String")
+    except Exception as e:
+        print(f"Ollama Error: {e}")
+        return ask_mock()
+
+def ask_gemini(prompt: str, api_key: str):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
-    
-    import json
-    import urllib.request
-    import urllib.error
-    import time
     
     max_retries = 3
     for attempt in range(max_retries):
@@ -187,7 +219,6 @@ def ask_ai(args: List[ArkValue]):
             req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
             with urllib.request.urlopen(req) as response:
                 res_json = json.loads(response.read().decode("utf-8"))
-                # Extract text from response
                 try:
                     text = res_json["candidates"][0]["content"]["parts"][0]["text"]
                     return ArkValue(text, "String")
@@ -196,22 +227,37 @@ def ask_ai(args: List[ArkValue]):
         except urllib.error.HTTPError as e:
             if e.code == 429:
                 if attempt < max_retries - 1:
-                    wait_time = (2 ** attempt) * 2 # 2, 4, 8 seconds
+                    wait_time = (2 ** attempt) * 2
                     print(f"AI Rate Limit (429). Retrying in {wait_time}s...")
                     time.sleep(wait_time)
                     continue
             print(f"AI Request Failed: {e.code} {e.reason}")
-            # Fall through to fallback
         except Exception as e:
             print(f"AI Error: {e}")
-            # Fall through to fallback
             
-    # Fallback for verification if API is dead/rate-limited
-    print(f"WARNING: API Failed. Using Fallback Mock for Verification.")
+    return ask_mock()
+
+def ask_mock():
+    print(f"WARNING: Using Mock AI Response.")
     start = "```python\n"
     code = "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n"
     end = "```"
     return ArkValue(start + code + end, "String")
+
+def ask_ai(args: List[ArkValue]):
+    if not args or args[0].type != "String":
+        raise Exception("ask_ai expects a string prompt")
+    prompt = args[0].val
+
+    mode = detect_ai_mode()
+
+    if mode == "OLLAMA":
+        return ask_ollama(prompt)
+    elif mode == "GEMINI":
+        api_key = os.environ.get("GOOGLE_API_KEY")
+        return ask_gemini(prompt, api_key)
+    else:
+        return ask_mock()
 
 def extract_code(args: List[ArkValue]):
     if not args or args[0].type != "String":
@@ -717,7 +763,6 @@ def sys_html_escape(args: List[ArkValue]):
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
 
-<<<<<<< HEAD
 def intrinsic_math_pow(args: List[ArkValue]):
     if len(args) != 2: raise Exception("pow expects base, exp")
     return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
@@ -1040,7 +1085,6 @@ def sys_chain_verify_tx(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
     # Mock verification
     return ArkValue(True, "Boolean")
-=======
 def sys_fs_write_buffer(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "String" or args[1].type != "Buffer":
         raise Exception("sys.fs.write_buffer expects string path and buffer")
@@ -1094,7 +1138,6 @@ def sys_str_from_code(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.str.from_code expects 1 arg")
     code = args[0].val
     return ArkValue(chr(code), "String")
->>>>>>> pr-69
 
 INTRINSICS = {
     # Core
@@ -1174,8 +1217,8 @@ INTRINSICS = {
     "sys.func.apply": sys_func_apply,
 
     # Intrinsics (Aliased / Specific)
-    "time_now": intrinsic_time_now,
-    "intrinsic_time_now": intrinsic_time_now,
+    "time_now": sys_time_now,
+    "intrinsic_time_now": sys_time_now,
     "sys_crypto_hash": sys_crypto_hash,
     "intrinsic_and": sys_and,
     "intrinsic_not": intrinsic_not,
@@ -1432,7 +1475,6 @@ def eval_node(node, scope):
         return ArkValue(int(node.children[0].value), "Integer")
     
     if node.data == "string":
-    if node.data == "string":
         # Use literal_eval to handle escapes (\n, \t, etc)
         import ast
         try:
@@ -1442,7 +1484,6 @@ def eval_node(node, scope):
              s = node.children[0].value[1:-1]
         return ArkValue(s, "String")
         return ArkValue(s, "String")
-        
     if node.data in ["add", "sub", "mul", "div", "mod", "lt", "gt", "le", "ge", "eq", "neq"]:
         left = eval_node(node.children[0], scope)
         right = eval_node(node.children[1], scope)
