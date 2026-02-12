@@ -1,0 +1,46 @@
+// lib/std/net.ark
+
+// Helper functions must be defined at top-level
+func http_get(url) {
+    return sys.net.http.request("GET", url)
+}
+
+func http_post(url, body) {
+    return sys.net.http.request("POST", url, body)
+}
+
+// HTTP Module
+http := {
+    // Serve requests: func(port, handler) -> Unit
+    serve: sys.net.http.serve,
+
+    // Make requests: func(method, url, [body]) -> [status, content]
+    request: sys.net.http.request,
+
+    // Helper for GET
+    get: http_get,
+
+    // Helper for POST
+    post: http_post
+}
+
+// Socket Module
+socket := {
+    // Connect to host: func(host, port) -> Socket
+    connect: sys.net.socket.connect,
+
+    // Send data: func(socket, data) -> Unit
+    send: sys.net.socket.send,
+
+    // Receive data: func(socket, size) -> String
+    recv: sys.net.socket.recv,
+
+    // Close socket: func(socket) -> Unit
+    close: sys.net.socket.close
+}
+
+// Net Module
+net := {
+    http: http,
+    socket: socket
+}
