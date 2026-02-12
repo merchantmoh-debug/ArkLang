@@ -14,6 +14,16 @@ TOKEN_STRING := 3
 TOKEN_SYMBOL := 4
 TOKEN_KEYWORD := 5
 
+// Specific Keywords
+TOKEN_KEYWORD_IF := 100
+TOKEN_KEYWORD_ELSE := 101
+TOKEN_KEYWORD_WHILE := 102
+TOKEN_KEYWORD_FUNC := 103
+TOKEN_KEYWORD_RETURN := 104
+TOKEN_KEYWORD_LET := 105
+TOKEN_AND := 23
+TOKEN_OR := 24
+
 // --- Helpers ---
 
 func is_digit(char_str) {
@@ -26,6 +36,21 @@ func is_alpha(char_str) {
 
 func is_whitespace(char_str) {
     return (char_str == " ") || (char_str == "\n") || (char_str == "\t") || (char_str == "\r")
+}
+
+func check_keyword(ident_str) {
+    if ident_str == "if" { return TOKEN_KEYWORD_IF }
+    if ident_str == "else" { return TOKEN_KEYWORD_ELSE }
+    if ident_str == "while" { return TOKEN_KEYWORD_WHILE }
+    if ident_str == "func" { return TOKEN_KEYWORD_FUNC }
+    if ident_str == "return" { return TOKEN_KEYWORD_RETURN }
+    if ident_str == "let" { return TOKEN_KEYWORD_LET }
+    if ident_str == "and" { return TOKEN_AND }
+    if ident_str == "or" { return TOKEN_OR }
+    if ident_str == "class" { return TOKEN_KEYWORD }
+    if ident_str == "true" { return TOKEN_KEYWORD }
+    if ident_str == "false" { return TOKEN_KEYWORD }
+    return TOKEN_IDENTIFIER
 }
 
 // --- Lexer Struct & Methods ---
@@ -137,20 +162,8 @@ func lexer_scan(lexer) {
                  looping := false
              }
         }
-        // Todo: Check keywords (func, let, if, etc)
-        // simple keyword check
-        type := TOKEN_IDENTIFIER
-        if ident_str == "func" { type := TOKEN_KEYWORD }
-        if ident_str == "let" { type := TOKEN_KEYWORD }
-        if ident_str == "if" { type := TOKEN_KEYWORD }
-        if ident_str == "else" { type := TOKEN_KEYWORD }
-        if ident_str == "while" { type := TOKEN_KEYWORD }
-        if ident_str == "return" { type := TOKEN_KEYWORD }
-        if ident_str == "class" { type := TOKEN_KEYWORD }
-        if ident_str == "true" { type := TOKEN_KEYWORD }
-        if ident_str == "false" { type := TOKEN_KEYWORD }
-        if ident_str == "and" { type := TOKEN_KEYWORD }
-        if ident_str == "or" { type := TOKEN_KEYWORD }
+        // Properly check keywords
+        type := check_keyword(ident_str)
 
         lexer := lexer_add_token(lexer, type, ident_str)
         return lexer
