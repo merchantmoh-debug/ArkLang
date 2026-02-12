@@ -4,11 +4,7 @@ import re
 import time
 import math
 import json
-<<<<<<< HEAD
 import codecs
-=======
-import math
->>>>>>> pr-69
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import http.server
@@ -717,7 +713,6 @@ def sys_html_escape(args: List[ArkValue]):
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
 
-<<<<<<< HEAD
 def intrinsic_math_pow(args: List[ArkValue]):
     if len(args) != 2: raise Exception("pow expects base, exp")
     return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
@@ -1040,7 +1035,6 @@ def sys_chain_verify_tx(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
     # Mock verification
     return ArkValue(True, "Boolean")
-=======
 def sys_fs_write_buffer(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "String" or args[1].type != "Buffer":
         raise Exception("sys.fs.write_buffer expects string path and buffer")
@@ -1094,7 +1088,6 @@ def sys_str_from_code(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.str.from_code expects 1 arg")
     code = args[0].val
     return ArkValue(chr(code), "String")
->>>>>>> pr-69
 
 INTRINSICS = {
     # Core
@@ -1174,8 +1167,8 @@ INTRINSICS = {
     "sys.func.apply": sys_func_apply,
 
     # Intrinsics (Aliased / Specific)
-    "time_now": intrinsic_time_now,
-    "intrinsic_time_now": intrinsic_time_now,
+    "time_now": sys_time_now,
+    "intrinsic_time_now": sys_time_now,
     "sys_crypto_hash": sys_crypto_hash,
     "intrinsic_and": sys_and,
     "intrinsic_not": intrinsic_not,
@@ -1432,7 +1425,6 @@ def eval_node(node, scope):
         return ArkValue(int(node.children[0].value), "Integer")
     
     if node.data == "string":
-    if node.data == "string":
         # Use literal_eval to handle escapes (\n, \t, etc)
         import ast
         try:
@@ -1440,7 +1432,6 @@ def eval_node(node, scope):
         except:
              # Fallback if literal_eval fails (e.g. strict syntax issues), though unlikely for valid strings
              s = node.children[0].value[1:-1]
-        return ArkValue(s, "String")
         return ArkValue(s, "String")
         
     if node.data in ["add", "sub", "mul", "div", "mod", "lt", "gt", "le", "ge", "eq", "neq"]:
