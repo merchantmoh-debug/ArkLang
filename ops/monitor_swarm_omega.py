@@ -5,7 +5,12 @@ import json
 import time
 
 # --- Configuration ---
-API_KEY = "AQ.Ab8RN6IAOEajocSy78LAN6ZM5tjf7gTtGBulq0zGqVvHYAJUWg"
+try:
+    from secrets import API_KEY
+except ImportError:
+    API_KEY = os.environ.get("JULES_API_KEY")
+    if not API_KEY:
+        print("WARNING: API_KEY not found in secrets.py or environment.")
 JULES_API_URL = "https://jules.googleapis.com/v1alpha"
 LOG_FILE = "SWARM_REGISTRY_OMEGA.txt"
 

@@ -102,6 +102,8 @@ The Protocol exposes these intrinsics as the standard interface for all smart co
 | `sys.mem.alloc(size)` | Allocate linear memory. | 10 + size |
 | `sys.mem.write(buf, i, v)` | Write to buffer (Consumes Buffer). | 5 |
 | `sys.mem.read(buf, i)` | Read from buffer. | 5 |
+| `sys.vm.eval(code)` | Execute Ark code string. | 1000 |
+| `sys.vm.source(path)` | Execute Ark file. | 1000 + IO |
 | `sys.net.send(peer, msg)` | Send P2P message. | 500 |
 | `sys.time.now()` | Unix Timestamp (ms). | 10 |
 | `sys.time.sleep(s)` | Sleep for `s` seconds. | 10/s |
