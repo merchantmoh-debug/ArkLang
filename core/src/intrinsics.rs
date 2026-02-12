@@ -10,7 +10,6 @@ use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use std::fs;
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -40,6 +39,7 @@ impl IntrinsicRegistry {
             "sys_fs_write" | "intrinsic_fs_write" | "sys.fs.write" => Some(intrinsic_fs_write),
             "sys_fs_read" | "intrinsic_fs_read" | "sys.fs.read" => Some(intrinsic_fs_read),
             "intrinsic_crypto_hash" | "sys.crypto.hash" => Some(intrinsic_crypto_hash),
+            "intrinsic_crypto_verify" | "sys.crypto.verify" => Some(intrinsic_crypto_verify),
             "intrinsic_merkle_root" | "sys.crypto.merkle_root" => Some(intrinsic_merkle_root),
             "intrinsic_buffer_alloc" | "sys.mem.alloc" => Some(intrinsic_buffer_alloc),
             "intrinsic_buffer_inspect" | "sys.mem.inspect" => Some(intrinsic_buffer_inspect),
@@ -150,6 +150,10 @@ impl IntrinsicRegistry {
         scope.set(
             "sys.crypto.hash".to_string(),
             Value::NativeFunction(intrinsic_crypto_hash),
+        );
+        scope.set(
+            "sys.crypto.verify".to_string(),
+            Value::NativeFunction(intrinsic_crypto_verify),
         );
 
         // List/Struct
@@ -731,20 +735,57 @@ pub fn intrinsic_crypto_hash(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
         return Err(RuntimeError::NotExecutable);
     }
-    let data = match &args[0] {
-        Value::String(s) => s,
+    let data_bytes = match &args[0] {
+        Value::String(s) => s.as_bytes(),
+        Value::Buffer(b) => b.as_slice(),
         _ => {
             return Err(RuntimeError::TypeMismatch(
-                "String".to_string(),
+                "String or Buffer".to_string(),
                 args[0].clone(),
             ));
         }
     };
 
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    let result = hasher.finalize();
-    Ok(Value::String(hex::encode(result)))
+    Ok(Value::String(crate::crypto::hash(data_bytes)))
+}
+
+pub fn intrinsic_crypto_verify(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    // Helper to get bytes from Buffer or Hex String
+    let get_bytes = |v: &Value, name: &str| -> Result<Vec<u8>, RuntimeError> {
+        match v {
+            Value::Buffer(b) => Ok(b.clone()),
+            Value::String(s) => hex::decode(s).map_err(|_| {
+                RuntimeError::TypeMismatch(format!("Hex String for {}", name), v.clone())
+            }),
+            _ => Err(RuntimeError::TypeMismatch(
+                format!("Buffer or Hex String for {}", name),
+                v.clone(),
+            )),
+        }
+    };
+
+    let msg_bytes = match &args[0] {
+        Value::String(s) => s.as_bytes().to_vec(),
+        Value::Buffer(b) => b.clone(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String or Buffer for msg".to_string(),
+                args[0].clone(),
+            ))
+        }
+    };
+
+    let sig_bytes = get_bytes(&args[1], "signature")?;
+    let pubkey_bytes = get_bytes(&args[2], "public key")?;
+
+    match crate::crypto::verify_signature(&msg_bytes, &sig_bytes, &pubkey_bytes) {
+        Ok(valid) => Ok(Value::Boolean(valid)),
+        Err(e) => Err(RuntimeError::InvalidOperation(e)),
+    }
 }
 
 pub fn intrinsic_merkle_root(args: Vec<Value>) -> Result<Value, RuntimeError> {
@@ -776,41 +817,7 @@ pub fn intrinsic_merkle_root(args: Vec<Value>) -> Result<Value, RuntimeError> {
         }
     }
 
-    if leaves.is_empty() {
-        return Ok(Value::String("".to_string()));
-    }
-
-    // Hash leaves first
-    let mut current_level: Vec<String> = leaves
-        .into_iter()
-        .map(|s| {
-            let mut hasher = Sha256::new();
-            hasher.update(s);
-            hex::encode(hasher.finalize())
-        })
-        .collect();
-
-    while current_level.len() > 1 {
-        let mut next_level = Vec::new();
-
-        for i in (0..current_level.len()).step_by(2) {
-            let left = &current_level[i];
-            let right = if i + 1 < current_level.len() {
-                &current_level[i + 1]
-            } else {
-                left // Duplicate last if odd
-            };
-
-            let mut hasher = Sha256::new();
-            // Hash(left + right)
-            hasher.update(left);
-            hasher.update(right);
-            next_level.push(hex::encode(hasher.finalize()));
-        }
-        current_level = next_level;
-    }
-
-    Ok(Value::String(current_level[0].clone()))
+    Ok(Value::String(crate::crypto::merkle_root(&leaves)))
 }
 
 pub fn intrinsic_buffer_alloc(args: Vec<Value>) -> Result<Value, RuntimeError> {
@@ -1409,5 +1416,41 @@ mod tests {
         let val = Value::Integer(42);
         let args = vec![buf, idx, val];
         assert!(intrinsic_buffer_write(args).is_err());
+    }
+
+    #[test]
+    fn test_crypto_verify() {
+        // Valid Signature (Test Vector 2 from RFC 8032)
+        // Msg: "r" (0x72)
+        let msg = Value::String("r".to_string());
+        let sig_hex = "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00";
+        let pubkey_hex = "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+
+        let args = vec![
+            msg.clone(),
+            Value::String(sig_hex.to_string()),
+            Value::String(pubkey_hex.to_string()),
+        ];
+        let res = intrinsic_crypto_verify(args).unwrap();
+        assert_eq!(res, Value::Boolean(true));
+
+        // Invalid Signature (Modified first byte 92 -> 93)
+        let invalid_sig_hex = "93a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00";
+        let args = vec![
+            msg.clone(),
+            Value::String(invalid_sig_hex.to_string()),
+            Value::String(pubkey_hex.to_string()),
+        ];
+        let res = intrinsic_crypto_verify(args).unwrap();
+        assert_eq!(res, Value::Boolean(false));
+
+        // Invalid Message
+        let args = vec![
+            Value::String("wrong".to_string()),
+            Value::String(sig_hex.to_string()),
+            Value::String(pubkey_hex.to_string()),
+        ];
+        let res = intrinsic_crypto_verify(args).unwrap();
+        assert_eq!(res, Value::Boolean(false));
     }
 }
