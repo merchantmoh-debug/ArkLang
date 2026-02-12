@@ -133,25 +133,13 @@ impl Blockchain {
     pub fn is_valid(&self) -> bool {
         for (i, block) in self.chain.iter().enumerate() {
             if i == 0 {
-                continue; // Skip genesis check for simplicity, or verify hardcoded
+                continue;
             }
             let prev_block = &self.chain[i - 1];
-
             if block.prev_hash != prev_block.hash {
                 return false;
             }
-
-            if block.hash != block.calculate_hash() {
-                return false;
-            }
-
-            // Recalculate merkle root to ensure transactions weren't tampered with
-            if block.merkle_root != block.calculate_merkle_root() {
-                return false;
-            }
-
-            // Check difficulty
-            if !block.hash.starts_with(&"0".repeat(self.difficulty)) {
+            if !self.consensus.verify_block(block) {
                 return false;
             }
         }
