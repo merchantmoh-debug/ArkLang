@@ -59,13 +59,15 @@ pub unsafe extern "C" fn ark_eval(input_ptr: *mut u8, input_len: usize) -> *mut 
 
     // 2. Load and Execute
     let response = match load_ark_program(input_str) {
-        Ok(node) => {
+        Ok(mast) => {
             let compiler = Compiler::new();
-            let chunk = compiler.compile(&node);
-            let mut vm = VM::new(chunk);
-            match vm.run() {
-                Ok(val) => format!("Result: {:?}", val),
-                Err(e) => format!("Runtime Error: {:?}", e),
+            let chunk = compiler.compile(&mast.content);
+            match VM::new(chunk, &mast.hash, 0) {
+                Ok(mut vm) => match vm.run() {
+                    Ok(val) => format!("Result: {:?}", val),
+                    Err(e) => format!("Runtime Error: {:?}", e),
+                },
+                Err(e) => format!("VM Init Error: {:?}", e),
             }
         }
         Err(e) => format!("Load Error: {:?}", e),

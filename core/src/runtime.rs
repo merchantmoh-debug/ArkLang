@@ -169,4 +169,6 @@ pub enum RuntimeError {
     InvalidOperation(String),
     #[error("System Lockout: Recursion Limit Exceeded (Vertigo Check)")]
     RecursionLimitExceeded,
+    #[error("System Lockout: Untrusted Code Hash")]
+    UntrustedCode,
 }
