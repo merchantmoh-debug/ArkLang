@@ -19,8 +19,10 @@ import urllib.request
 import urllib.error
 import urllib.parse
 import codecs
-from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.hazmat.primitives import serialization
+import queue
+
+# --- Global Event Queue ---
+EVENT_QUEUE = queue.Queue()
 
 # --- Security ---
 
@@ -833,40 +835,126 @@ def sys_struct_has(args: List[ArkValue]):
     if obj.type != "Instance": return ArkValue(False, "Boolean")
     return ArkValue(field in obj.val.fields, "Boolean")
 
-def intrinsic_math_pow(args):
+def intrinsic_math_pow(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("math.pow expects 2 args")
     return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
 
-def intrinsic_math_sqrt(args):
+def intrinsic_math_sqrt(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.sqrt expects 1 arg")
     return ArkValue(int(math.sqrt(args[0].val)), "Integer")
 
-def intrinsic_math_sin(args):
-    val = args[0].val / 10000.0
-    return ArkValue(int(math.sin(val) * 10000), "Integer")
+def intrinsic_math_sin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.sin expects 1 arg")
+    return ArkValue(int(math.sin(args[0].val)), "Integer")
 
-def intrinsic_math_cos(args):
-    val = args[0].val / 10000.0
-    return ArkValue(int(math.cos(val) * 10000), "Integer")
+def intrinsic_math_cos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.cos expects 1 arg")
+    return ArkValue(int(math.cos(args[0].val)), "Integer")
 
-def intrinsic_math_tan(args):
-    val = args[0].val / 10000.0
-    return ArkValue(int(math.tan(val) * 10000), "Integer")
+def intrinsic_math_tan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.tan expects 1 arg")
+    return ArkValue(int(math.tan(args[0].val)), "Integer")
 
-def intrinsic_math_asin(args):
-    val = args[0].val / 10000.0
-    return ArkValue(int(math.asin(val) * 10000), "Integer")
+def intrinsic_math_asin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.asin expects 1 arg")
+    return ArkValue(int(math.asin(args[0].val)), "Integer")
 
-def intrinsic_math_acos(args):
-    val = args[0].val / 10000.0
-    return ArkValue(int(math.acos(val) * 10000), "Integer")
+def intrinsic_math_acos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.acos expects 1 arg")
+    return ArkValue(int(math.acos(args[0].val)), "Integer")
 
-def intrinsic_math_atan(args):
-    val = args[0].val / 10000.0
-    return ArkValue(int(math.atan(val) * 10000), "Integer")
+def intrinsic_math_atan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.atan expects 1 arg")
+    return ArkValue(int(math.atan(args[0].val)), "Integer")
 
-def intrinsic_math_atan2(args):
-    y = args[0].val / 10000.0
-    x = args[1].val / 10000.0
-    return ArkValue(int(math.atan2(y, x) * 10000), "Integer")
+def intrinsic_math_atan2(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("math.atan2 expects 2 args")
+    return ArkValue(int(math.atan2(args[0].val, args[1].val)), "Integer")
+
+def sys_net_http_request(args: List[ArkValue]):
+    check_exec_security()
+    if len(args) < 2:
+        raise Exception("sys.net.http.request expects method, url, [body]")
+    method = args[0].val
+    url = args[1].val
+    body = None
+    if len(args) > 2:
+        body = args[2].val.encode('utf-8')
+
+    req = urllib.request.Request(url, data=body, method=method)
+    try:
+        with urllib.request.urlopen(req) as response:
+            status = response.getcode()
+            content = response.read().decode('utf-8')
+            return ArkValue([ArkValue(status, "Integer"), ArkValue(content, "String")], "List")
+    except urllib.error.HTTPError as e:
+        return ArkValue([ArkValue(e.code, "Integer"), ArkValue(e.read().decode('utf-8'), "String")], "List")
+    except Exception as e:
+        return ArkValue([ArkValue(0, "Integer"), ArkValue(str(e), "String")], "List")
+
+def sys_io_read_file_async(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.io.read_file_async expects path, callback")
+    path = args[0].val
+    check_path_security(path)
+    callback = args[1]
+
+    def task():
+        try:
+            with open(path, "r") as f:
+                content = f.read()
+            val = ArkValue(content, "String")
+            EVENT_QUEUE.put((callback, [val]))
+        except Exception as e:
+            print(f"Async Read Error: {e}", file=sys.stderr)
+            val = ArkValue(None, "Unit")
+            EVENT_QUEUE.put((callback, [val]))
+
+    t = threading.Thread(target=task)
+    t.daemon = True
+    t.start()
+    return ArkValue(None, "Unit")
+
+def sys_net_request_async(args: List[ArkValue]):
+    check_exec_security()
+    if len(args) < 2: raise Exception("sys.net.request_async expects url, callback")
+    url = args[0].val
+    callback = args[1]
+
+    def task():
+        try:
+            with urllib.request.urlopen(url) as response:
+                status = response.getcode()
+                content = response.read().decode('utf-8')
+                val = ArkValue([ArkValue(status, "Integer"), ArkValue(content, "String")], "List")
+                EVENT_QUEUE.put((callback, [val]))
+        except Exception as e:
+            print(f"Async Net Error: {e}", file=sys.stderr)
+            val = ArkValue([ArkValue(0, "Integer"), ArkValue(str(e), "String")], "List")
+            EVENT_QUEUE.put((callback, [val]))
+
+    t = threading.Thread(target=task)
+    t.daemon = True
+    t.start()
+    return ArkValue(None, "Unit")
+
+def sys_event_poll(args: List[ArkValue]):
+    try:
+        cb, cb_args = EVENT_QUEUE.get_nowait()
+        return ArkValue([cb, ArkValue(cb_args, "List")], "List")
+    except queue.Empty:
+        return ArkValue(None, "Unit")
+
+def sys_func_apply(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.func.apply expects func, args_list")
+    func = args[0]
+    arg_list = args[1]
+    if arg_list.type != "List": raise Exception("sys.func.apply expects List of args")
+
+    if func.type == "Function":
+        return call_user_func(func.val, arg_list.val)
+    elif func.type == "Intrinsic":
+        return INTRINSICS[func.val](arg_list.val)
+    raise Exception(f"Cannot apply {func.type}")
 
 INTRINSICS = {
     # Core
@@ -922,6 +1010,10 @@ INTRINSICS = {
     "sys.json.parse": sys_json_parse,
     "sys.json.stringify": sys_json_stringify,
     "sys.exit": sys_exit,
+    "sys.io.read_file_async": sys_io_read_file_async,
+    "sys.net.request_async": sys_net_request_async,
+    "sys.event.poll": sys_event_poll,
+    "sys.func.apply": sys_func_apply,
 
     # Intrinsics (Aliased / Specific)
     "intrinsic_and": sys_and,

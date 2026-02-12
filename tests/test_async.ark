@@ -1,0 +1,28 @@
+// tests/test_async.ark
+
+print("Starting async test...\n")
+
+// Create a test file
+io.write_file("test_data.txt", "Hello Async World!")
+
+// Global counter state
+state := { count: 0 }
+
+func on_done(data) {
+    print("Callback received data: " + data + "\n")
+    // Update count in struct
+    state.count := state.count + 1
+    if state.count >= 2 {
+        print("All tasks completed. Exiting.\n")
+        sys.exit(0)
+    }
+}
+
+print("Scheduling Task 1...\n")
+io.read_file_async("test_data.txt", on_done)
+
+print("Scheduling Task 2...\n")
+io.read_file_async("test_data.txt", on_done)
+
+print("Entering Event Loop...\n")
+event.loop()
