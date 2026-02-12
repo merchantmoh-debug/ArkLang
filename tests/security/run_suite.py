@@ -35,7 +35,8 @@ def run_test(filename):
 def main():
     tests = [
         "tests/security/path_traversal.ark",
-        "tests/security/exec_violation.ark"
+        "tests/security/exec_violation.ark",
+        "tests/security/repo_overwrite.ark"
     ]
 
     failures = 0
