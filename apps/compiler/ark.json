@@ -1,0 +1,17 @@
+{
+  "package": {
+    "name": "ark-compiler",
+    "version": "0.1.0",
+    "authors": ["The Swarm"],
+    "type": "app"
+  },
+  "build": {
+    "sources": [
+      "lexer.ark",
+      "parser.ark",
+      "codegen.ark",
+      "driver.ark"
+    ],
+    "output": "compiler.ark"
+  }
+}

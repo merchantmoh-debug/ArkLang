@@ -76,6 +76,18 @@ func lexer_add_token(lexer, type, value) {
     return lexer
 }
 
+func lexer_skip_comment(lexer) {
+    looping := true
+    while looping {
+        lexer := lexer_advance(lexer)
+        c := lexer_peek(lexer)
+        if (c == "\n") || (c == "") {
+            looping := false
+        }
+    }
+    return lexer
+}
+
 func lexer_scan(lexer) {
     // Main loop
     char_str := lexer_peek(lexer)
@@ -149,18 +161,7 @@ func lexer_scan(lexer) {
         if (lexer.pos + 1) < lexer.length {
             let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
             if next_char == "/" {
-                 // Skip until newline
-                 looping := true
-                 while looping {
-                     lexer := lexer_advance(lexer)
-                     c := lexer_peek(lexer)
-                     if c == "\n" {
-                         looping := false
-                     }
-                     if c == "" {
-                         looping := false
-                     }
-                 }
+                 lexer := lexer_skip_comment(lexer)
                  return lexer_scan(lexer)
             }
         }
@@ -215,9 +216,9 @@ func lexer_tokenize(source) {
 
 // --- TEST RUNNER ---
 
-src := "func let if else while return class true false and or"
-// print("Source:", src)
-print("Source: " + src)
+// Use string with newline char in it (not escaped)
+src := "func let // comment \n if else"
+// print("Source: " + src)
 
 tokens := lexer_tokenize(src)
 print("Tokens Generated:")

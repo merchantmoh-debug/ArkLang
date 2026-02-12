@@ -610,6 +610,7 @@ func parse_program(tokens) {
         let (tok, p_prog_peek) := parser_peek(p)
         
         let (ttype, tok) := sys.struct.get(tok, "type")
+
         if ttype == TOKEN_EOF {
             running := false
             ref_parser := [p_prog_peek]
