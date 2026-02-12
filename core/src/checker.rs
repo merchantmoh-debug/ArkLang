@@ -50,6 +50,24 @@ impl LinearChecker {
         checker.traverse_node(node)
     }
 
+    fn get_intrinsic_return_linearity(name: &str) -> Vec<bool> {
+        match name {
+            // sys.mem.read -> [val, buf]
+            "sys.mem.read" | "intrinsic_buffer_read" => vec![false, true],
+            // sys.mem.write -> buf
+            "sys.mem.write" | "intrinsic_buffer_write" => vec![true],
+            // sys.mem.alloc -> buf
+            "sys.mem.alloc" | "intrinsic_buffer_alloc" => vec![true],
+            // sys.len -> [len, original_val] (original val might be linear)
+            "sys.len" | "intrinsic_len" => vec![false, true],
+            // sys.list.get -> [val, list]
+            "sys.list.get" | "intrinsic_list_get" | "sys.str.get" => vec![false, true],
+            // sys.list.append -> list
+            "sys.list.append" | "intrinsic_list_append" => vec![true],
+            _ => vec![false], // Default non-linear
+        }
+    }
+
     pub fn check_function(&mut self, func: &FunctionDef) -> Result<(), LinearError> {
         // 1. Register input arguments
         for (name, ty) in &func.inputs {
@@ -81,6 +99,23 @@ impl LinearChecker {
     fn check_statement(&mut self, stmt: &Statement) -> Result<(), LinearError> {
         match stmt {
             Statement::Let { name, ty, value } => {
+                // Heuristic: Check if RHS is a linear variable being moved
+                // This must be done BEFORE traverse_node consumes it
+                let mut inferred_linear = false;
+                if let Expression::Variable(v) = value {
+                    if self.declared_linears.contains(v) {
+                        inferred_linear = true;
+                    }
+                }
+
+                // Also check if RHS is a Call to a linear intrinsic
+                if let Expression::Call { function_hash, .. } = value {
+                     let sig = Self::get_intrinsic_return_linearity(function_hash);
+                     if sig.len() == 1 && sig[0] {
+                         inferred_linear = true;
+                     }
+                }
+
                 self.traverse_node(&ArkNode::Expression(value.clone()))?;
 
                 // Check for shadowing of active linear variable
@@ -88,17 +123,41 @@ impl LinearChecker {
                     return Err(LinearError::UnusedResource(name.clone()));
                 }
 
-                if let Some(t) = ty {
-                    if t.is_linear() {
-                        self.active_linears.insert(name.clone());
-                        self.declared_linears.insert(name.clone());
-                    }
+                if inferred_linear || ty.as_ref().map(|t| t.is_linear()).unwrap_or(false) {
+                    self.active_linears.insert(name.clone());
+                    self.declared_linears.insert(name.clone());
                 }
                 Ok(())
             }
-            Statement::LetDestructure { names: _, value } => {
+            Statement::LetDestructure { names, value } => {
                 self.traverse_node(&ArkNode::Expression(value.clone()))?;
-                // Todo: Register destructuring bindings as linear if applicable
+
+                let mut call_signature = vec![];
+                if let Expression::Call { function_hash, .. } = value {
+                    call_signature = Self::get_intrinsic_return_linearity(function_hash);
+                }
+
+                for (i, name) in names.iter().enumerate() {
+                     let mut is_linear = false;
+                     // 1. Check intrinsic signature
+                     if i < call_signature.len() && call_signature[i] {
+                         is_linear = true;
+                     }
+                     // 2. Check shadowing
+                     if self.declared_linears.contains(name) {
+                         is_linear = true;
+                     }
+
+                     if is_linear {
+                         // Check for shadowing of active linear variable
+                         if self.active_linears.contains(name) {
+                             return Err(LinearError::UnusedResource(name.clone()));
+                         }
+
+                         self.active_linears.insert(name.clone());
+                         self.declared_linears.insert(name.clone());
+                     }
+                }
                 Ok(())
             }
             Statement::SetField {
@@ -457,5 +516,147 @@ mod tests {
         assert!(result.is_ok());
         assert!(!checker.active_linears.contains("y"));
         assert!(!checker.declared_linears.contains("y"));
+    }
+
+    #[test]
+    fn test_linear_destructure_drop_hole() {
+        // let buf: Linear = ...
+        // let (val, buf2) = sys.mem.read(buf, 0)
+        // return val
+        // buf2 is dropped but was linear!
+        let func = FunctionDef {
+            name: "leak_hole".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                    Statement::Let {
+                        name: "buf".to_string(),
+                        ty: Some(ArkType::Linear("Buffer".to_string())),
+                        value: Expression::Literal("dummy_buf".to_string()),
+                    },
+                    Statement::LetDestructure {
+                        names: vec!["val".to_string(), "buf2".to_string()],
+                        value: Expression::Call {
+                            function_hash: "sys.mem.read".to_string(),
+                            args: vec![
+                                Expression::Variable("buf".to_string()),
+                                Expression::Literal("0".to_string())
+                            ]
+                        }
+                    },
+                    Statement::Return(Expression::Variable("val".to_string())),
+                ])))
+                .unwrap(),
+            ),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        match result {
+            Err(LinearError::UnusedResource(name)) => assert_eq!(name, "buf2"),
+            Ok(_) => panic!("Checker failed to catch linear variable leak in destructure!"),
+            _ => panic!("Expected UnusedResource error, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_linear_let_call_inferred() {
+        // let buf = sys.mem.alloc(10); // inferred linear
+        // return buf;
+        let func = FunctionDef {
+            name: "alloc_inferred".to_string(),
+            inputs: vec![],
+            output: ArkType::Linear("Buffer".to_string()),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                    Statement::Let {
+                        name: "buf".to_string(),
+                        ty: None, // No type info!
+                        value: Expression::Call {
+                            function_hash: "sys.mem.alloc".to_string(),
+                            args: vec![Expression::Literal("10".to_string())]
+                        }
+                    },
+                    Statement::Return(Expression::Variable("buf".to_string())),
+                ])))
+                .unwrap(),
+            ),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        assert!(result.is_ok(), "Should infer linearity from sys.mem.alloc and track it");
+    }
+
+    #[test]
+    fn test_linear_let_call_inferred_leak() {
+         // let buf = sys.mem.alloc(10);
+         // return;
+         let func = FunctionDef {
+            name: "alloc_leak".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                    Statement::Let {
+                        name: "buf".to_string(),
+                        ty: None,
+                        value: Expression::Call {
+                            function_hash: "sys.mem.alloc".to_string(),
+                            args: vec![Expression::Literal("10".to_string())]
+                        }
+                    },
+                    Statement::Return(Expression::Literal("void".to_string())),
+                ])))
+                .unwrap(),
+            ),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        match result {
+            Err(LinearError::UnusedResource(name)) => assert_eq!(name, "buf"),
+            _ => panic!("Expected UnusedResource for leaked inferred linear var"),
+        }
+    }
+
+    #[test]
+    fn test_linear_destructure_shadowing_unknown() {
+        // let buf: Linear = ...
+        // let (val, buf) = unknown(buf) // shadowing, should infer buf is linear
+        // return val // Leak buf!
+         let func = FunctionDef {
+            name: "shadow_unknown".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                    Statement::Let {
+                        name: "buf".to_string(),
+                        ty: Some(ArkType::Linear("Buffer".to_string())),
+                        value: Expression::Literal("dummy_buf".to_string()),
+                    },
+                    Statement::LetDestructure {
+                        names: vec!["val".to_string(), "buf".to_string()],
+                        value: Expression::Call {
+                            function_hash: "unknown_func".to_string(),
+                            args: vec![
+                                Expression::Variable("buf".to_string())
+                            ]
+                        }
+                    },
+                    Statement::Return(Expression::Variable("val".to_string())),
+                ])))
+                .unwrap(),
+            ),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        match result {
+            Err(LinearError::UnusedResource(name)) => assert_eq!(name, "buf"),
+            _ => panic!("Expected UnusedResource for shadowed variable in destructure of unknown function"),
+        }
     }
 }

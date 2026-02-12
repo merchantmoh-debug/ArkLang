@@ -4,10 +4,13 @@ import json
 import time
 import os
 
-def send_message(proc, msg):
+def send_message(proc, msg, header_case="Title"):
     body = json.dumps(msg)
     content_length = len(body.encode('utf-8'))
-    header = f"Content-Length: {content_length}\r\n\r\n"
+    if header_case == "lower":
+        header = f"content-length: {content_length}\r\n\r\n"
+    else:
+        header = f"Content-Length: {content_length}\r\n\r\n"
     proc.stdin.write(header.encode('ascii'))
     proc.stdin.write(body.encode('utf-8'))
     proc.stdin.flush()
@@ -113,6 +116,25 @@ def test_lsp():
         assert len(notification["params"]["diagnostics"]) > 0
         diag = notification["params"]["diagnostics"][0]
         print(f"Diagnostic message: {diag['message']}")
+
+        # 4. Test case-insensitive header
+        print("Sending didOpen (lowercase header)...")
+        send_message(proc, {
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": "file:///test_lower.ark",
+                    "languageId": "ark",
+                    "version": 1,
+                    "text": code
+                }
+            }
+        }, header_case="lower")
+
+        notification = read_message(proc)
+        print(f"Diagnostics (Lower): {notification}")
+        assert notification["method"] == "textDocument/publishDiagnostics"
 
         print("LSP Test Passed!")
 

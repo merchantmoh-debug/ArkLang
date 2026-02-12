@@ -31,5 +31,5 @@ pub mod loader;
 pub mod runtime;
 pub mod types;
 pub mod vm;
-// pub mod wasm; // Requires Interpreter
-// pub use wasm::*;
+pub mod wasm;
+pub use wasm::*;

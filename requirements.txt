@@ -3,3 +3,5 @@ pydantic
 pydantic-settings
 google-genai
 lark
+prompt_toolkit
+pygments

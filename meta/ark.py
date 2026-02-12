@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import time
+import math
 import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
@@ -103,7 +104,10 @@ def core_get(args: List[ArkValue]):
         if isinstance(collection, str):
             return ArkValue(collection[index], "String")
         elif isinstance(collection, list):
-            return ArkValue(collection[index], "Any") # Assuming list elements can be anything
+            val = collection[index]
+            if isinstance(val, ArkValue):
+                return val
+            return ArkValue(val, "Any")
     else:
         raise Exception("Index out of bounds")
     return ArkValue(None, "Unit") # Should not be reached
@@ -271,6 +275,11 @@ def sys_time_sleep(args: List[ArkValue]):
         raise Exception("sys.time.sleep expects a number (seconds)")
     time.sleep(args[0].val)
     return ArkValue(None, "Unit")
+
+def sys_time_now(args: List[ArkValue]):
+    if len(args) != 0:
+        raise Exception("sys.time.now expects 0 arguments")
+    return ArkValue(int(time.time() * 1000), "Integer")
 
 def sys_crypto_hash(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
@@ -467,8 +476,18 @@ INTRINSICS = {
     "intrinsic_list_append": sys_list_append,
     "intrinsic_list_get": sys_list_get,
     "intrinsic_lt": lambda args: eval_binop("lt", args[0], args[1]),
+    "intrinsic_math_pow": intrinsic_math_pow,
+    "intrinsic_math_sqrt": intrinsic_math_sqrt,
+    "intrinsic_math_sin": intrinsic_math_sin,
+    "intrinsic_math_cos": intrinsic_math_cos,
+    "intrinsic_math_tan": intrinsic_math_tan,
+    "intrinsic_math_asin": intrinsic_math_asin,
+    "intrinsic_math_acos": intrinsic_math_acos,
+    "intrinsic_math_atan": intrinsic_math_atan,
+    "intrinsic_math_atan2": intrinsic_math_atan2,
     "intrinsic_merkle_root": sys_crypto_merkle_root,
     "intrinsic_or": sys_or,
+    "intrinsic_time_now": sys_time_now,
 }
 
 
@@ -728,6 +747,35 @@ def eval_node(node, scope):
             if hasattr(child, "data") and child.data == "expr_list":
                 items = [eval_node(c, scope) for c in child.children]
         return ArkValue(items, "List")
+
+    if node.data == "get_item":
+        # children[0] is the collection (list/string/buffer)
+        # children[1] is the index (expression)
+
+        collection = eval_node(node.children[0], scope)
+        index_val = eval_node(node.children[1], scope)
+
+        if index_val.type != "Integer":
+             raise Exception(f"Index must be Integer, got {index_val.type}")
+        idx = index_val.val
+
+        if collection.type == "List":
+            if idx < 0 or idx >= len(collection.val):
+                raise Exception(f"List index out of range: {idx}")
+            return collection.val[idx]
+
+        if collection.type == "String":
+            if idx < 0 or idx >= len(collection.val):
+                 raise Exception(f"String index out of range: {idx}")
+            return ArkValue(collection.val[idx], "String")
+
+        if collection.type == "Buffer":
+            if idx < 0 or idx >= len(collection.val):
+                 raise Exception(f"Buffer index out of range: {idx}")
+            # Return integer byte value
+            return ArkValue(int(collection.val[idx]), "Integer")
+
+        raise Exception(f"Cannot index type {collection.type}")
 
     return ArkValue(None, "Unit")
 

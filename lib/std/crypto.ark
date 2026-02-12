@@ -1,0 +1,9 @@
+// Standard Library: Crypto
+
+func _crypto_hash_wrapper(s) {
+    return intrinsic_crypto_hash(s)
+}
+
+crypto := {
+    hash: _crypto_hash_wrapper
+}
