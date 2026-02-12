@@ -1,0 +1,18 @@
+// Ark Standard Library: Filesystem
+// (c) 2026 Sovereign Systems
+
+func read_file(path) {
+    return sys_fs_read(path)
+}
+
+func write_file(path, content) {
+    sys_fs_write(path, content)
+}
+
+func append_file(path, content) {
+    // Read, Append, Write
+    // Note: Inefficient but functional for v1
+    current := sys_fs_read(path)
+    new_content := current + content
+    sys_fs_write(path, new_content)
+}

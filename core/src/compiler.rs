@@ -149,9 +149,6 @@ impl Compiler {
                 self.chunk.write(OpCode::SetField(field.clone()));
                 self.chunk.write(OpCode::Store(obj_name.clone()));
             }
-            _ => {
-                // println!("Compiler Warning: Unimplemented statement");
-            }
         }
     }
 
@@ -174,17 +171,7 @@ impl Compiler {
                 self.visit_expr(obj);
                 self.chunk.write(OpCode::GetField(field.clone()));
             }
-            Expression::Literal(s) => {
-                if let Ok(i) = s.parse::<i64>() {
-                    self.chunk.write(OpCode::Push(Value::Integer(i)));
-                } else if s == "true" {
-                    self.chunk.write(OpCode::Push(Value::Boolean(true)));
-                } else if s == "false" {
-                    self.chunk.write(OpCode::Push(Value::Boolean(false)));
-                } else {
-                    self.chunk.write(OpCode::Push(Value::String(s.clone())));
-                }
-            }
+
             Expression::Variable(name) => {
                 self.chunk.write(OpCode::Load(name.clone()));
             }

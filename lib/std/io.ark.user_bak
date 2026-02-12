@@ -1,0 +1,14 @@
+// Ark Standard Library: IO
+// (c) 2026 Sovereign Systems
+
+func print(msg) {
+    intrinsic_print(msg)
+}
+
+func println(msg) {
+    intrinsic_print(msg)
+}
+
+func clear() {
+    io_cls()
+}

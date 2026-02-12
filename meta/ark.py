@@ -956,6 +956,37 @@ def sys_func_apply(args: List[ArkValue]):
         return INTRINSICS[func.val](arg_list.val)
     raise Exception(f"Cannot apply {func.type}")
 
+
+# --- Chain Intrinsics (Mock/Prototype) ---
+
+def sys_chain_height(args: List[ArkValue]):
+    if len(args) != 0: raise Exception("sys.chain.height expects 0 args")
+    # In a real node, this would query the local blockchain state
+    # For prototype simulation, we can check a local file or return a mock
+    return ArkValue(1, "Integer")
+
+def sys_chain_get_balance(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.chain.get_balance expects address")
+    # Mock balance for simulation
+    addr = args[0].val
+    if addr.startswith("ark"):
+        return ArkValue(1000, "Integer")
+    return ArkValue(0, "Integer")
+
+def sys_chain_submit_tx(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.chain.submit_tx expects signed_tx_hex")
+    # In simulation, we just print/log it
+    tx_hex = args[0].val
+    print(f"[CHAIN] Submitted TX: {tx_hex[:16]}...")
+    return ArkValue(True, "Boolean")
+
+def sys_chain_verify_tx(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
+    # Mock verification
+    return ArkValue(True, "Boolean")
+
 INTRINSICS = {
     # Core
     "get": core_get,
@@ -1000,7 +1031,20 @@ INTRINSICS = {
     "sys.chain.submit_tx": sys_chain_submit_tx,
     "sys.chain.verify_tx": sys_chain_verify_tx,
     "sys.time.now": sys_time_now,
+    "sys.chain.verify_tx": sys_chain_verify_tx,
+    "sys.time.now": sys_time_now,
     "sys.time.sleep": sys_time_sleep,
+
+    # Math
+    "math.pow": intrinsic_math_pow,
+    "math.sqrt": intrinsic_math_sqrt,
+    "math.sin": intrinsic_math_sin,
+    "math.cos": intrinsic_math_cos,
+    "math.tan": intrinsic_math_tan,
+    "math.asin": intrinsic_math_asin,
+    "math.acos": intrinsic_math_acos,
+    "math.atan": intrinsic_math_atan,
+    "math.atan2": intrinsic_math_atan2,
 
     # IO / JSON
     "sys.io.read_bytes": sys_io_read_bytes,
@@ -1395,6 +1439,7 @@ def run_file(path):
     # print(tree.pretty(), file=sys.stderr)
     scope = Scope()
     scope.set("sys", ArkValue("sys", "Namespace"))
+    scope.set("math", ArkValue("math", "Namespace"))
 
     # Inject sys_args
     # sys.argv: [meta/ark.py, run, script.ark, arg1, arg2...]

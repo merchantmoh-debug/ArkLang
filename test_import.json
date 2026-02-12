@@ -1,0 +1,494 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Function": {
+          "name": "print",
+          "inputs": [
+            [
+              "msg",
+              {
+                "Shared": "Any"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "intrinsic_print",
+                        "args": [
+                          {
+                            "Variable": "msg"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Function": {
+          "name": "println",
+          "inputs": [
+            [
+              "msg",
+              {
+                "Shared": "Any"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "intrinsic_print",
+                        "args": [
+                          {
+                            "Variable": "msg"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Function": {
+          "name": "clear",
+          "inputs": [],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "Expression": {
+                      "Call": {
+                        "function_hash": "io_cls",
+                        "args": []
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Function": {
+          "name": "pow",
+          "inputs": [
+            [
+              "base",
+              {
+                "Shared": "Any"
+              }
+            ],
+            [
+              "exp",
+              {
+                "Shared": "Any"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "Return": {
+                      "Call": {
+                        "function_hash": "math_pow",
+                        "args": [
+                          {
+                            "Variable": "base"
+                          },
+                          {
+                            "Variable": "exp"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Function": {
+          "name": "sqrt",
+          "inputs": [
+            [
+              "n",
+              {
+                "Shared": "Any"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "Return": {
+                      "Call": {
+                        "function_hash": "math_sqrt",
+                        "args": [
+                          {
+                            "Variable": "n"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Function": {
+          "name": "abs",
+          "inputs": [
+            [
+              "n",
+              {
+                "Shared": "Any"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "If": {
+                      "condition": {
+                        "Call": {
+                          "function_hash": "intrinsic_lt",
+                          "args": [
+                            {
+                              "Variable": "n"
+                            },
+                            {
+                              "Literal": "0"
+                            }
+                          ]
+                        }
+                      },
+                      "then_block": [
+                        {
+                          "Return": {
+                            "Call": {
+                              "function_hash": "intrinsic_sub",
+                              "args": [
+                                {
+                                  "Literal": "0"
+                                },
+                                {
+                                  "Variable": "n"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ],
+                      "else_block": null
+                    }
+                  },
+                  {
+                    "Return": {
+                      "Variable": "n"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Function": {
+          "name": "max",
+          "inputs": [
+            [
+              "a",
+              {
+                "Shared": "Any"
+              }
+            ],
+            [
+              "b",
+              {
+                "Shared": "Any"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "If": {
+                      "condition": {
+                        "Call": {
+                          "function_hash": "intrinsic_gt",
+                          "args": [
+                            {
+                              "Variable": "a"
+                            },
+                            {
+                              "Variable": "b"
+                            }
+                          ]
+                        }
+                      },
+                      "then_block": [
+                        {
+                          "Return": {
+                            "Variable": "a"
+                          }
+                        }
+                      ],
+                      "else_block": null
+                    }
+                  },
+                  {
+                    "Return": {
+                      "Variable": "b"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Function": {
+          "name": "min",
+          "inputs": [
+            [
+              "a",
+              {
+                "Shared": "Any"
+              }
+            ],
+            [
+              "b",
+              {
+                "Shared": "Any"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "If": {
+                      "condition": {
+                        "Call": {
+                          "function_hash": "intrinsic_lt",
+                          "args": [
+                            {
+                              "Variable": "a"
+                            },
+                            {
+                              "Variable": "b"
+                            }
+                          ]
+                        }
+                      },
+                      "then_block": [
+                        {
+                          "Return": {
+                            "Variable": "a"
+                          }
+                        }
+                      ],
+                      "else_block": null
+                    }
+                  },
+                  {
+                    "Return": {
+                      "Variable": "b"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "println",
+            "args": [
+              {
+                "Literal": "[Test] IO Module Loaded Successfully."
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "x",
+          "ty": null,
+          "value": {
+            "Literal": "10"
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "y",
+          "ty": null,
+          "value": {
+            "Literal": "2"
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "p",
+          "ty": null,
+          "value": {
+            "Call": {
+              "function_hash": "pow",
+              "args": [
+                {
+                  "Variable": "x"
+                },
+                {
+                  "Variable": "y"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Literal": "[Test] Math.pow(10, 2) = "
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "println",
+            "args": [
+              {
+                "Variable": "p"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "If": {
+          "condition": {
+            "Call": {
+              "function_hash": "intrinsic_eq",
+              "args": [
+                {
+                  "Variable": "p"
+                },
+                {
+                  "Literal": "100"
+                }
+              ]
+            }
+          },
+          "then_block": [
+            {
+              "Expression": {
+                "Call": {
+                  "function_hash": "println",
+                  "args": [
+                    {
+                      "Literal": "[SUCCESS] Math Verified."
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "else_block": [
+            {
+              "Expression": {
+                "Call": {
+                  "function_hash": "println",
+                  "args": [
+                    {
+                      "Literal": "[FAILURE] Math Calculation Wrong."
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
