@@ -1,0 +1,73 @@
+// lib/std/result.ark
+// Standard Library: Result Pattern
+
+true := 1 == 1
+false := 1 == 0
+
+func _Result_Ok(val) {
+    return { is_err: false, val: val, err: "" }
+}
+
+func _Result_Err(e) {
+    return { is_err: true, val: "", err: e }
+}
+
+func _Result_is_ok(res) {
+    return res.is_err == false
+}
+
+func _Result_is_err(res) {
+    return res.is_err == true
+}
+
+func _Result_unwrap(res) {
+    if res.is_err {
+        print("PANIC: called `Result.unwrap()` on an `Err` value: " + res.err)
+        // Force crash (Runtime Error)
+        crash := 1 / 0
+    }
+    return res.val
+}
+
+func _Result_unwrap_err(res) {
+    if res.is_err == false {
+        print("PANIC: called `Result.unwrap_err()` on an `Ok` value.")
+        crash := 1 / 0
+    }
+    return res.err
+}
+
+func _Result_unwrap_or(res, default) {
+    if res.is_err {
+        return default
+    }
+    return res.val
+}
+
+func _Result_map(res, f) {
+    if res.is_err {
+        return res
+    }
+    new_val := f(res.val)
+    return _Result_Ok(new_val)
+}
+
+func _Result_map_err(res, f) {
+    if res.is_err {
+        new_err := f(res.err)
+        return _Result_Err(new_err)
+    }
+    return res
+}
+
+Result := {
+    Ok: _Result_Ok,
+    Err: _Result_Err,
+    is_ok: _Result_is_ok,
+    is_err: _Result_is_err,
+    unwrap: _Result_unwrap,
+    unwrap_err: _Result_unwrap_err,
+    unwrap_or: _Result_unwrap_or,
+    map: _Result_map,
+    map_err: _Result_map_err
+}
