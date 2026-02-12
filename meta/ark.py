@@ -4,11 +4,7 @@ import re
 import time
 import math
 import json
-<<<<<<< HEAD
 import codecs
-=======
-import math
->>>>>>> pr-69
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import http.server
@@ -31,6 +27,9 @@ EVENT_QUEUE = queue.Queue()
 # --- Security ---
 
 class SandboxViolation(Exception):
+    pass
+
+class LinearityViolation(Exception):
     pass
 
 def check_path_security(path):
@@ -85,13 +84,23 @@ class Scope:
 
     def get(self, name: str) -> Optional[ArkValue]:
         if name in self.vars:
-            return self.vars[name]
+            val = self.vars[name]
+            if val.type == "Moved":
+                raise LinearityViolation(f"Use of moved variable '{name}'")
+            return val
         if self.parent:
             return self.parent.get(name)
         return None
 
     def set(self, name: str, val: ArkValue):
         self.vars[name] = val
+
+    def mark_moved(self, name: str):
+        if name in self.vars:
+            self.vars[name] = ArkValue(None, "Moved")
+            return
+        if self.parent:
+            self.parent.mark_moved(name)
 
 # --- Intrinsics ---
 
@@ -717,7 +726,6 @@ def sys_html_escape(args: List[ArkValue]):
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
 
-<<<<<<< HEAD
 def intrinsic_math_pow(args: List[ArkValue]):
     if len(args) != 2: raise Exception("pow expects base, exp")
     return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
@@ -1040,7 +1048,6 @@ def sys_chain_verify_tx(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
     # Mock verification
     return ArkValue(True, "Boolean")
-=======
 def sys_fs_write_buffer(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "String" or args[1].type != "Buffer":
         raise Exception("sys.fs.write_buffer expects string path and buffer")
@@ -1094,7 +1101,10 @@ def sys_str_from_code(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.str.from_code expects 1 arg")
     code = args[0].val
     return ArkValue(chr(code), "String")
->>>>>>> pr-69
+
+LINEAR_SPECS = {
+    "sys.mem.write": [0],
+}
 
 INTRINSICS = {
     # Core
@@ -1174,8 +1184,8 @@ INTRINSICS = {
     "sys.func.apply": sys_func_apply,
 
     # Intrinsics (Aliased / Specific)
-    "time_now": intrinsic_time_now,
-    "intrinsic_time_now": intrinsic_time_now,
+    "time_now": sys_time_now,
+    "intrinsic_time_now": sys_time_now,
     "sys_crypto_hash": sys_crypto_hash,
     "intrinsic_and": sys_and,
     "intrinsic_not": intrinsic_not,
@@ -1396,6 +1406,7 @@ def eval_node(node, scope):
             func_val = eval_node(node.children[0], scope)
             
             args = []
+            arg_list_node = None
             if len(node.children) > 1:
                 arg_list_node = node.children[1]
                 if hasattr(arg_list_node, "children"):
@@ -1413,6 +1424,17 @@ def eval_node(node, scope):
             # If `print` is not in scope, `eval_node` returns Unit + Error (currently).
             
             if func_val.type == "Intrinsic":
+                intrinsic_name = func_val.val
+                if intrinsic_name in LINEAR_SPECS:
+                    consumed_indices = LINEAR_SPECS[intrinsic_name]
+                    if arg_list_node and hasattr(arg_list_node, "children"):
+                        for idx in consumed_indices:
+                            if idx < len(arg_list_node.children):
+                                arg_node = arg_list_node.children[idx]
+                                if hasattr(arg_node, "data") and arg_node.data == "var":
+                                    var_name = arg_node.children[0].value
+                                    scope.mark_moved(var_name)
+
                 return INTRINSICS[func_val.val](args)
                 
             if func_val.type == "Function":
@@ -1431,7 +1453,6 @@ def eval_node(node, scope):
     if node.data == "number":
         return ArkValue(int(node.children[0].value), "Integer")
     
-    if node.data == "string":
     if node.data == "string":
         # Use literal_eval to handle escapes (\n, \t, etc)
         import ast
