@@ -87,38 +87,42 @@ class MCPClientManager:
         self._lock = asyncio.Lock()
         self._tool_cache: Dict[str, Callable[..., Any]] = {}
 
-    def _load_server_configs(self) -> List[MCPServerConfig]:
+    async def _load_server_configs(self) -> List[MCPServerConfig]:
         """
         Load MCP server configurations from JSON file.
 
         Returns:
             List of MCPServerConfig objects
         """
-        config_file = Path(self.config_path)
 
-        if not config_file.exists():
-            print(f"   ⚠️ MCP config file not found: {config_file}")
-            return []
+        def _load():
+            config_file = Path(self.config_path)
 
-        try:
-            with open(config_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            if not config_file.exists():
+                print(f"   ⚠️ MCP config file not found: {config_file}")
+                return []
 
-            servers = data.get("servers", [])
-            configs = []
+            try:
+                with open(config_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
 
-            for server_data in servers:
-                if server_data.get("enabled", True):
-                    configs.append(MCPServerConfig(**server_data))
+                servers = data.get("servers", [])
+                configs = []
 
-            return configs
+                for server_data in servers:
+                    if server_data.get("enabled", True):
+                        configs.append(MCPServerConfig(**server_data))
 
-        except json.JSONDecodeError as e:
-            print(f"   ❌ Invalid JSON in MCP config: {e}")
-            return []
-        except Exception as e:
-            print(f"   ❌ Error loading MCP config: {e}")
-            return []
+                return configs
+
+            except json.JSONDecodeError as e:
+                print(f"   ❌ Invalid JSON in MCP config: {e}")
+                return []
+            except Exception as e:
+                print(f"   ❌ Error loading MCP config: {e}")
+                return []
+
+        return await asyncio.to_thread(_load)
 
     async def initialize(self) -> None:
         """
@@ -139,7 +143,7 @@ class MCPClientManager:
 
             print("🔌 Initializing MCP Client Manager...")
 
-            configs = self._load_server_configs()
+            configs = await self._load_server_configs()
 
             if not configs:
                 print("   ℹ️ No MCP servers configured")
