@@ -1,0 +1,166 @@
+// Ark Snake Game
+
+// Global State
+state := {
+    w: 20,
+    h: 20,
+    snake: [[10, 10], [10, 11], [10, 12]],
+    dir: 0, // 0: up, 1: down, 2: left, 3: right
+    apple: [5, 5],
+    game_over: 0,
+    score: 0
+}
+
+func sleep_ms(ms) {
+    start := sys.time.now()
+    while (sys.time.now() - start) < ms {
+        // busy wait
+    }
+}
+
+func get_snake_len(snake) {
+    let (l, _) := sys.len(snake)
+    return l
+}
+
+func get_head(snake) {
+    l := get_snake_len(snake)
+    let (head, _) := sys.list.get(snake, l - 1)
+    return head
+}
+
+func update_game() {
+    if state.game_over { return 0 }
+
+    head := get_head(state.snake)
+    let (hx, _) := sys.list.get(head, 0)
+    let (hy, _) := sys.list.get(head, 1)
+
+    // Move
+    if state.dir == 0 { hy := hy - 1 }
+    if state.dir == 1 { hy := hy + 1 }
+    if state.dir == 2 { hx := hx - 1 }
+    if state.dir == 3 { hx := hx + 1 }
+
+    // Check Bounds
+    if hx < 0 || hx >= state.w || hy < 0 || hy >= state.h {
+        state.game_over := 1
+        print("Game Over: Wall Collision")
+        return 0
+    }
+
+    // Check Self Collision
+    let (l, _) := sys.len(state.snake)
+    i := 0
+    while i < l {
+        let (part, _) := sys.list.get(state.snake, i)
+        let (px, _) := sys.list.get(part, 0)
+        let (py, _) := sys.list.get(part, 1)
+        if px == hx && py == hy {
+            state.game_over := 1
+            print("Game Over: Self Collision")
+            return 0
+        }
+        i := i + 1
+    }
+
+    new_head := [hx, hy]
+
+    // Check Apple
+    let (ax, _) := sys.list.get(state.apple, 0)
+    let (ay, _) := sys.list.get(state.apple, 1)
+
+    eaten := 0
+    if hx == ax && hy == ay {
+        eaten := 1
+        state.score := state.score + 1
+        print("Apple Eaten! Score: ", state.score)
+
+        // Respawn Apple
+        t := sys.time.now()
+        // Simple pseudo-random using time
+        ax := (t / 10) % state.w
+        ay := (t / 100) % state.h
+        state.apple := [ax, ay]
+    }
+
+    // Create new snake list (immutable step for thread safety)
+    new_snake := []
+
+    // If not eaten, skip first (tail)
+    start_idx := 0
+    if eaten == 0 { start_idx := 1 }
+
+    i := start_idx
+    while i < l {
+        let (val, _) := sys.list.get(state.snake, i)
+        sys.list.append(new_snake, val)
+        i := i + 1
+    }
+    sys.list.append(new_snake, new_head)
+
+    state.snake := new_snake
+    return 1
+}
+
+func json_state() {
+    res := "{"
+
+    // Snake
+    res := res + "\"snake\": ["
+    let (l, _) := sys.len(state.snake)
+    i := 0
+    while i < l {
+        if i > 0 { res := res + "," }
+        let (part, _) := sys.list.get(state.snake, i)
+        let (x, _) := sys.list.get(part, 0)
+        let (y, _) := sys.list.get(part, 1)
+        res := res + "[" + x + "," + y + "]"
+        i := i + 1
+    }
+    res := res + "],"
+
+    // Apple
+    let (ax, _) := sys.list.get(state.apple, 0)
+    let (ay, _) := sys.list.get(state.apple, 1)
+    res := res + "\"apple\": [" + ax + "," + ay + "],"
+
+    // Game Over
+    go := "false"
+    if state.game_over { go := "true" }
+    res := res + "\"game_over\": " + go
+
+    res := res + "}"
+    return res
+}
+
+func handler(path) {
+    if path == "/" {
+        return sys.fs.read("examples/snake.html")
+    }
+    if path == "/state" {
+        return json_state()
+    }
+
+    // Controls
+    // Prevent 180 degree turns
+    // Note: != is not supported, use (cond) == 0
+    if path == "/up" && (state.dir == 1) == 0 { state.dir := 0 }
+    if path == "/down" && (state.dir == 0) == 0 { state.dir := 1 }
+    if path == "/left" && (state.dir == 3) == 0 { state.dir := 2 }
+    if path == "/right" && (state.dir == 2) == 0 { state.dir := 3 }
+
+    return "OK"
+}
+
+// Main Execution
+print("Starting Ark Snake Server...")
+print("Port: 8000")
+print("Access: http://localhost:8000")
+
+sys.net.http.serve(8000, handler)
+
+while 1 {
+    update_game()
+    sleep_ms(100)
+}
