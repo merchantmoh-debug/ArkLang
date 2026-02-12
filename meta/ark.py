@@ -584,6 +584,45 @@ def sys_list_get(args: List[ArkValue]):
     else:
         raise Exception("Expected List or String")
 
+def sys_struct_get(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.struct.get expects struct, key")
+    struct_val = args[0]
+    key = args[1].val
+
+    # In Python interpreter, struct is ArkInstance (from struct_init) or Dict?
+    # parser_new returns { tokens: ..., pos: ... } which is compiled to dict/struct?
+    # Let's handle both for robustness.
+
+    fields = {}
+    if struct_val.type == "Instance":
+        fields = struct_val.val.fields
+    elif isinstance(struct_val.val, dict): # If implementation uses raw dicts
+         fields = struct_val.val
+    else:
+         # Try to see if it's a dict wrapped in something else?
+         # Assuming Instance or Dict.
+         pass
+
+    # If Instance, fields is dict.
+    if struct_val.type == "Instance":
+        val = struct_val.val.fields.get(key)
+        if val is None: raise Exception(f"Field {key} not found in Instance")
+        return ArkValue([val, struct_val], "List")
+
+    raise Exception(f"sys.struct.get not supported for type {struct_val.type}")
+
+def sys_struct_set(args: List[ArkValue]):
+    if len(args) != 3: raise Exception("sys.struct.set expects struct, key, val")
+    struct_val = args[0]
+    key = args[1].val
+    val = args[2]
+
+    if struct_val.type == "Instance":
+        struct_val.val.fields[key] = val
+        return struct_val
+
+    raise Exception(f"sys.struct.set not supported for type {struct_val.type}")
+
 def sys_mem_inspect(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "Buffer": raise Exception("sys.mem.inspect expects buffer")
     buf = args[0].val
@@ -1024,6 +1063,7 @@ INTRINSICS = {
     "sys.struct.set": sys_struct_set,
     "sys.str.get": sys_list_get,
     "sys.struct.get": sys_struct_get,
+<<<<<<< HEAD
     "sys.struct.has": sys_struct_has,
     "sys.struct.set": sys_struct_set,
     "sys.chain.height": sys_chain_height,
@@ -1033,6 +1073,9 @@ INTRINSICS = {
     "sys.time.now": sys_time_now,
     "sys.chain.verify_tx": sys_chain_verify_tx,
     "sys.time.now": sys_time_now,
+=======
+    "sys.struct.set": sys_struct_set,
+>>>>>>> pr-58
     "sys.time.sleep": sys_time_sleep,
 
     # Math
@@ -1314,6 +1357,7 @@ def eval_node(node, scope):
         return ArkValue(int(node.children[0].value), "Integer")
     
     if node.data == "string":
+<<<<<<< HEAD
         # Remove quotes
         s = node.children[0].value[1:-1]
         # Decode escape sequences
@@ -1321,6 +1365,11 @@ def eval_node(node, scope):
             s = codecs.decode(s, 'unicode_escape')
         except:
             pass # Fallback or keep raw if issue
+=======
+        # Use literal_eval to handle escapes (\n, \t, etc)
+        import ast
+        s = ast.literal_eval(node.children[0].value)
+>>>>>>> pr-58
         return ArkValue(s, "String")
         
     if node.data in ["add", "sub", "mul", "div", "lt", "gt", "le", "ge", "eq", "neq"]:
@@ -1439,6 +1488,7 @@ def run_file(path):
     # print(tree.pretty(), file=sys.stderr)
     scope = Scope()
     scope.set("sys", ArkValue("sys", "Namespace"))
+<<<<<<< HEAD
     scope.set("math", ArkValue("math", "Namespace"))
 
     # Inject sys_args
@@ -1456,6 +1506,20 @@ def run_file(path):
     scope.set("sys_args", ArkValue(args_vals, "List"))
     scope.set("true", ArkValue(True, "Boolean"))
     scope.set("false", ArkValue(False, "Boolean"))
+=======
+
+    # Inject Globals
+    scope.set("true", ArkValue(1, "Integer"))
+    scope.set("false", ArkValue(0, "Integer"))
+
+    # Inject sys_args (cli args)
+    # Assumes invocation: python ark.py run <script> <args...>
+    # sys_args[0] should be the script path.
+    # sys.argv: [ark.py, run, script, args...]
+    # sys.argv[2:] -> [script, args...]
+    sys_args_list = [ArkValue(arg, "String") for arg in sys.argv[2:]]
+    scope.set("sys_args", ArkValue(sys_args_list, "List"))
+>>>>>>> pr-58
     
     # Inject sys_args
     sys_args_list = []
