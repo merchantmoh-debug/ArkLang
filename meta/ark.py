@@ -783,91 +783,6 @@ def sys_html_escape(args: List[ArkValue]):
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
 
-def sys_fs_write_buffer(args: List[ArkValue]):
-    if len(args) != 2 or args[0].type != "String" or args[1].type != "Buffer":
-        raise Exception("sys.fs.write_buffer expects string path and buffer")
-    path = args[0].val
-    check_path_security(path)
-    buf = args[1].val
-    try:
-        with open(path, "wb") as f:
-            f.write(buf)
-        return ArkValue(None, "Unit")
-    except Exception as e:
-        raise Exception(f"Error writing buffer to {path}: {e}")
-
-def sys_fs_read_buffer(args: List[ArkValue]):
-    if len(args) != 1 or args[0].type != "String":
-        raise Exception("sys.fs.read_buffer expects string path")
-    path = args[0].val
-    check_path_security(path)
-    try:
-        with open(path, "rb") as f:
-            content = bytearray(f.read())
-        return ArkValue(content, "Buffer")
-    except Exception as e:
-        raise Exception(f"Error reading buffer from {path}: {e}")
-
-def math_sin_scaled(args: List[ArkValue]):
-    if len(args) != 3: raise Exception("math.sin_scaled expects 3 args")
-    angle = args[0].val
-    scale_in = args[1].val
-    scale_out = args[2].val
-    if scale_in == 0: raise Exception("Scale in is 0")
-    res = math.sin(angle / scale_in) * scale_out
-    return ArkValue(int(round(res)), "Integer")
-
-def math_cos_scaled(args: List[ArkValue]):
-    if len(args) != 3: raise Exception("math.cos_scaled expects 3 args")
-    angle = args[0].val
-    scale_in = args[1].val
-    scale_out = args[2].val
-    if scale_in == 0: raise Exception("Scale in is 0")
-    res = math.cos(angle / scale_in) * scale_out
-    return ArkValue(int(round(res)), "Integer")
-
-def math_pi_scaled(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("math.pi_scaled expects 1 arg")
-    scale = args[0].val
-    res = math.pi * scale
-    return ArkValue(int(round(res)), "Integer")
-
-def sys_str_from_code(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("sys.str.from_code expects 1 arg")
-    code = args[0].val
-    return ArkValue(chr(code), "String")
-
-# --- Chain Intrinsics (Mock/Prototype) ---
-
-def sys_chain_height(args: List[ArkValue]):
-    if len(args) != 0: raise Exception("sys.chain.height expects 0 args")
-    # In a real node, this would query the local blockchain state
-    # For prototype simulation, we can check a local file or return a mock
-    return ArkValue(1, "Integer")
-
-def sys_chain_get_balance(args: List[ArkValue]):
-    if len(args) != 1 or args[0].type != "String":
-        raise Exception("sys.chain.get_balance expects address")
-    # Mock balance for simulation
-    addr = args[0].val
-    if addr.startswith("ark"):
-        return ArkValue(1000, "Integer")
-    return ArkValue(0, "Integer")
-
-def sys_chain_submit_tx(args: List[ArkValue]):
-    if len(args) != 1 or args[0].type != "String":
-        raise Exception("sys.chain.submit_tx expects signed_tx_hex")
-    # In simulation, we just print/log it
-    tx_hex = args[0].val
-    print(f"[CHAIN] Submitted TX: {tx_hex[:16]}...")
-    return ArkValue(True, "Boolean")
-
-def sys_chain_verify_tx(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
-    # Mock verification
-    return ArkValue(True, "Boolean")
-
-
 def intrinsic_math_pow(args: List[ArkValue]):
     if len(args) != 2: raise Exception("math.pow expects 2 args")
     return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
@@ -1066,6 +981,16 @@ def sys_z3_verify(args: List[ArkValue]):
              raise Exception("sys.z3.verify constraints list must contain Strings")
         constraints.append(item.val)
 
+def sys_chain_verify_tx(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
+    # Mock verification
+    return ArkValue(True, "Boolean")
+def sys_fs_write_buffer(args: List[ArkValue]):
+    if len(args) != 2 or args[0].type != "String" or args[1].type != "Buffer":
+        raise Exception("sys.fs.write_buffer expects string path and buffer")
+    path = args[0].val
+    check_path_security(path)
+    buf = args[1].val
     try:
         # Ensure we can import from same directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1080,7 +1005,10 @@ def sys_z3_verify(args: List[ArkValue]):
         return ArkValue(True, "Boolean") # Fail open or mock success
 
 
-intrinsic_time_now = sys_time_now
+def sys_str_from_code(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sys.str.from_code expects 1 arg")
+    code = args[0].val
+    return ArkValue(chr(code), "String")
 
 INTRINSICS = {
     # Core

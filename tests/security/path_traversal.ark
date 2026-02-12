@@ -1,0 +1,2 @@
+// This should fail due to sandbox violation
+sys.fs.read("/etc/passwd")
