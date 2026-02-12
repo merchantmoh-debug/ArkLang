@@ -1,0 +1,17 @@
+// Tests that a buffer cannot be used after being moved by sys.mem.write
+
+func main() {
+    print("Allocating buffer...")
+    b := sys.mem.alloc(10)
+
+    print("Writing to buffer (consume b)...")
+    // sys.mem.write consumes 'b' and returns a new handle (which we ignore here)
+    sys.mem.write(b, 0, 123)
+
+    print("Attempting to read from moved buffer b...")
+    // This should raise LinearityViolation
+    res := sys.mem.read(b, 0)
+    print("Error: Should have failed before this line")
+}
+
+main()

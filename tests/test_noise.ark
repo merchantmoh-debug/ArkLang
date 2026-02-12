@@ -1,0 +1,37 @@
+// tests/test_noise.ark
+
+// Enable Noise
+net.config.ENABLE_NOISE := true
+print("[Test] Noise Enabled: " + net.config.ENABLE_NOISE)
+
+func server_loop() {
+    print("[Test] Server Thread Started")
+    net.listen(8082)
+}
+
+print("[Test] Spawning Server...")
+sys.thread.spawn(server_loop)
+
+print("[Test] Sleeping 1s...")
+sys.time.sleep(1)
+
+print("[Test] Connecting...")
+// Connect returns handle
+handle := net.connect("127.0.0.1", 8082)
+
+if handle == -1 {
+    print("[Test] Connection Failed!")
+} else {
+    print("[Test] Connected. Handle: " + handle)
+}
+
+print("[Test] Sleeping 1s to allow handshake...")
+sys.time.sleep(1)
+
+print("[Test] Broadcasting Ping...")
+net.broadcast("Secure Ping from Main Thread")
+
+print("[Test] Sleeping 2s to allow receive...")
+sys.time.sleep(2)
+
+print("[Test] Done.")
