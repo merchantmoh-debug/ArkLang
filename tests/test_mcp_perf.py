@@ -149,7 +149,7 @@ class TestMCPClient(unittest.TestCase):
                     MCPServerConfig(name=f"s{i}", transport="stdio", command="echo")
                     for i in range(5)
                 ]
-                manager._load_server_configs = MagicMock(return_value=configs)
+                manager._load_server_configs = AsyncMock(return_value=configs)
 
                 # Mock delay: 0.2s
                 async def mock_connect(config):
