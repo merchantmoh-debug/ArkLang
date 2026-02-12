@@ -1,0 +1,17 @@
+state := { height: 0 }
+
+func handler(path) {
+    if (path == "/block") {
+        state.height := state.height + 1
+        print("New block received: Height " + state.height)
+        return "OK"
+    }
+    if (path == "/height") {
+        return "" + state.height
+    }
+    return "404"
+}
+
+print("Node starting on 8000...")
+sys.net.http.serve(8000, handler)
+while (1) { sys.time.sleep(1) }

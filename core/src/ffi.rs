@@ -41,14 +41,17 @@ pub extern "C" fn ark_eval_string(json_ptr: *const c_char) -> *mut c_char {
         Err(e) => return CString::new(format!("Error: Invalid UTF-8: {}", e)).unwrap().into_raw(),
     };
 
-    let node = match load_ark_program(json_str) {
+    let mast = match load_ark_program(json_str) {
         Ok(n) => n,
         Err(e) => return CString::new(format!("Error: {}", e)).unwrap().into_raw(),
     };
 
     let compiler = Compiler::new();
-    let chunk = compiler.compile(&node);
-    let mut vm = VM::new(chunk);
+    let chunk = compiler.compile(&mast.content);
+    let mut vm = match VM::new(chunk, &mast.hash, 0) {
+        Ok(v) => v,
+        Err(e) => return CString::new(format!("Error: {}", e)).unwrap().into_raw(),
+    };
 
     match vm.run() {
         Ok(val) => {
