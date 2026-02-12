@@ -62,6 +62,10 @@ impl IntrinsicRegistry {
             "intrinsic_math_atan2" | "math.atan2" => Some(intrinsic_math_atan2),
             "intrinsic_io_cls" | "io.cls" => Some(intrinsic_io_cls),
             "intrinsic_list_set" | "sys.list.set" => Some(intrinsic_list_set),
+            "intrinsic_chain_height" | "sys.chain.height" => Some(intrinsic_chain_height),
+            "intrinsic_chain_get_balance" | "sys.chain.get_balance" => Some(intrinsic_chain_get_balance),
+            "intrinsic_chain_submit_tx" | "sys.chain.submit_tx" => Some(intrinsic_chain_submit_tx),
+            "intrinsic_chain_verify_tx" | "sys.chain.verify_tx" => Some(intrinsic_chain_verify_tx),
             _ => None,
         }
     }
@@ -248,6 +252,22 @@ impl IntrinsicRegistry {
         scope.set(
             "sys.list.set".to_string(),
             Value::NativeFunction(intrinsic_list_set),
+        );
+        scope.set(
+            "sys.chain.height".to_string(),
+            Value::NativeFunction(intrinsic_chain_height),
+        );
+        scope.set(
+            "sys.chain.get_balance".to_string(),
+            Value::NativeFunction(intrinsic_chain_get_balance),
+        );
+        scope.set(
+            "sys.chain.submit_tx".to_string(),
+            Value::NativeFunction(intrinsic_chain_submit_tx),
+        );
+        scope.set(
+            "sys.chain.verify_tx".to_string(),
+            Value::NativeFunction(intrinsic_chain_verify_tx),
         );
     }
 }
@@ -1239,6 +1259,49 @@ pub fn intrinsic_math_atan2(args: Vec<Value>) -> Result<Value, RuntimeError> {
 pub fn intrinsic_io_cls(_args: Vec<Value>) -> Result<Value, RuntimeError> {
     print!("\x1b[2J\x1b[H");
     Ok(Value::Unit)
+}
+
+pub fn intrinsic_chain_height(_args: Vec<Value>) -> Result<Value, RuntimeError> {
+    Ok(Value::Integer(10000))
+}
+
+pub fn intrinsic_chain_get_balance(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::String(_) => Ok(Value::Integer(5000)),
+        _ => Err(RuntimeError::TypeMismatch(
+            "String".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_chain_submit_tx(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::String(_) => Ok(Value::String("0x123...".to_string())),
+        _ => Err(RuntimeError::TypeMismatch(
+            "String".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_chain_verify_tx(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::String(_) => Ok(Value::Boolean(true)),
+        _ => Err(RuntimeError::TypeMismatch(
+            "String".to_string(),
+            args[0].clone(),
+        )),
+    }
 }
 
 #[cfg(test)]
