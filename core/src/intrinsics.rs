@@ -53,6 +53,13 @@ impl IntrinsicRegistry {
             "intrinsic_time_now" | "time.now" => Some(intrinsic_time_now),
             "intrinsic_math_pow" | "math.pow" => Some(intrinsic_math_pow),
             "intrinsic_math_sqrt" | "math.sqrt" => Some(intrinsic_math_sqrt),
+            "intrinsic_math_sin" | "math.sin" => Some(intrinsic_math_sin),
+            "intrinsic_math_cos" | "math.cos" => Some(intrinsic_math_cos),
+            "intrinsic_math_tan" | "math.tan" => Some(intrinsic_math_tan),
+            "intrinsic_math_asin" | "math.asin" => Some(intrinsic_math_asin),
+            "intrinsic_math_acos" | "math.acos" => Some(intrinsic_math_acos),
+            "intrinsic_math_atan" | "math.atan" => Some(intrinsic_math_atan),
+            "intrinsic_math_atan2" | "math.atan2" => Some(intrinsic_math_atan2),
             "intrinsic_io_cls" | "io.cls" => Some(intrinsic_io_cls),
             "intrinsic_list_set" | "sys.list.set" => Some(intrinsic_list_set),
             _ => None,
@@ -163,12 +170,76 @@ impl IntrinsicRegistry {
             Value::NativeFunction(intrinsic_time_now),
         );
         scope.set(
+            "intrinsic_math_pow".to_string(),
+            Value::NativeFunction(intrinsic_math_pow),
+        );
+        scope.set(
             "math.pow".to_string(),
             Value::NativeFunction(intrinsic_math_pow),
         );
         scope.set(
+            "intrinsic_math_sqrt".to_string(),
+            Value::NativeFunction(intrinsic_math_sqrt),
+        );
+        scope.set(
             "math.sqrt".to_string(),
             Value::NativeFunction(intrinsic_math_sqrt),
+        );
+        scope.set(
+            "intrinsic_math_sin".to_string(),
+            Value::NativeFunction(intrinsic_math_sin),
+        );
+        scope.set(
+            "math.sin".to_string(),
+            Value::NativeFunction(intrinsic_math_sin),
+        );
+        scope.set(
+            "intrinsic_math_cos".to_string(),
+            Value::NativeFunction(intrinsic_math_cos),
+        );
+        scope.set(
+            "math.cos".to_string(),
+            Value::NativeFunction(intrinsic_math_cos),
+        );
+        scope.set(
+            "intrinsic_math_tan".to_string(),
+            Value::NativeFunction(intrinsic_math_tan),
+        );
+        scope.set(
+            "math.tan".to_string(),
+            Value::NativeFunction(intrinsic_math_tan),
+        );
+        scope.set(
+            "intrinsic_math_asin".to_string(),
+            Value::NativeFunction(intrinsic_math_asin),
+        );
+        scope.set(
+            "math.asin".to_string(),
+            Value::NativeFunction(intrinsic_math_asin),
+        );
+        scope.set(
+            "intrinsic_math_acos".to_string(),
+            Value::NativeFunction(intrinsic_math_acos),
+        );
+        scope.set(
+            "math.acos".to_string(),
+            Value::NativeFunction(intrinsic_math_acos),
+        );
+        scope.set(
+            "intrinsic_math_atan".to_string(),
+            Value::NativeFunction(intrinsic_math_atan),
+        );
+        scope.set(
+            "math.atan".to_string(),
+            Value::NativeFunction(intrinsic_math_atan),
+        );
+        scope.set(
+            "intrinsic_math_atan2".to_string(),
+            Value::NativeFunction(intrinsic_math_atan2),
+        );
+        scope.set(
+            "math.atan2".to_string(),
+            Value::NativeFunction(intrinsic_math_atan2),
         );
         scope.set(
             "io.cls".to_string(),
@@ -1039,6 +1110,132 @@ pub fn intrinsic_math_sqrt(args: Vec<Value>) -> Result<Value, RuntimeError> {
     }
 }
 
+pub fn intrinsic_math_sin(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => {
+            let angle = (*n as f64) / 10000.0;
+            let res = angle.sin();
+            Ok(Value::Integer((res * 10000.0) as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_math_cos(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => {
+            let angle = (*n as f64) / 10000.0;
+            let res = angle.cos();
+            Ok(Value::Integer((res * 10000.0) as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_math_tan(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => {
+            let angle = (*n as f64) / 10000.0;
+            let res = angle.tan();
+            Ok(Value::Integer((res * 10000.0) as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_math_asin(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => {
+            let val = (*n as f64) / 10000.0;
+            if val < -1.0 || val > 1.0 {
+                return Err(RuntimeError::InvalidOperation("asin out of domain".to_string()));
+            }
+            let res = val.asin();
+            Ok(Value::Integer((res * 10000.0) as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_math_acos(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => {
+            let val = (*n as f64) / 10000.0;
+            if val < -1.0 || val > 1.0 {
+                return Err(RuntimeError::InvalidOperation("acos out of domain".to_string()));
+            }
+            let res = val.acos();
+            Ok(Value::Integer((res * 10000.0) as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_math_atan(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => {
+            let val = (*n as f64) / 10000.0;
+            let res = val.atan();
+            Ok(Value::Integer((res * 10000.0) as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_math_atan2(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match (&args[0], &args[1]) {
+        (Value::Integer(y), Value::Integer(x)) => {
+            let y_val = (*y as f64) / 10000.0;
+            let x_val = (*x as f64) / 10000.0;
+            let res = y_val.atan2(x_val);
+            Ok(Value::Integer((res * 10000.0) as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
 pub fn intrinsic_io_cls(_args: Vec<Value>) -> Result<Value, RuntimeError> {
     print!("\x1b[2J\x1b[H");
     Ok(Value::Unit)
@@ -1093,6 +1290,37 @@ mod tests {
         // Just verify it runs and returns Unit
         let args = vec![];
         assert_eq!(intrinsic_io_cls(args).unwrap(), Value::Unit);
+    }
+
+    #[test]
+    fn test_math_trig() {
+        // sin(0) = 0
+        let args = vec![Value::Integer(0)];
+        assert_eq!(intrinsic_math_sin(args).unwrap(), Value::Integer(0));
+
+        // sin(PI/2) approx 10000 (PI/2 = 1.5707... * 10000 = 15707)
+        let args = vec![Value::Integer(15708)]; // 1.5708
+        // sin(1.5708) is close to 1
+        let res = intrinsic_math_sin(args).unwrap();
+        if let Value::Integer(v) = res {
+            assert!(v >= 9999 && v <= 10000);
+        } else {
+            panic!("Expected Integer");
+        }
+
+        // cos(0) = 10000
+        let args = vec![Value::Integer(0)];
+        assert_eq!(intrinsic_math_cos(args).unwrap(), Value::Integer(10000));
+
+        // tan(45deg) = tan(PI/4) = 1 (approx)
+        // PI/4 = 0.78539 * 10000 = 7854
+        let args = vec![Value::Integer(7854)];
+        let res = intrinsic_math_tan(args).unwrap();
+        if let Value::Integer(v) = res {
+             assert!(v >= 9990 && v <= 10010);
+        } else {
+            panic!("Expected Integer");
+        }
     }
 
     #[test]

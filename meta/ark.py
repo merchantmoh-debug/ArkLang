@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import time
+import math
 import json
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
@@ -12,6 +13,11 @@ from lark import Lark
 import hashlib
 import ctypes
 import html
+import socket
+import urllib.request
+import urllib.error
+import urllib.parse
+import codecs
 
 # --- Security ---
 
@@ -103,7 +109,10 @@ def core_get(args: List[ArkValue]):
         if isinstance(collection, str):
             return ArkValue(collection[index], "String")
         elif isinstance(collection, list):
-            return ArkValue(collection[index], "Any") # Assuming list elements can be anything
+            val = collection[index]
+            if isinstance(val, ArkValue):
+                return val
+            return ArkValue(val, "Any")
     else:
         raise Exception("Index out of bounds")
     return ArkValue(None, "Unit") # Should not be reached
@@ -451,11 +460,13 @@ INTRINSICS = {
     "sys.mem.inspect": sys_mem_inspect,
     "sys.mem.read": sys_mem_read,
     "sys.mem.write": sys_mem_write,
+    "sys.net.http.request": sys_net_http_request,
     "sys.net.http.serve": sys_net_http_serve,
     "sys.struct.get": sys_struct_get,
     "sys.struct.set": sys_struct_set,
     "sys.str.get": sys_list_get,
-    "sys.time.now": sys_time_now,
+    "sys.struct.get": sys_struct_get,
+    "sys.struct.set": sys_struct_set,
     "sys.time.sleep": sys_time_sleep,
 
     # Intrinsics (Aliased / Specific)
@@ -474,6 +485,15 @@ INTRINSICS = {
     "intrinsic_list_append": sys_list_append,
     "intrinsic_list_get": sys_list_get,
     "intrinsic_lt": lambda args: eval_binop("lt", args[0], args[1]),
+    "intrinsic_math_pow": intrinsic_math_pow,
+    "intrinsic_math_sqrt": intrinsic_math_sqrt,
+    "intrinsic_math_sin": intrinsic_math_sin,
+    "intrinsic_math_cos": intrinsic_math_cos,
+    "intrinsic_math_tan": intrinsic_math_tan,
+    "intrinsic_math_asin": intrinsic_math_asin,
+    "intrinsic_math_acos": intrinsic_math_acos,
+    "intrinsic_math_atan": intrinsic_math_atan,
+    "intrinsic_math_atan2": intrinsic_math_atan2,
     "intrinsic_merkle_root": sys_crypto_merkle_root,
     "intrinsic_or": sys_or,
     "intrinsic_time_now": sys_time_now,
@@ -484,6 +504,7 @@ INTRINSICS = {
 # --- Evaluator ---
 
 def eval_node(node, scope):
+    if node is None: return ArkValue(None, "Unit")
     if hasattr(node, "data"):
         # print(f"DEBUG: Visiting {node.data}")
         if node.data == "start":
@@ -713,7 +734,12 @@ def eval_node(node, scope):
     
     if node.data == "string":
         # Remove quotes
-        s = node.children[0].value[1:-1]
+        raw = node.children[0].value[1:-1]
+        try:
+            # decode unicode_escape
+            s = codecs.decode(raw, 'unicode_escape')
+        except:
+            s = raw
         return ArkValue(s, "String")
         
     if node.data in ["add", "sub", "mul", "div", "lt", "gt", "le", "ge", "eq"]:
@@ -729,6 +755,35 @@ def eval_node(node, scope):
             if hasattr(child, "data") and child.data == "expr_list":
                 items = [eval_node(c, scope) for c in child.children]
         return ArkValue(items, "List")
+
+    if node.data == "get_item":
+        # children[0] is the collection (list/string/buffer)
+        # children[1] is the index (expression)
+
+        collection = eval_node(node.children[0], scope)
+        index_val = eval_node(node.children[1], scope)
+
+        if index_val.type != "Integer":
+             raise Exception(f"Index must be Integer, got {index_val.type}")
+        idx = index_val.val
+
+        if collection.type == "List":
+            if idx < 0 or idx >= len(collection.val):
+                raise Exception(f"List index out of range: {idx}")
+            return collection.val[idx]
+
+        if collection.type == "String":
+            if idx < 0 or idx >= len(collection.val):
+                 raise Exception(f"String index out of range: {idx}")
+            return ArkValue(collection.val[idx], "String")
+
+        if collection.type == "Buffer":
+            if idx < 0 or idx >= len(collection.val):
+                 raise Exception(f"Buffer index out of range: {idx}")
+            # Return integer byte value
+            return ArkValue(int(collection.val[idx]), "Integer")
+
+        raise Exception(f"Cannot index type {collection.type}")
 
     return ArkValue(None, "Unit")
 
@@ -800,6 +855,20 @@ def run_file(path):
     # print(tree.pretty())
     scope = Scope()
     scope.set("sys", ArkValue("sys", "Namespace"))
+
+    # Inject sys_args
+    # sys.argv: [meta/ark.py, run, script.ark, arg1, arg2...]
+    # We want sys_args to be [script.ark, arg1, arg2...]
+    # So slice from index 2
+    args_vals = []
+    if len(sys.argv) >= 3:
+        for a in sys.argv[2:]:
+            args_vals.append(ArkValue(a, "String"))
+
+    # Wrap in List struct [ArkValue, Ref] ?
+    # No, ArkValue(list_obj, "List")
+    # list_obj is Python list of ArkValues
+    scope.set("sys_args", ArkValue(args_vals, "List"))
     
     # Inject sys_args
     sys_args_list = []
