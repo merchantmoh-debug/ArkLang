@@ -1,0 +1,31 @@
+// Test Chain Module
+true := 1 == 1
+false := 1 == 0
+
+print("Testing Chain Module...")
+
+h := chain.height()
+print("Height:", h)
+if h != 10000 {
+    print("FAIL: Height")
+}
+
+bal := chain.get_balance("addr1")
+print("Balance:", bal)
+if bal != 5000 {
+    print("FAIL: Balance")
+}
+
+tx := chain.submit_tx("payload")
+print("TxID:", tx)
+if tx != "0x123..." {
+    print("FAIL: Submit Tx")
+}
+
+ver := chain.verify_tx(tx)
+print("Verified:", ver)
+if ver != true {
+    print("FAIL: Verify Tx")
+}
+
+print("Chain Module Tests Passed")

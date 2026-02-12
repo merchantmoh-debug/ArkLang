@@ -220,6 +220,183 @@ def extract_code(args: List[ArkValue]):
         return ArkValue(matches[0], "String")
     return ArkValue("", "String") # Return empty string if no code block found
 
+SOCKETS = {}
+SOCKET_ID = 0
+SOCKET_LOCK = threading.Lock()
+
+def get_socket(handle):
+    if handle.type != "Integer":
+        raise Exception(f"Socket handle must be Integer, got {handle.type}")
+    with SOCKET_LOCK:
+        if handle.val not in SOCKETS:
+            raise Exception(f"Invalid socket handle: {handle.val}")
+        return SOCKETS[handle.val]
+
+def sys_net_socket_bind(args: List[ArkValue]):
+    check_exec_security()
+    global SOCKET_ID
+    if len(args) != 1 or args[0].type != "Integer":
+        raise Exception("sys.net.socket.bind expects integer port")
+    port = args[0].val
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(('0.0.0.0', port))
+    s.listen(5)
+
+    with SOCKET_LOCK:
+        SOCKET_ID += 1
+        SOCKETS[SOCKET_ID] = s
+        return ArkValue(SOCKET_ID, "Integer")
+
+def sys_net_socket_accept(args: List[ArkValue]):
+    global SOCKET_ID
+    if len(args) != 1:
+        raise Exception("sys.net.socket.accept expects socket handle")
+
+    server_handle = args[0]
+    s = get_socket(server_handle)
+
+    try:
+        conn, addr = s.accept()
+        with SOCKET_LOCK:
+            SOCKET_ID += 1
+            SOCKETS[SOCKET_ID] = conn
+            sid = SOCKET_ID
+
+        # Return [handle, ip]
+        return ArkValue([ArkValue(sid, "Integer"), ArkValue(addr[0], "String")], "List")
+    except socket.timeout:
+        return ArkValue(False, "Boolean")
+    except BlockingIOError:
+        return ArkValue(False, "Boolean")
+    except Exception as e:
+        print(f"Accept Error: {e}", file=sys.stderr)
+        return ArkValue(False, "Boolean")
+
+def sys_net_socket_connect(args: List[ArkValue]):
+    check_exec_security()
+    global SOCKET_ID
+    if len(args) != 2 or args[0].type != "String" or args[1].type != "Integer":
+        raise Exception("sys.net.socket.connect expects ip (String) and port (Integer)")
+
+    ip = args[0].val
+    port = args[1].val
+
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((ip, port))
+
+        with SOCKET_LOCK:
+            SOCKET_ID += 1
+            SOCKETS[SOCKET_ID] = s
+            return ArkValue(SOCKET_ID, "Integer")
+    except Exception as e:
+        raise Exception(f"Connection failed: {e}")
+
+def sys_net_socket_send(args: List[ArkValue]):
+    if len(args) != 2 or args[0].type != "Integer" or args[1].type != "String":
+        raise Exception("sys.net.socket.send expects handle and data string")
+
+    handle = args[0]
+    data = args[1].val
+    s = get_socket(handle)
+
+    try:
+        s.sendall(data.encode('utf-8'))
+        return ArkValue(None, "Unit")
+    except Exception as e:
+        raise Exception(f"Send failed: {e}")
+
+def sys_net_socket_recv(args: List[ArkValue]):
+    if len(args) != 2 or args[0].type != "Integer" or args[1].type != "Integer":
+        raise Exception("sys.net.socket.recv expects handle and size")
+
+    handle = args[0]
+    size = args[1].val
+    s = get_socket(handle)
+
+    try:
+        data = s.recv(size)
+        if not data:
+            return ArkValue("", "String") # EOF
+        return ArkValue(data.decode('utf-8', errors='ignore'), "String")
+    except socket.timeout:
+        return ArkValue(False, "Boolean")
+    except BlockingIOError:
+        return ArkValue(False, "Boolean")
+    except Exception as e:
+        # print(f"Recv Error: {e}", file=sys.stderr)
+        return ArkValue("", "String") # Treat errors as closed for now
+
+def sys_net_socket_close(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "Integer":
+        raise Exception("sys.net.socket.close expects handle")
+
+    handle = args[0]
+    with SOCKET_LOCK:
+        if handle.val in SOCKETS:
+            try:
+                SOCKETS[handle.val].close()
+            except:
+                pass
+            del SOCKETS[handle.val]
+    return ArkValue(None, "Unit")
+
+def sys_net_socket_set_timeout(args: List[ArkValue]):
+    if len(args) != 2 or args[0].type != "Integer":
+        raise Exception("sys.net.socket.set_timeout expects handle and timeout (ms)")
+
+    handle = args[0]
+    timeout_ms = args[1].val
+    timeout = float(timeout_ms) / 1000.0
+
+    s = get_socket(handle)
+    s.settimeout(timeout)
+    return ArkValue(None, "Unit")
+
+def sys_net_http_request(args: List[ArkValue]):
+    # args: method, url, [body]
+    if len(args) < 2:
+        raise Exception("sys.net.http.request expects method, url")
+    method = args[0].val
+    url = args[1].val
+    data = None
+    if len(args) > 2:
+        data = args[2].val.encode('utf-8')
+
+    req = urllib.request.Request(url, data=data, method=method)
+    try:
+        with urllib.request.urlopen(req) as response:
+            status = response.getcode()
+            body = response.read().decode('utf-8')
+            return ArkValue([ArkValue(status, "Integer"), ArkValue(body, "String")], "List")
+    except urllib.error.HTTPError as e:
+        status = e.code
+        body = e.read().decode('utf-8')
+        return ArkValue([ArkValue(status, "Integer"), ArkValue(body, "String")], "List")
+    except Exception as e:
+        raise Exception(f"HTTP Request Failed: {e}")
+
+def sys_thread_spawn(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "Function":
+        raise Exception("sys.thread.spawn expects a function")
+
+    func = args[0].val
+
+    def thread_target():
+        try:
+            call_user_func(func, [])
+        except Exception as e:
+            print(f"Thread Error: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
+
+    t = threading.Thread(target=thread_target)
+    t.daemon = True
+    t.start()
+    return ArkValue(None, "Unit")
+
 def sys_net_http_serve(args: List[ArkValue]):
     check_exec_security()
     # print(f"DEBUG: sys.net.http.serve args: {[a.type for a in args]}")
@@ -328,6 +505,60 @@ def sys_crypto_merkle_root(args: List[ArkValue]):
         
     return ArkValue(current_level[0], "String")
 
+def sys_crypto_ed25519_gen(args: List[ArkValue]):
+    if len(args) != 0:
+        raise Exception("sys.crypto.ed25519.gen expects 0 arguments")
+
+    priv = ed25519.Ed25519PrivateKey.generate()
+    pub = priv.public_key()
+
+    priv_bytes = priv.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+    pub_bytes = pub.public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw
+    )
+
+    return ArkValue([
+        ArkValue(priv_bytes.hex(), "String"),
+        ArkValue(pub_bytes.hex(), "String")
+    ], "List")
+
+def sys_crypto_ed25519_sign(args: List[ArkValue]):
+    if len(args) != 2:
+        raise Exception("sys.crypto.ed25519.sign expects msg(string) and priv(hex string)")
+
+    msg = args[0].val.encode('utf-8')
+    priv_hex = args[1].val
+
+    try:
+        priv_bytes = bytes.fromhex(priv_hex)
+        priv = ed25519.Ed25519PrivateKey.from_private_bytes(priv_bytes)
+        sig = priv.sign(msg)
+        return ArkValue(sig.hex(), "String")
+    except Exception as e:
+        raise Exception(f"Ed25519 Sign Error: {e}")
+
+def sys_crypto_ed25519_verify(args: List[ArkValue]):
+    if len(args) != 3:
+        raise Exception("sys.crypto.ed25519.verify expects msg(string), sig(hex string), pub(hex string)")
+
+    msg = args[0].val.encode('utf-8')
+    sig_hex = args[1].val
+    pub_hex = args[2].val
+
+    try:
+        sig_bytes = bytes.fromhex(sig_hex)
+        pub_bytes = bytes.fromhex(pub_hex)
+        pub = ed25519.Ed25519PublicKey.from_public_bytes(pub_bytes)
+        pub.verify(sig_bytes, msg)
+        return ArkValue(True, "Boolean")
+    except Exception:
+        return ArkValue(False, "Boolean")
+
 def sys_mem_alloc(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "Integer": raise Exception("sys.mem.alloc expects size")
     size = args[0].val
@@ -384,6 +615,16 @@ def sys_list_append(args: List[ArkValue]):
     lst.val.append(item)
     return lst # Return the list (linear threading)
 
+def sys_list_pop(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.list.pop expects list, index")
+    lst = args[0]
+    idx = args[1].val
+    if lst.type != "List": raise Exception("sys.list.pop expects List")
+    if idx < 0 or idx >= len(lst.val): return ArkValue(None, "Unit")
+
+    val = lst.val.pop(idx)
+    return val # Return popped value
+
 def sys_len(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.len expects 1 argument")
     val = args[0]
@@ -422,6 +663,57 @@ def sys_html_escape(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
+
+def intrinsic_math_pow(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("pow expects base, exp")
+    return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
+
+def intrinsic_math_sqrt(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sqrt expects 1 arg")
+    return ArkValue(int(math.sqrt(args[0].val)), "Integer")
+
+def intrinsic_math_sin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sin expects 1 arg")
+    angle = args[0].val / 10000.0
+    res = math.sin(angle)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_cos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("cos expects 1 arg")
+    angle = args[0].val / 10000.0
+    res = math.cos(angle)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_tan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("tan expects 1 arg")
+    angle = args[0].val / 10000.0
+    res = math.tan(angle)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_asin(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("asin expects 1 arg")
+    val = args[0].val / 10000.0
+    res = math.asin(val)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_acos(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("acos expects 1 arg")
+    val = args[0].val / 10000.0
+    res = math.acos(val)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_atan(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("atan expects 1 arg")
+    val = args[0].val / 10000.0
+    res = math.atan(val)
+    return ArkValue(int(res * 10000.0), "Integer")
+
+def intrinsic_math_atan2(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("atan2 expects 2 args")
+    y = args[0].val / 10000.0
+    x = args[1].val / 10000.0
+    res = math.atan2(y, x)
+    return ArkValue(int(res * 10000.0), "Integer")
 
 # --- New Intrinsics for LSP ---
 
@@ -673,11 +965,15 @@ INTRINSICS = {
     # System
     "sys.crypto.hash": sys_crypto_hash,
     "sys.crypto.merkle_root": sys_crypto_merkle_root,
+    "sys.crypto.ed25519.gen": sys_crypto_ed25519_gen,
+    "sys.crypto.ed25519.sign": sys_crypto_ed25519_sign,
+    "sys.crypto.ed25519.verify": sys_crypto_ed25519_verify,
     "sys.exec": sys_exec,
     "sys.fs.read": sys_fs_read,
     "sys.fs.write": sys_fs_write,
     "sys.len": sys_len,
     "sys.list.append": sys_list_append,
+    "sys.list.pop": sys_list_pop,
     "sys.list.get": sys_list_get,
     "sys.mem.alloc": sys_mem_alloc,
     "sys.mem.inspect": sys_mem_inspect,
@@ -685,12 +981,24 @@ INTRINSICS = {
     "sys.mem.write": sys_mem_write,
     "sys.net.http.request": sys_net_http_request,
     "sys.net.http.serve": sys_net_http_serve,
+    "sys.net.socket.bind": sys_net_socket_bind,
+    "sys.net.socket.accept": sys_net_socket_accept,
+    "sys.net.socket.connect": sys_net_socket_connect,
+    "sys.net.socket.send": sys_net_socket_send,
+    "sys.net.socket.recv": sys_net_socket_recv,
+    "sys.net.socket.close": sys_net_socket_close,
+    "sys.net.socket.set_timeout": sys_net_socket_set_timeout,
+    "sys.thread.spawn": sys_thread_spawn,
     "sys.struct.get": sys_struct_get,
     "sys.struct.set": sys_struct_set,
     "sys.str.get": sys_list_get,
     "sys.struct.get": sys_struct_get,
     "sys.struct.has": sys_struct_has,
     "sys.struct.set": sys_struct_set,
+    "sys.chain.height": sys_chain_height,
+    "sys.chain.get_balance": sys_chain_get_balance,
+    "sys.chain.submit_tx": sys_chain_submit_tx,
+    "sys.chain.verify_tx": sys_chain_verify_tx,
     "sys.time.now": sys_time_now,
     "sys.time.sleep": sys_time_sleep,
 
@@ -723,15 +1031,6 @@ INTRINSICS = {
     "intrinsic_list_append": sys_list_append,
     "intrinsic_list_get": sys_list_get,
     "intrinsic_lt": lambda args: eval_binop("lt", args[0], args[1]),
-    "intrinsic_math_pow": intrinsic_math_pow,
-    "intrinsic_math_sqrt": intrinsic_math_sqrt,
-    "intrinsic_math_sin": intrinsic_math_sin,
-    "intrinsic_math_cos": intrinsic_math_cos,
-    "intrinsic_math_tan": intrinsic_math_tan,
-    "intrinsic_math_asin": intrinsic_math_asin,
-    "intrinsic_math_acos": intrinsic_math_acos,
-    "intrinsic_math_atan": intrinsic_math_atan,
-    "intrinsic_math_atan2": intrinsic_math_atan2,
     "intrinsic_merkle_root": sys_crypto_merkle_root,
     "intrinsic_or": sys_or,
     "intrinsic_time_now": sys_time_now,
@@ -1060,6 +1359,8 @@ def eval_block(nodes, scope):
 def is_truthy(val):
     if val.type == "Boolean": return val.val
     if val.type == "Integer": return val.val != 0
+    if val.type == "String": return len(val.val) > 0
+    if val.type == "List": return True
     return False
 
 def eval_binop(op, left, right):
@@ -1108,6 +1409,8 @@ def run_file(path):
     # No, ArkValue(list_obj, "List")
     # list_obj is Python list of ArkValues
     scope.set("sys_args", ArkValue(args_vals, "List"))
+    scope.set("true", ArkValue(True, "Boolean"))
+    scope.set("false", ArkValue(False, "Boolean"))
     
     # Inject sys_args
     sys_args_list = []

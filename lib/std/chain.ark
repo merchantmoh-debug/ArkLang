@@ -1,0 +1,24 @@
+// Standard Library: Chain
+
+func chain_height() {
+    return sys.chain.height()
+}
+
+func chain_get_balance(addr) {
+    return sys.chain.get_balance(addr)
+}
+
+func chain_submit_tx(payload) {
+    return sys.chain.submit_tx(payload)
+}
+
+func chain_verify_tx(tx_id) {
+    return sys.chain.verify_tx(tx_id)
+}
+
+chain := {
+    height: chain_height,
+    get_balance: chain_get_balance,
+    submit_tx: chain_submit_tx,
+    verify_tx: chain_verify_tx
+}
