@@ -1,0 +1,276 @@
+// lib/std/audio.ark
+
+func _write_u16_le(buf, idx, val) {
+    b0 := val % 256
+    b1 := (val / 256) % 256
+
+    buf := sys.mem.write(buf, idx, b0)
+    buf := sys.mem.write(buf, idx + 1, b1)
+    return buf
+}
+
+func _write_u32_le(buf, idx, val) {
+    b0 := val % 256
+    b1 := (val / 256) % 256
+    b2 := (val / 65536) % 256
+    b3 := (val / 16777216) % 256
+
+    buf := sys.mem.write(buf, idx, b0)
+    buf := sys.mem.write(buf, idx + 1, b1)
+    buf := sys.mem.write(buf, idx + 2, b2)
+    buf := sys.mem.write(buf, idx + 3, b3)
+    return buf
+}
+
+func _read_u16_le(buf, idx) {
+    let (b0, buf) := sys.mem.read(buf, idx)
+    let (b1, buf) := sys.mem.read(buf, idx + 1)
+
+    val := b0 + (b1 * 256)
+    return [val, buf]
+}
+
+func _read_u32_le(buf, idx) {
+    let (b0, buf) := sys.mem.read(buf, idx)
+    let (b1, buf) := sys.mem.read(buf, idx + 1)
+    let (b2, buf) := sys.mem.read(buf, idx + 2)
+    let (b3, buf) := sys.mem.read(buf, idx + 3)
+
+    val := b0 + (b1 * 256) + (b2 * 65536) + (b3 * 16777216)
+    return [val, buf]
+}
+
+func _buf_to_str(buf, start, len) {
+    s := ""
+    i := 0
+    while i < len {
+        let (c, buf) := sys.mem.read(buf, start + i)
+        if c == 0 {
+            i := len
+        } else {
+            s := s + sys.str.from_code(c)
+        }
+        i := i + 1
+    }
+    return [s, buf]
+}
+
+// --- Wav ---
+
+func _wav_write(path, buffer, sample_rate, channels) {
+    let (data_len, buffer) := sys.len(buffer)
+    file_size := 36 + data_len
+
+    hdr := sys.mem.alloc(44)
+
+    // RIFF
+    hdr := sys.mem.write(hdr, 0, 82)
+    hdr := sys.mem.write(hdr, 1, 73)
+    hdr := sys.mem.write(hdr, 2, 70)
+    hdr := sys.mem.write(hdr, 3, 70)
+
+    // File Size
+    hdr := _write_u32_le(hdr, 4, file_size)
+
+    // WAVE
+    hdr := sys.mem.write(hdr, 8, 87)
+    hdr := sys.mem.write(hdr, 9, 65)
+    hdr := sys.mem.write(hdr, 10, 86)
+    hdr := sys.mem.write(hdr, 11, 69)
+
+    // fmt
+    hdr := sys.mem.write(hdr, 12, 102)
+    hdr := sys.mem.write(hdr, 13, 109)
+    hdr := sys.mem.write(hdr, 14, 116)
+    hdr := sys.mem.write(hdr, 15, 32)
+
+    // Chunk Size (16)
+    hdr := _write_u32_le(hdr, 16, 16)
+
+    // Format (1 PCM)
+    hdr := _write_u16_le(hdr, 20, 1)
+
+    // Channels
+    hdr := _write_u16_le(hdr, 22, channels)
+
+    // Sample Rate
+    hdr := _write_u32_le(hdr, 24, sample_rate)
+
+    // Byte Rate
+    bits_per_sample := 16
+    byte_rate := sample_rate * channels * (bits_per_sample / 8)
+    hdr := _write_u32_le(hdr, 28, byte_rate)
+
+    // Block Align
+    block_align := channels * (bits_per_sample / 8)
+    hdr := _write_u16_le(hdr, 32, block_align)
+
+    // Bits Per Sample
+    hdr := _write_u16_le(hdr, 34, bits_per_sample)
+
+    // data
+    hdr := sys.mem.write(hdr, 36, 100)
+    hdr := sys.mem.write(hdr, 37, 97)
+    hdr := sys.mem.write(hdr, 38, 116)
+    hdr := sys.mem.write(hdr, 39, 97)
+
+    // Data Size
+    hdr := _write_u32_le(hdr, 40, data_len)
+
+    // Allocate Full Buffer
+    full_buf := sys.mem.alloc(44 + data_len)
+
+    // Copy Header
+    i := 0
+    while i < 44 {
+        let (b, hdr) := sys.mem.read(hdr, i)
+        full_buf := sys.mem.write(full_buf, i, b)
+        i := i + 1
+    }
+
+    // Copy Data
+    j := 0
+    while j < data_len {
+        let (b, buffer) := sys.mem.read(buffer, j)
+        full_buf := sys.mem.write(full_buf, 44 + j, b)
+        j := j + 1
+    }
+
+    sys.fs.write_buffer(path, full_buf)
+}
+
+func _wav_read(path) {
+    buf := sys.fs.read_buffer(path)
+    let (len, buf) := sys.len(buf)
+    if len < 44 { return [] }
+
+    // Parse Header
+    let (sr, buf) := _read_u32_le(buf, 24)
+    let (ch, buf) := _read_u16_le(buf, 22)
+
+    return [buf, sr, ch]
+}
+
+Wav := {
+    write: _wav_write,
+    read: _wav_read
+}
+
+// --- Synth ---
+
+func _synth_sine(freq, duration_ms, sample_rate, volume) {
+    num_samples := (sample_rate * duration_ms) / 1000
+    buf_size := num_samples * 2
+    buf := sys.mem.alloc(buf_size)
+
+    pi_scaled := math.pi_scaled(10000)
+
+    // 2 * PI * freq / sample_rate
+    phase_step := (2 * pi_scaled * freq) / sample_rate
+    phase := 0
+
+    i := 0
+    while i < num_samples {
+        // scale_in = 10000 (from pi_scaled)
+        sample := math.sin_scaled(phase, 10000, volume)
+
+        if sample < 0 {
+            sample := 65536 + sample
+        }
+
+        buf := _write_u16_le(buf, i * 2, sample)
+        phase := phase + phase_step
+        i := i + 1
+    }
+
+    return buf
+}
+
+func _synth_square(freq, duration_ms, sample_rate, volume) {
+    num_samples := (sample_rate * duration_ms) / 1000
+    buf_size := num_samples * 2
+    buf := sys.mem.alloc(buf_size)
+
+    period := sample_rate / freq
+    half_period := period / 2
+
+    i := 0
+    while i < num_samples {
+        val := 0
+        if (i % period) < half_period {
+            val := volume
+        } else {
+            val := 0 - volume
+        }
+
+            if val < 0 { val := 65536 + val }
+            buf := _write_u16_le(buf, i * 2, val)
+            i := i + 1
+    }
+    return buf
+}
+
+func _synth_sawtooth(freq, duration_ms, sample_rate, volume) {
+    num_samples := (sample_rate * duration_ms) / 1000
+    buf_size := num_samples * 2
+    buf := sys.mem.alloc(buf_size)
+
+    period := sample_rate / freq
+
+    i := 0
+    while i < num_samples {
+        pos := i % period
+        // val = (pos * 2 * volume) / period - volume
+        val := (pos * 2 * volume) / period - volume
+
+            if val < 0 { val := 65536 + val }
+            buf := _write_u16_le(buf, i * 2, val)
+            i := i + 1
+    }
+    return buf
+}
+
+Synth := {
+    sine: _synth_sine,
+    square: _synth_square,
+    sawtooth: _synth_sawtooth
+}
+
+// --- Mp3 ---
+
+func _mp3_read_metadata(path) {
+    buf := sys.fs.read_buffer(path)
+    let (len, buf) := sys.len(buf)
+
+    if len < 128 { return { title: "", artist: "", album: "" } }
+
+    offset := len - 128
+
+    // Check TAG
+    let (t, buf) := sys.mem.read(buf, offset)
+    let (a, buf) := sys.mem.read(buf, offset + 1)
+    let (g, buf) := sys.mem.read(buf, offset + 2)
+
+    // T=84, A=65, G=71
+    if intrinsic_not(t == 84) { return { title: "NoTag", artist: "", album: "" } }
+    if intrinsic_not(a == 65) { return { title: "NoTag", artist: "", album: "" } }
+    if intrinsic_not(g == 71) { return { title: "NoTag", artist: "", album: "" } }
+
+    // Title: offset+3, 30 chars
+    let (title, buf) := _buf_to_str(buf, offset + 3, 30)
+
+    // Artist: offset+33, 30 chars
+    let (artist, buf) := _buf_to_str(buf, offset + 33, 30)
+
+    // Album: offset+63, 30 chars
+    let (album, buf) := _buf_to_str(buf, offset + 63, 30)
+
+    // Year: offset+93, 4 chars
+    let (year, buf) := _buf_to_str(buf, offset + 93, 4)
+
+    return { title: title, artist: artist, album: album, year: year }
+}
+
+Mp3 := {
+    read_metadata: _mp3_read_metadata
+}

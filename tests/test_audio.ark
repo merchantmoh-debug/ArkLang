@@ -1,0 +1,74 @@
+// tests/test_audio.ark
+
+func assert(cond, msg) {
+    if intrinsic_not(cond) {
+        print("FAIL: ", msg)
+        // Force error by division by zero or similar
+        x := 1 / 0
+    } else {
+        print("PASS: ", msg)
+    }
+}
+
+// 1. Test Synth
+print("Testing Synth...")
+duration_ms := 1000
+sample_rate := 44100
+freq := 440
+volume := 10000
+
+print("Generating sine wave...")
+buf := Synth.sine(freq, duration_ms, sample_rate, volume)
+
+let (len, buf) := sys.len(buf)
+expected_len := (sample_rate * duration_ms / 1000) * 2
+assert(len == expected_len, "Buffer length mismatch")
+
+// 2. Test WAV Write
+print("Testing WAV Write...")
+Wav.write("test_tone.wav", buf, sample_rate, 1)
+
+// 3. Test WAV Read
+print("Testing WAV Read...")
+let (read_buf, sr, ch) := Wav.read("test_tone.wav")
+
+assert(sr == sample_rate, "Sample rate mismatch")
+assert(ch == 1, "Channels mismatch")
+let (read_len, read_buf) := sys.len(read_buf)
+// Header 44 bytes + data
+assert(read_len == expected_len + 44, "Read buffer length mismatch")
+
+// 4. Test MP3 Metadata (Mock)
+print("Testing MP3 Metadata...")
+// Create a buffer with 128 bytes + extra
+mp3_len := 200
+mp3_buf := sys.mem.alloc(mp3_len)
+
+// Fill "TAG" at -128
+offset := mp3_len - 128
+mp3_buf := sys.mem.write(mp3_buf, offset, 84) // T
+mp3_buf := sys.mem.write(mp3_buf, offset+1, 65) // A
+mp3_buf := sys.mem.write(mp3_buf, offset+2, 71) // G
+
+// Title "TestSong"
+mp3_buf := sys.mem.write(mp3_buf, offset+3, 84) // T
+mp3_buf := sys.mem.write(mp3_buf, offset+4, 101) // e
+mp3_buf := sys.mem.write(mp3_buf, offset+5, 115) // s
+mp3_buf := sys.mem.write(mp3_buf, offset+6, 116) // t
+mp3_buf := sys.mem.write(mp3_buf, offset+7, 83) // S
+mp3_buf := sys.mem.write(mp3_buf, offset+8, 111) // o
+mp3_buf := sys.mem.write(mp3_buf, offset+9, 110) // n
+mp3_buf := sys.mem.write(mp3_buf, offset+10, 103) // g
+
+sys.fs.write_buffer("test.mp3", mp3_buf)
+
+meta := Mp3.read_metadata("test.mp3")
+print("Meta: ", meta)
+// "TestSong" + nulls? No, my implementation stops at null or continues?
+// _buf_to_str stops at 0.
+// sys.mem.alloc zero-initializes.
+// So it should be "TestSong".
+
+assert(meta.title == "TestSong", "MP3 Title mismatch")
+
+print("All tests passed.")

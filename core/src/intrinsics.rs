@@ -62,10 +62,19 @@ impl IntrinsicRegistry {
             "intrinsic_math_atan2" | "math.atan2" => Some(intrinsic_math_atan2),
             "intrinsic_io_cls" | "io.cls" => Some(intrinsic_io_cls),
             "intrinsic_list_set" | "sys.list.set" => Some(intrinsic_list_set),
+<<<<<<< HEAD
             "intrinsic_chain_height" | "sys.chain.height" => Some(intrinsic_chain_height),
             "intrinsic_chain_get_balance" | "sys.chain.get_balance" => Some(intrinsic_chain_get_balance),
             "intrinsic_chain_submit_tx" | "sys.chain.submit_tx" => Some(intrinsic_chain_submit_tx),
             "intrinsic_chain_verify_tx" | "sys.chain.verify_tx" => Some(intrinsic_chain_verify_tx),
+=======
+            "sys.fs.write_buffer" => Some(intrinsic_fs_write_buffer),
+            "sys.fs.read_buffer" => Some(intrinsic_fs_read_buffer),
+            "math.sin_scaled" => Some(intrinsic_math_sin_scaled),
+            "math.cos_scaled" => Some(intrinsic_math_cos_scaled),
+            "math.pi_scaled" => Some(intrinsic_math_pi_scaled),
+            "sys.str.from_code" => Some(intrinsic_str_from_code),
+>>>>>>> pr-69
             _ => None,
         }
     }
@@ -258,6 +267,7 @@ impl IntrinsicRegistry {
             Value::NativeFunction(intrinsic_list_set),
         );
         scope.set(
+<<<<<<< HEAD
             "sys.chain.height".to_string(),
             Value::NativeFunction(intrinsic_chain_height),
         );
@@ -272,9 +282,39 @@ impl IntrinsicRegistry {
         scope.set(
             "sys.chain.verify_tx".to_string(),
             Value::NativeFunction(intrinsic_chain_verify_tx),
+=======
+            "sys.fs.write_buffer".to_string(),
+            Value::NativeFunction(intrinsic_fs_write_buffer),
         );
-    }
-}
+        scope.set(
+            "sys.fs.read_buffer".to_string(),
+            Value::NativeFunction(intrinsic_fs_read_buffer),
+        );
+        scope.set(
+            "math.sin_scaled".to_string(),
+            Value::NativeFunction(intrinsic_math_sin_scaled),
+        );
+        scope.set(
+            "math.cos_scaled".to_string(),
+            Value::NativeFunction(intrinsic_math_cos_scaled),
+        scope.set(
+            "sys.fs.write".to_string(),
+            Value::NativeFunction(intrinsic_fs_write),
+        );
+        scope.set(
+            "sys.net.http.request".to_string(),
+            Value::NativeFunction(intrinsic_http_request),
+        );
+        // Audio Intrinsics (PR-69)
+        scope.set(
+            "sys.audio.play_wav".to_string(),
+            Value::NativeFunction(intrinsic_audio_play_wav),
+        );
+        scope.set(
+            "sys.audio.synth_tone".to_string(),
+            Value::NativeFunction(intrinsic_audio_synth_tone),
+        );
+
 
 pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
@@ -1268,6 +1308,7 @@ pub fn intrinsic_io_cls(_args: Vec<Value>) -> Result<Value, RuntimeError> {
     Ok(Value::Unit)
 }
 
+<<<<<<< HEAD
 pub fn intrinsic_chain_height(_args: Vec<Value>) -> Result<Value, RuntimeError> {
     Ok(Value::Integer(10000))
 }
@@ -1308,6 +1349,102 @@ pub fn intrinsic_chain_verify_tx(args: Vec<Value>) -> Result<Value, RuntimeError
             "String".to_string(),
             args[0].clone(),
         )),
+=======
+pub fn intrinsic_fs_write_buffer(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let path_str = match &args[0] {
+        Value::String(s) => s,
+        _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+    };
+
+    match &args[1] {
+        Value::Buffer(buf) => {
+            #[cfg(target_arch = "wasm32")]
+            {
+                println!("[Ark:VFS] Write Buffer to '{}': [Size: {}]", path_str, buf.len());
+                Ok(Value::Unit)
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                if std::path::Path::new(path_str).exists() {
+                    println!(
+                        "[Ark:NTS] WARNING: Overwriting existing file '{}' without explicit lock (LAT).",
+                        path_str
+                    );
+                }
+                println!("[Ark:FS] Writing buffer to {}", path_str);
+                fs::write(path_str, buf).map_err(|_| RuntimeError::NotExecutable)?;
+                Ok(Value::Unit)
+            }
+        },
+        _ => Err(RuntimeError::TypeMismatch("Buffer".to_string(), args[1].clone())),
+    }
+}
+
+pub fn intrinsic_fs_read_buffer(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let path_str = match &args[0] {
+        Value::String(s) => s,
+        _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+    };
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        println!("[Ark:VFS] Read Buffer from '{}': [Empty]", path_str);
+        Ok(Value::Buffer(vec![]))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        println!("[Ark:FS] Reading buffer from {}", path_str);
+        let content = fs::read(path_str).map_err(|_| RuntimeError::NotExecutable)?;
+        Ok(Value::Buffer(content))
+    }
+}
+
+pub fn intrinsic_math_sin_scaled(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 { return Err(RuntimeError::NotExecutable); }
+    let angle = match &args[0] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())) };
+    let scale_in = match &args[1] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[1].clone())) };
+    let scale_out = match &args[2] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[2].clone())) };
+
+    if scale_in == 0.0 { return Err(RuntimeError::InvalidOperation("Scale In is 0".to_string())); }
+
+    let res = (angle / scale_in).sin() * scale_out;
+    Ok(Value::Integer(res.round() as i64))
+}
+
+pub fn intrinsic_math_cos_scaled(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 { return Err(RuntimeError::NotExecutable); }
+    let angle = match &args[0] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())) };
+    let scale_in = match &args[1] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[1].clone())) };
+    let scale_out = match &args[2] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[2].clone())) };
+
+    if scale_in == 0.0 { return Err(RuntimeError::InvalidOperation("Scale In is 0".to_string())); }
+
+    let res = (angle / scale_in).cos() * scale_out;
+    Ok(Value::Integer(res.round() as i64))
+}
+
+pub fn intrinsic_math_pi_scaled(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 { return Err(RuntimeError::NotExecutable); }
+    let scale = match &args[0] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())) };
+
+    let res = std::f64::consts::PI * scale;
+    Ok(Value::Integer(res.round() as i64))
+}
+
+pub fn intrinsic_str_from_code(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 { return Err(RuntimeError::NotExecutable); }
+    let code = match &args[0] { Value::Integer(i) => *i as u32, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())) };
+    if let Some(c) = std::char::from_u32(code) {
+        Ok(Value::String(c.to_string()))
+    } else {
+        Err(RuntimeError::InvalidOperation("Invalid Char Code".to_string()))
+>>>>>>> pr-69
     }
 }
 
