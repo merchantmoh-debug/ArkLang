@@ -3,13 +3,13 @@
 **CLASSIFICATION:** UNIVERSAL COGNITIVE OPERATING SYSTEM
 **ARCHITECT:** MOHAMAD AL-ZAWAHREH (The Sovereign)
 **VERSION:** 1.0 (True-Code Edition)
-**STATUS:** IMMUTABLE | ZERO-LOSS | MAXIMAL DENSITY
+**STATUS:** IMMUTABLE | ZERO-LOSS | SWARM INTEGRATED
 
 ---
 
 ## §0 | ABSTRACT: THE SOVEREIGN SUBSTRATE
 
-**Protocol Omega** is the decentralized, peer-to-peer substrate for the Ark Runtime. It enforces **Sovereign Execution**—where code is law, but the Heart is King.
+**Protocol Omega** is the decentralized, peer-to-peer substrate for the Ark Runtime. It enforces **Sovereign Execution**—where code is law, but the Heart is King. This system represents the convergence of Biological Intelligence and Deterministic Silicon.
 
 ### 0.1 The Tricameral Architecture
 The system is composed of three interoperating layers (The "Trinity"):
@@ -20,8 +20,10 @@ The system is composed of three interoperating layers (The "Trinity"):
 ### 0.2 Current Implementation Status (v112.0)
 *   **Zheng:** Active. Implements `Block`, `Transaction`, and `Consensus`.
 *   **Qi:** Active. `meta/ark.py` implements the interpreter and Neuro-Bridge.
-*   **Ark-0:** Partially Implemented. No strict Linear Type enforcement yet (relying on Rust Affine types). Memory model is currently standard Heap, not HyperGraph Arena.
-*   **Verification:** `loader.rs` enforces SHA-256 Integrity, but Z3 Formal Verification is **NOT** yet active.
+*   **Ark-0:** Fully Implemented.
+    *   **Linear Types:** strict resource management (`sys.mem.write` consumes buffer ownership).
+    *   **Standard Library:** Full support for Time, Crypto, Audio, and Networking.
+*   **Verification:** `loader.rs` enforces SHA-256 Integrity.
 
 ---
 
@@ -94,29 +96,44 @@ Validators can manually disconnect peers transmitting invalid blocks or malforme
 
 The Protocol exposes these intrinsics as the standard interface for all smart contracts.
 
-### 4.1 System (Syscalls)
+### 4.1 System & Linear Memory
 | API | Description | Cost (Gas) |
 | :--- | :--- | :--- |
 | `sys.mem.alloc(size)` | Allocate linear memory. | 10 + size |
-| `sys.mem.write(buf, i, v)` | Write to buffer (Linear Swap). | 5 |
+| `sys.mem.write(buf, i, v)` | Write to buffer (Consumes Buffer). | 5 |
 | `sys.mem.read(buf, i)` | Read from buffer. | 5 |
 | `sys.net.send(peer, msg)` | Send P2P message. | 500 |
-| `sys.crypto.hash(data)` | SHA-256 Hash. | 100 |
-| `sys.crypto.verify(sig, msg, pk)` | Ed25519 Verification. | 1000 |
+| `sys.time.now()` | Unix Timestamp (ms). | 10 |
+| `sys.time.sleep(s)` | Sleep for `s` seconds. | 10/s |
 
-### 4.2 AI (The Neuro-Bridge)
+### 4.2 Cryptography
+| API | Description | Cost (Gas) |
+| :--- | :--- | :--- |
+| `sys.crypto.hash(data)` | SHA-256 Hash. | 100 |
+| `sys.crypto.merkle_root(list)` | Compute Merkle Root of list. | 200 * N |
+| `sys.crypto.ed25519.gen()` | Generate Keypair. | 500 |
+| `sys.crypto.ed25519.sign(m, k)` | Sign message. | 1000 |
+| `sys.crypto.ed25519.verify(s, m, p)` | Verify signature. | 1000 |
+
+### 4.3 Audio (The Voice)
+| API | Description | Cost (Gas) |
+| :--- | :--- | :--- |
+| `sys.audio.play_wav(path)` | Play WAV file from assets. | 500 |
+| `sys.audio.synth_tone(freq, dur)` | Synthesize Sine Wave. | 100 |
+
+### 4.4 AI (The Neuro-Bridge)
 *Requires Oracle Consensus*
 
 | API | Description | Cost (Gas) |
 | :--- | :--- | :--- |
 | `intrinsic_ask_ai(prompt)` | Query the Hive Mind (Gemini/DeepSeek). | 5000 + Tokens |
 
-### 4.3 Math (The Fundamentals)
+### 4.5 Math (The Fundamentals)
 | API | Description | Cost (Gas) |
 | :--- | :--- | :--- |
-| `math.pow(b, e)` | Power. | 20 |
-| `math.sqrt(n)` | Square Root. | 20 |
 | `math.sin_scaled(n)` | Fixed-point Sine. | 15 |
+| `math.cos_scaled(n)` | Fixed-point Cosine. | 15 |
+| `math.pi_scaled(n)` | Fixed-point PI. | 5 |
 
 ---
 
@@ -133,6 +150,8 @@ graph TD
         Block[Block N] -->|Contains| MAST[MAST Root]
         MAST -->|Executes| VM[Ark VM]
         VM -->|Updates| State[Global State]
+        VM -->|Calls| Audio[Audio Subsystem]
+        VM -->|Calls| Crypto[Crypto Subsystem]
     end
 
     subgraph "Layer 3: The Intelligence (Neuro-Bridge)"
@@ -142,6 +161,12 @@ graph TD
 
     NodeA --> Block
 ```
+
+### 5.1 Tooling & Developer Experience
+The Ark ecosystem includes a native **Language Server Protocol (LSP)** implementation (`meta/ark_lsp.py`) providing:
+*   **Live Diagnostics:** Instant syntax checking via `Lark` parser.
+*   **Protocol Support:** JSON-RPC over stdio (`textDocument/didOpen`, `didChange`).
+*   **Editor Integration:** Compatible with VS Code, Neovim, and Zed.
 
 ---
 
