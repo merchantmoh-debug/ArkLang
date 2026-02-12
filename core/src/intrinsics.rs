@@ -264,7 +264,6 @@ impl IntrinsicRegistry {
             Value::NativeFunction(intrinsic_list_set),
         );
         scope.set(
-        scope.set(
             "sys.chain.height".to_string(),
             Value::NativeFunction(intrinsic_chain_height),
         );
@@ -300,6 +299,7 @@ impl IntrinsicRegistry {
             "sys.fs.write".to_string(),
             Value::NativeFunction(intrinsic_fs_write),
         );
+        /*
         scope.set(
             "sys.net.http.request".to_string(),
             Value::NativeFunction(intrinsic_http_request),
@@ -313,8 +313,10 @@ impl IntrinsicRegistry {
             "sys.audio.synth_tone".to_string(),
             Value::NativeFunction(intrinsic_audio_synth_tone),
         );
+        */
     }
 }
+
 
 pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
@@ -1586,4 +1588,3 @@ mod tests {
         }
     }
     }
-}

@@ -3,15 +3,90 @@ use crate::intrinsics;
 use crate::runtime::{RuntimeError, Scope, Value};
 use std::rc::Rc;
 
+// --- GraphArena Implementation ---
+
+#[derive(Debug)]
+pub struct GraphArena {
+    pub nodes: Vec<Option<GraphNode>>,
+    pub free_list: Vec<usize>,
+}
+
+impl GraphArena {
+    pub fn new() -> Self {
+        Self {
+            nodes: Vec::new(),
+            free_list: Vec::new(),
+        }
+    }
+
+    pub fn alloc(&mut self, data: GraphData) -> usize {
+        if let Some(idx) = self.free_list.pop() {
+            self.nodes[idx] = Some(GraphNode {
+                data,
+                ref_count: 1,
+            });
+            idx
+        } else {
+            let idx = self.nodes.len();
+            self.nodes.push(Some(GraphNode {
+                data,
+                ref_count: 1,
+            }));
+            idx
+        }
+    }
+
+    pub fn get(&self, idx: usize) -> Option<&GraphNode> {
+        self.nodes.get(idx).and_then(|opt| opt.as_ref())
+    }
+
+    pub fn get_mut(&mut self, idx: usize) -> Option<&mut GraphNode> {
+        self.nodes.get_mut(idx).and_then(|opt| opt.as_mut())
+    }
+
+    pub fn decref(&mut self, idx: usize) {
+        let should_free = if let Some(node) = self.get_mut(idx) {
+            node.ref_count = node.ref_count.saturating_sub(1);
+            node.ref_count == 0
+        } else {
+            false
+        };
+
+        if should_free {
+            self.nodes[idx] = None;
+            self.free_list.push(idx);
+        }
+    }
+
+    pub fn incref(&mut self, idx: usize) {
+        if let Some(node) = self.get_mut(idx) {
+             node.ref_count += 1;
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct GraphNode {
+    pub data: GraphData,
+    pub ref_count: usize,
+}
+
+#[derive(Debug)]
+pub enum GraphData {
+    Frame(CallFrame),
+}
+
+#[derive(Debug, Clone)]
 pub struct CallFrame {
     pub ip: usize,
     pub chunk: Rc<Chunk>,
 }
 
 pub struct VM<'a> {
+    pub heap: GraphArena,
     pub stack: Vec<Value>,
     pub scopes: Vec<Scope<'a>>, // Stack of scopes (Frames)
-    pub frames: Vec<CallFrame>,
+    pub frames: Vec<usize>,     // Stack of frame indices into heap
     pub ip: usize,
     pub chunk: Rc<Chunk>,
     pub security_level: u8,
@@ -29,6 +104,7 @@ impl<'a> VM<'a> {
         let mut global_scope = Scope::new();
         crate::intrinsics::IntrinsicRegistry::register_all(&mut global_scope);
         Ok(Self {
+            heap: GraphArena::new(),
             stack: Vec::new(),
             scopes: vec![global_scope],
             frames: Vec::new(),
@@ -47,9 +123,19 @@ impl<'a> VM<'a> {
                     // Logic matches OpCode::Ret
                     let result = self.stack.pop().unwrap_or(Value::Unit);
 
-                    if let Some(frame) = self.frames.pop() {
-                        self.chunk = frame.chunk;
-                        self.ip = frame.ip;
+                    if let Some(frame_idx) = self.frames.pop() {
+                        // Restore Context from Heap
+                        if let Some(node) = self.heap.get(frame_idx) {
+                            let GraphData::Frame(ref frame) = node.data;
+                            self.chunk = frame.chunk.clone();
+                            self.ip = frame.ip;
+                        } else {
+                            return Err(format!("Frame not found at index {}", frame_idx));
+                        }
+
+                        // Decrement ref count (and free if 0)
+                        self.heap.decref(frame_idx);
+
                         self.scopes.pop();
                         self.stack.push(result);
                         continue; // Continue loop in previous frame
@@ -124,6 +210,8 @@ impl<'a> VM<'a> {
                     let val = self.stack.pop().ok_or("Stack underflow")?;
                     #[cfg(not(test))]
                     println!("{:?}", val);
+                    #[cfg(test)]
+                    let _ = val;
                 }
                 OpCode::Destructure => {
                     let val = self.stack.pop().ok_or("Stack underflow")?;
@@ -222,11 +310,14 @@ impl<'a> VM<'a> {
                     let func_val = self.stack.pop().ok_or("Stack underflow during call")?;
                     match func_val {
                         Value::Function(chunk) => {
-                            // Push Frame
-                            self.frames.push(CallFrame {
+                            // Allocation on Heap (Zero-Copy Ref Count)
+                            let frame = CallFrame {
                                 ip: self.ip,
                                 chunk: self.chunk.clone(),
-                            });
+                            };
+                            let frame_idx = self.heap.alloc(GraphData::Frame(frame));
+                            self.frames.push(frame_idx);
+
                             // Switch Context
                             self.chunk = chunk;
                             self.ip = 0;
@@ -258,10 +349,19 @@ impl<'a> VM<'a> {
                 OpCode::Ret => {
                     let result = self.stack.pop().unwrap_or(Value::Unit);
 
-                    if let Some(frame) = self.frames.pop() {
-                        // Restore Context
-                        self.chunk = frame.chunk;
-                        self.ip = frame.ip;
+                    if let Some(frame_idx) = self.frames.pop() {
+                        // Restore Context from Heap
+                        if let Some(node) = self.heap.get(frame_idx) {
+                            let GraphData::Frame(ref frame) = node.data;
+                            self.chunk = frame.chunk.clone();
+                            self.ip = frame.ip;
+                        } else {
+                            return Err(format!("Frame not found at index {}", frame_idx));
+                        }
+
+                        // Decrement ref count (and free if 0)
+                        self.heap.decref(frame_idx);
+
                         // Pop Scope
                         self.scopes.pop();
                         // Push Result
@@ -334,5 +434,32 @@ mod tests {
         // Security level 1 should allow trusted hash (anything not "UNTRUSTED" in our mock)
         let vm = VM::new(chunk, "TRUSTED_HASH", 1);
         assert!(vm.is_ok());
+    }
+
+    #[test]
+    fn test_graph_arena_frame_allocation() {
+        let mut chunk = Chunk::new();
+        chunk.write(OpCode::Ret); // Just return unit
+        let vm_res = VM::new(chunk, "HASH", 0);
+        assert!(vm_res.is_ok());
+        let mut vm = vm_res.unwrap();
+
+        // Manually simulate a call frame allocation
+        let frame = CallFrame {
+            ip: 0,
+            chunk: Rc::new(Chunk::new()),
+        };
+        let idx = vm.heap.alloc(GraphData::Frame(frame));
+
+        // Check ref count
+        let node = vm.heap.get(idx).unwrap();
+        assert_eq!(node.ref_count, 1);
+
+        // Decref
+        vm.heap.decref(idx);
+
+        // Should be gone (or in free list/None)
+        let node = vm.heap.get(idx);
+        assert!(node.is_none());
     }
 }
