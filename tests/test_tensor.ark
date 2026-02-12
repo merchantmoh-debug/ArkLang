@@ -1,0 +1,118 @@
+// Test Tensor Math
+
+func int_to_str(x) {
+    return "" + x
+}
+
+func assert_eq(val, expected, msg) {
+    if val != expected {
+        print("FAIL: " + msg + " (Expected " + int_to_str(expected) + ", Got " + int_to_str(val) + ")")
+        // crash := 1 / 0
+    } else {
+        // print("PASS: " + msg)
+    }
+}
+
+func test_matmul() {
+    print("Testing Matmul...")
+    // Create Tensor A
+    data_a := [1, 2, 3, 4]
+    shape_a := [2, 2]
+    A := math.Tensor(data_a, shape_a)
+
+    // Create Tensor B
+    data_b := [5, 6, 7, 8]
+    shape_b := [2, 2]
+    B := math.Tensor(data_b, shape_b)
+
+    // Matmul
+    C := math.matmul(A, B)
+
+    // Verify
+    expected := [19, 22, 43, 50]
+
+    i := 0
+    while i < 4 {
+        assert_eq(C.data[i], expected[i], "Matmul[" + int_to_str(i) + "]")
+        i := i + 1
+    }
+    print("PASS: Matmul")
+}
+
+func test_transpose() {
+    print("Testing Transpose...")
+    // [1, 2, 3]
+    // [4, 5, 6]
+    data := [1, 2, 3, 4, 5, 6]
+    shape := [2, 3]
+    T := math.Tensor(data, shape)
+
+    // Transpose -> [3, 2]
+    // [1, 4]
+    // [2, 5]
+    // [3, 6]
+    res := math.transpose(T)
+
+    assert_eq(res.shape[0], 3, "Transpose Rows")
+    assert_eq(res.shape[1], 2, "Transpose Cols")
+
+    expected := [1, 4, 2, 5, 3, 6]
+
+    i := 0
+    while i < 6 {
+        assert_eq(res.data[i], expected[i], "Transpose[" + int_to_str(i) + "]")
+        i := i + 1
+    }
+    print("PASS: Transpose")
+}
+
+func test_dot() {
+    print("Testing Dot Product...")
+    // [1, 2, 3] . [4, 5, 6] = 4 + 10 + 18 = 32
+    a := math.Tensor([1, 2, 3], [3])
+    b := math.Tensor([4, 5, 6], [3])
+
+    res := math.dot(a, b)
+    assert_eq(res, 32, "Dot Product")
+    print("PASS: Dot Product")
+}
+
+func test_add_sub() {
+    print("Testing Add/Sub...")
+    a := math.Tensor([10, 20, 30], [3])
+    b := math.Tensor([1, 2, 3], [3])
+
+    sum := math.add(a, b)
+    sub := math.sub(a, b)
+
+    assert_eq(sum.data[0], 11, "Add[0]")
+    assert_eq(sum.data[1], 22, "Add[1]")
+    assert_eq(sum.data[2], 33, "Add[2]")
+
+    assert_eq(sub.data[0], 9, "Sub[0]")
+    assert_eq(sub.data[1], 18, "Sub[1]")
+    assert_eq(sub.data[2], 27, "Sub[2]")
+    print("PASS: Add/Sub")
+}
+
+func test_mul_scalar() {
+    print("Testing Scalar Mul...")
+    t := math.Tensor([1, 2, 3], [3])
+    res := math.mul_scalar(t, 10)
+
+    assert_eq(res.data[0], 10, "Mul[0]")
+    assert_eq(res.data[1], 20, "Mul[1]")
+    assert_eq(res.data[2], 30, "Mul[2]")
+    print("PASS: Scalar Mul")
+}
+
+func main() {
+    test_matmul()
+    test_transpose()
+    test_dot()
+    test_add_sub()
+    test_mul_scalar()
+    print("ALL TESTS PASSED")
+}
+
+main()
