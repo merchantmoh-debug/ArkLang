@@ -1,23 +1,139 @@
-print("🔮 SOVEREIGN SHELL ONLINE")
-print("========================")
+print("🔮 SOVEREIGN SHELL v2.0 (OMEGA-POINT)")
+print("=======================================")
+print("Type '!help' for commands.")
 
 running := true
+history := []
+
+func string_len(s) {
+    // Use core len() which returns Integer directly
+    return len(s)
+}
+
+func string_trim(s) {
+    l := string_len(s)
+    if l == 0 { return "" }
+    // Remove trailing newline if present (basic trim)
+    last_char := sys.list.get(s, l - 1)
+    if last_char[0] == "\n" {
+        new_s := ""
+        i := 0
+        while i < (l - 1) {
+            c := sys.list.get(s, i)
+            new_s := new_s + c[0]
+            i := i + 1
+        }
+        return new_s
+    }
+    return s
+}
+
+func starts_with(s, prefix) {
+    sl := string_len(s)
+    pl := string_len(prefix)
+    if pl > sl { return false }
+
+    i := 0
+    while i < pl {
+        c1 := sys.list.get(s, i)
+        c2 := sys.list.get(prefix, i)
+        if c1[0] != c2[0] { return false }
+        i := i + 1
+    }
+    return true
+}
+
+func split_first_space(s) {
+    l := string_len(s)
+    i := 0
+    found := -1
+    while i < l {
+        c := sys.list.get(s, i)
+        if c[0] == " " {
+            found := i
+            i := l + 1 // break
+        } else {
+            i := i + 1
+        }
+    }
+
+    if found == -1 {
+        return [s, ""]
+    }
+
+    // Construct parts
+    part1 := ""
+    j := 0
+    while j < found {
+        c := sys.list.get(s, j)
+        part1 := part1 + c[0]
+        j := j + 1
+    }
+
+    part2 := ""
+    k := found + 1
+    while k < l {
+        c := sys.list.get(s, k)
+        part2 := part2 + c[0]
+        k := k + 1
+    }
+
+    return [part1, part2]
+}
 
 while running {
     sys.io.write(">> ")
-    input := sys.io.read_line()
+    raw_input := sys.io.read_line()
 
-    // Check for EOF (empty string)
-    if input == "" {
+    if raw_input == "" {
         running := false
     }
 
     if running {
-        // Skip empty lines (just newline)
-        if input != "\n" {
-            prompt := "You are a shell assistant. Translate this user request into a system command or an Ark script. Request: " + input
-            response := intrinsic_ask_ai(prompt)
-            print("🤖 AI: " + response)
+        input := string_trim(raw_input)
+
+        if input != "" {
+            if starts_with(input, "!") {
+                // Command
+                parts := split_first_space(input)
+                cmd := parts[0]
+                arg := parts[1]
+
+                if cmd == "!exit" {
+                    running := false
+                } else if cmd == "!help" {
+                    print("Commands:")
+                    print("  !run <file>   : Run an Ark script")
+                    print("  !exec <cmd>   : Run a system command")
+                    print("  !clear        : Clear screen")
+                    print("  !exit         : Exit shell")
+                    print("  ? <prompt>    : Ask AI")
+                    print("  <code>        : Execute Ark code directly")
+                } else if cmd == "!clear" {
+                    sys.exec("clear")
+                } else if cmd == "!exec" {
+                    print(sys.exec(arg))
+                } else if cmd == "!run" {
+                    print("Running " + arg + "...")
+                    sys.vm.source(arg)
+                } else {
+                    print("Unknown command: " + cmd)
+                }
+
+            } else if starts_with(input, "?") {
+                // AI
+                parts := split_first_space(input)
+                prompt := parts[1]
+                print("🤖 Thinking...")
+                // In a real version, we'd append history
+                response := intrinsic_ask_ai(prompt)
+                print("🤖 " + response)
+
+            } else {
+                // Eval
+                sys.vm.eval(input)
+            }
         }
     }
 }
+print("Shell Terminated.")
