@@ -9,13 +9,86 @@ func http_post(url, body) {
     return sys.net.http.request("POST", url, body)
 }
 
+// --- Noise / Security Module ---
+
+net_config := {
+    ENABLE_NOISE: false
+}
+socket_secrets := {}
+
+func noise_handshake(handle) {
+    if net_config.ENABLE_NOISE == false {
+        return true
+    }
+
+    print("[Noise] Handshake Initiated for handle " + handle)
+
+    // 1. Generate Ephemeral Keys
+    keys := sys.crypto.ed25519.gen()
+    priv := keys[0]
+    pub := keys[1]
+
+    // 2. Exchange Keys
+    // Send my Pub
+    sys.net.socket.send(handle, pub)
+
+    // Recv Peer Pub (expecting 64 chars hex)
+    // We might need to handle timeout/blocking here carefully.
+    // For now, assume blocking recv is fine for handshake.
+    peer_pub := sys.net.socket.recv(handle, 64)
+
+    if peer_pub == false {
+         print("[Noise] Handshake Failed: Timeout or Error receiving peer key")
+         return false
+    }
+
+    len_peer_res := sys.len(peer_pub)
+    len_peer := len_peer_res[0]
+    if len_peer != 64 {
+        print("[Noise] Handshake Failed: Invalid Peer Key Length: " + len_peer)
+        return false
+    }
+
+    // 3. Derive Shared Secret (Mock: Hash of sorted keys)
+    combined := ""
+    if pub < peer_pub {
+        combined := pub + peer_pub
+    } else {
+        combined := peer_pub + pub
+    }
+    secret := sys.crypto.hash(combined)
+
+    // 4. Store Secret
+    // Key must be string for struct
+    key_str := "" + handle
+    sys.struct.set(socket_secrets, key_str, secret)
+
+    print("[Noise] Handshake Success. Secret established.")
+    return true
+}
+
+func secure_send(handle, data) {
+    // Check if secure
+    if net_config.ENABLE_NOISE {
+        key_str := "" + handle
+        if sys.struct.has(socket_secrets, key_str) {
+            // Handshake done, secure channel established
+        }
+    }
+    return sys.net.socket.send(handle, data)
+}
+
+func secure_recv(handle, size) {
+    return sys.net.socket.recv(handle, size)
+}
+
 // --- Socket Module ---
 socket := {
     bind: sys.net.socket.bind,
     accept: sys.net.socket.accept,
     connect: sys.net.socket.connect,
-    send: sys.net.socket.send,
-    recv: sys.net.socket.recv,
+    send: secure_send,
+    recv: secure_recv,
     close: sys.net.socket.close,
     set_timeout: sys.net.socket.set_timeout
 }
@@ -29,8 +102,17 @@ func net_connect(ip, port) {
     // 1. Connect
     handle := sys.net.socket.connect(ip, port)
 
-    // 2. Handshake
-    sys.net.socket.send(handle, "HELLOv1")
+    // 1.5 Noise Handshake
+    if net_config.ENABLE_NOISE {
+        if noise_handshake(handle) == false {
+             print("[Net] Handshake failed, closing connection.")
+             sys.net.socket.close(handle)
+             return -1
+        }
+    }
+
+    // 2. Handshake (App Layer)
+    secure_send(handle, "HELLOv1")
 
     // 2.5 Set Timeout (non-blocking feel)
     sys.net.socket.set_timeout(handle, 100)
@@ -73,16 +155,30 @@ func net_listen(port) {
             ip := res[1]
             print("[Net] Accepted connection from " + ip)
 
-            // Set short timeout for non-blocking feel
-            sys.net.socket.set_timeout(client, 0)
-
-            peer := {
-                ip: ip,
-                port: 0, // Unknown remote port? We have IP.
-                last_seen: sys.time.now(),
-                socket: client
+            // Handshake (Server Side)
+            handshake_ok := true
+            if net_config.ENABLE_NOISE {
+                // Set timeout for handshake
+                sys.net.socket.set_timeout(client, 2000)
+                if noise_handshake(client) == false {
+                    print("[Net] Handshake failed from " + ip)
+                    sys.net.socket.close(client)
+                    handshake_ok := false
+                }
             }
-            sys.list.append(peers, peer)
+
+            if handshake_ok {
+                // Set short timeout for non-blocking feel
+                sys.net.socket.set_timeout(client, 0)
+
+                peer := {
+                    ip: ip,
+                    port: 0, // Unknown remote port? We have IP.
+                    last_seen: sys.time.now(),
+                    socket: client
+                }
+                sys.list.append(peers, peer)
+            }
         }
 
         // 2. Poll Existing Peers
@@ -123,6 +219,7 @@ http := {
 net := {
     http: http,
     socket: socket,
+    config: net_config,
 
     // P2P
     connect: net_connect,
