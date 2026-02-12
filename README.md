@@ -1,4 +1,4 @@
-# Ark: The Programming Language
+# Ark: The Programming Language (Omega-Point v112.0)
 
 > **"Python is a Toy. Rust is a Handcuff. Ark is a Weapon."**
 
@@ -22,7 +22,7 @@ We didn't just build a language. We built a **Singularity**.
 
 ---
 
-## 🚀 The brag Sheet (Assets & Achievements)
+## 🚀 The Brag Sheet (Assets & Achievements)
 
 ### 1. 🐝 Built by a Massive Parallel Swarm
 **We compressed 2 weeks of engineering into 60 minutes.**
@@ -31,25 +31,19 @@ We didn't just build a language. We built a **Singularity**.
 - **Zero Conflicts.**
 *This isn't just code. It's a flex.*
 
-### 2. 🧠 Neuro-Symbolic Primitives (`@infer`)
+### 2. 🧠 Neuro-Symbolic Primitives (`intrinsic_ask_ai`)
 Stop importing `torch` and praying. AI is **native** in Ark.
 ```ark
-// Define the Brain
-neural vision_model {
-    source: "gemini-2.5-flash-lite"
-    context: 1M
-}
+// Define Intent
+prompt := "Write a Python script to calculate Fibonacci."
 
-// Execute Thought
-func analyze(img: Buffer) {
-    @infer(vision_model) {
-        input: img,
-        prompt: "Extract entropy vectors."
-    } -> result
-    
-    print(result)
-}
+// Execute Thought (Directly in Runtime)
+response := intrinsic_ask_ai(prompt)
+
+// Manifest Reality
+sys.fs.write("fib.py", response)
 ```
+*Powered by Gemini 2.0 Flash (Native Rust Integration).*
 
 ### 3. 🛡️ Linear Logic (The Zombie Killer)
 Garbage Collection is for the weak. Manual memory management is for the obsolete.
@@ -79,23 +73,39 @@ Then we ran the Compiler on the Rust VM.
 
 **Prerequisites:** Rust, Python 3.10+.
 
-### 1. The "Hello God-Mode" Flow
+### 1. The "Neuro-Bridge" Mode (Rapid Prototyping)
+Run Ark code directly using the Python interpreter. Ideal for testing logic and AI flows.
 ```bash
-# 1. Write the Law
-echo 'print("Reality is Programmable.")' > apps/law.ark
+# Set your API Key (Required for AI features)
+export GOOGLE_API_KEY="your-gemini-key"
 
-# 2. Transpile via Bootstrap
-python meta/compile.py apps/law.ark law.json
+# Enable Dangerous Execution (Required for sys.exec / file writes)
+export ALLOW_DANGEROUS_LOCAL_EXECUTION="true"
 
-# 3. Execute
-cargo run --bin ark_loader -- law.json
+# Run
+python3 meta/ark.py run apps/hello.ark
+```
+
+### 2. The "Silicon Heart" Mode (Production Compiler)
+Compile Ark to JSON MAST (Merkle-ized AST) and run on the high-performance Rust VM.
+```bash
+# 1. Transpile via Bootstrap
+python3 meta/compile.py apps/law.ark law.json
+
+# 2. Execute on Rust VM
+cd core
+cargo run --bin ark_loader -- ../law.json
 ```
 *> "Reality is Programmable."*
 
-### 2. Run the Self-Hosted Compiler
-```bash
-cargo run --bin ark_loader -- compiler.json input.ark output.json
-```
+---
+
+## 🔒 Security & Sovereignty
+
+Ark is designed for **Total Control**.
+- **Sandboxed by Default:** `sys.exec` and file writes are disabled unless explicitly allowed.
+- **Linear Memory Safety:** Buffer overruns are mathematically impossible in safe code.
+- **No Telemetry:** Your code, your machine, your rules.
 
 ---
 
