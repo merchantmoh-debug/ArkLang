@@ -103,7 +103,10 @@ def core_get(args: List[ArkValue]):
         if isinstance(collection, str):
             return ArkValue(collection[index], "String")
         elif isinstance(collection, list):
-            return ArkValue(collection[index], "Any") # Assuming list elements can be anything
+            val = collection[index]
+            if isinstance(val, ArkValue):
+                return val
+            return ArkValue(val, "Any")
     else:
         raise Exception("Index out of bounds")
     return ArkValue(None, "Unit") # Should not be reached
