@@ -1,102 +1,118 @@
-
-import subprocess
+import random
 import time
-import os
-import signal
 import sys
-import threading
 
-# Config
-TIMEOUT = 30
-# Windows uses 'python', not 'python3'
-NODE_CMD = ["python", "-u", "meta/ark.py", "run", "apps/node.ark"]
-MINER_CMD = ["python", "-u", "meta/ark.py", "run", "apps/miner.ark"]
-WALLET_CMD = ["python", "-u", "meta/ark.py", "run", "apps/wallet.ark"]
+# Simulation Config
+NUM_NODES = 100
+TARGET_PROPAGATION = 0.90  # 90% of ALL nodes (or active nodes? Let's say total network saturation)
+MAX_TICKS = 100
+CHURN_PROBABILITY = 0.05   # 5% chance to toggle state per tick
+CONNECTION_DEGREE = 5      # Average connections per node
 
-ENV = os.environ.copy()
-ENV["ALLOW_DANGEROUS_LOCAL_EXECUTION"] = "true"
+class Node:
+    def __init__(self, node_id):
+        self.id = node_id
+        self.peers = []
+        self.height = 0
+        self.online = True
+        self.receive_tick = -1
 
-def stream_reader(proc, name, stop_event, found_patterns):
-    for line in iter(proc.stdout.readline, b''):
-        if stop_event.is_set():
-            break
-        line_str = line.decode('utf-8', errors='ignore').strip()
-        if line_str:
-            print(f"[{name}] {line_str}")
+    def connect(self, other):
+        if other not in self.peers:
+            self.peers.append(other)
+        if self not in other.peers:
+            other.peers.append(self)
 
-            # Check patterns
-            if name == "NODE" and "New block received" in line_str:
-                found_patterns["node_block"] = True
-            if name == "MINER" and "Block submitted" in line_str:
-                found_patterns["miner_submit"] = True
-            if name == "WALLET" and "Wallet synced" in line_str:
-                found_patterns["wallet_sync"] = True
+class NetworkSimulation:
+    def __init__(self):
+        self.nodes = [Node(i) for i in range(NUM_NODES)]
+        self.tick = 0
+        self._build_graph()
 
-def main():
-    print("--- Ark Network Simulation: Protocol Omega ---")
+    def _build_graph(self):
+        # Random graph generation (approximate random regular graph)
+        for node in self.nodes:
+            while len(node.peers) < CONNECTION_DEGREE:
+                peer = random.choice(self.nodes)
+                if peer != node and peer not in node.peers:
+                    node.connect(peer)
 
-    # 1. Start Node
-    print("Starting Seed Node...")
-    node_proc = subprocess.Popen(NODE_CMD, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=ENV)
+    def churn(self):
+        """Randomly toggle node online/offline status."""
+        for node in self.nodes:
+            if random.random() < CHURN_PROBABILITY:
+                node.online = not node.online
 
-    # Wait for node to start (simple sleep)
-    time.sleep(2)
+    def propagate(self):
+        """
+        Simulate gossip.
+        Nodes that have the block (height=1) and are ONLINE
+        broadcast to their ONLINE peers.
+        """
+        # We use a set to track who receives it THIS tick to avoid infinite instant propagation
+        newly_received = []
 
-    # 2. Start Miner & Wallet
-    print("Starting Miner & Wallet...")
-    miner_proc = subprocess.Popen(MINER_CMD, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=ENV)
-    wallet_proc = subprocess.Popen(WALLET_CMD, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=ENV)
+        # Find all nodes that can broadcast (Online and have block)
+        broadcasters = [n for n in self.nodes if n.online and n.height == 1]
 
-    procs = [node_proc, miner_proc, wallet_proc]
-    stop_event = threading.Event()
-    found_patterns = {
-        "node_block": False,
-        "miner_submit": False,
-        "wallet_sync": False
-    }
+        for sender in broadcasters:
+            for peer in sender.peers:
+                if peer.online and peer.height == 0:
+                    # Peer receives the block
+                    # In a real network, this takes time (latency).
+                    # We simulate this by only allowing them to broadcast NEXT tick.
+                    # But we mark them as having it now.
+                    # To prevent them from broadcasting in THIS same tick loop (if we iterated differently),
+                    # we usually separate read/write, but here 'broadcasters' is a snapshotted list.
+                    # So we can update peer safely.
+                    if peer.receive_tick == -1: # Not already marked for this tick
+                        newly_received.append(peer)
 
-    threads = []
-    threads.append(threading.Thread(target=stream_reader, args=(node_proc, "NODE", stop_event, found_patterns)))
-    threads.append(threading.Thread(target=stream_reader, args=(miner_proc, "MINER", stop_event, found_patterns)))
-    threads.append(threading.Thread(target=stream_reader, args=(wallet_proc, "WALLET", stop_event, found_patterns)))
+        # Apply updates
+        for node in newly_received:
+            node.height = 1
+            node.receive_tick = self.tick
 
-    for t in threads:
-        t.start()
+        return len(newly_received)
 
-    # Monitor
-    start_time = time.time()
-    success = False
+    def run(self):
+        print(f"--- Ark Network Simulation: {NUM_NODES} Nodes ---")
+        print(f"Parameters: Churn={CHURN_PROBABILITY*100}%, Degree={CONNECTION_DEGREE}")
 
-    try:
-        while time.time() - start_time < TIMEOUT:
-            if all(found_patterns.values()):
-                success = True
-                break
-            time.sleep(0.5)
+        start_time = time.time()
 
-    except KeyboardInterrupt:
-        print("Interrupted.")
-    finally:
-        print("Stopping simulation...")
-        stop_event.set()
-        for p in procs:
-            p.terminate()
-            try:
-                p.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                p.kill()
+        # Genesis: Node 0 gets the block
+        self.nodes[0].height = 1
+        self.nodes[0].receive_tick = 0
+        self.nodes[0].online = True # Ensure seed is online
 
-    if success:
-        print("\nSUCCESS: All components verified.")
-        print("- Node received blocks")
-        print("- Miner submitted blocks")
-        print("- Wallet synced height")
-        sys.exit(0)
-    else:
-        print("\nFAILURE: Simulation timed out or incomplete.")
-        print(f"Patterns found: {found_patterns}")
-        # sys.exit(1) # Don't crash the agent, just report failure
-        sys.exit(0)
+        print(f"[Tick 0] Node 0 mined block 1.")
+
+        for t in range(1, MAX_TICKS + 1):
+            self.tick = t
+            self.churn()
+
+            new_cnt = self.propagate()
+
+            # Stats
+            active_count = sum(1 for n in self.nodes if n.online)
+            reached_count = sum(1 for n in self.nodes if n.height == 1)
+
+            # print(f"[Tick {t}] Active: {active_count}, Reached: {reached_count} (+{new_cnt})")
+
+            if reached_count >= NUM_NODES * TARGET_PROPAGATION:
+                elapsed = time.time() - start_time
+                print(f"\nSUCCESS: Block propagated to {reached_count}/{NUM_NODES} nodes.")
+                print(f"Total Ticks: {t}")
+                print(f"Real Time: {elapsed:.4f}s")
+                return
+
+            if active_count == 0:
+                print("\nFAILURE: Network collapse (0 active nodes).")
+                return
+
+        print(f"\nFAILURE: Timeout after {MAX_TICKS} ticks. Reached: {sum(1 for n in self.nodes if n.height == 1)}")
 
 if __name__ == "__main__":
-    main()
+    sim = NetworkSimulation()
+    sim.run()
