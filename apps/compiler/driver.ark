@@ -3,28 +3,67 @@
 
 func main() {
     // 1. Read Args
-    // sys_args is injected by loader. typ: List<String>
+    // sys_args is injected by meta/ark.py. typ: List<String>
     // sys_args[0] = binary path
-    // sys_args[1] = compiler.json
+    // sys_args[1] = command (e.g. "build")
     // sys_args[2] = input source path
-    // sys_args[3] = output json path
+    // sys_args[3] = output json path (optional)
     
     let (arg_count, list) := sys.len(sys_args)
-    if arg_count < 4 {
-        print("Usage: compiler.ark <input.ark> <output.json>")
+    if arg_count < 2 {
+        print("Usage: compiler.ark build <input.ark> [output.json]")
         return 0
     }
     
     // Debug Args
     print("Arg Count: " + int_to_str(arg_count))
     
-    // Get Input Path (For Read - Fresh Copy)
-    let (input_path, _) := sys.list.get(sys_args, 2)
-    let (output_path, _) := sys.list.get(sys_args, 3)
+    let (cmd, _) := sys.list.get(sys_args, 1)
+
+    input_path := ""
+    output_path := ""
+
+    is_valid := 0
+
+    if cmd == "build" {
+        if arg_count < 3 {
+             print("Usage: compiler.ark build <input.ark> [output.json]")
+             return 0
+        }
+
+        // Get Input
+        let (p, _) := sys.list.get(sys_args, 2)
+        input_path := p
+
+        // Get Output (Optional)
+        if arg_count > 3 {
+             let (p2, _) := sys.list.get(sys_args, 3)
+             output_path := p2
+        } else {
+             output_path := input_path + ".json"
+        }
+        is_valid := 1
+    }
+
+    if is_valid == 0 {
+        // Legacy fallback: compiler.ark <dummy> <input> <output>
+        if arg_count >= 4 {
+             let (p, _) := sys.list.get(sys_args, 2)
+             input_path := p
+             let (p2, _) := sys.list.get(sys_args, 3)
+             output_path := p2
+             is_valid := 1
+        }
+    }
+
+    if is_valid == 0 {
+         print("Unknown command or invalid arguments.")
+         print("Usage: compiler.ark build <input.ark> [output.json]")
+         return 0
+    }
     
     // Print using dedicated copy
-    let (input_path_print, _) := sys.list.get(sys_args, 2)
-    print("Compiling: " + input_path_print)
+    print("Compiling: " + input_path)
     
     // 2. Read Source (Using input_path)
     source := sys.fs.read(input_path)

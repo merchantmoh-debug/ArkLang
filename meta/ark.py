@@ -409,6 +409,29 @@ def sys_html_escape(args: List[ArkValue]):
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
 
+def sys_struct_get(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.struct.get expects struct, field")
+    obj = args[0]
+    field = args[1].val
+
+    if obj.type == "Instance":
+        if field in obj.val.fields:
+             val = obj.val.fields[field]
+             return ArkValue([val, obj], "List")
+        raise Exception(f"Field {field} not found in struct")
+    raise Exception(f"sys.struct.get expects Instance, got {obj.type}")
+
+def sys_struct_set(args: List[ArkValue]):
+    if len(args) != 3: raise Exception("sys.struct.set expects struct, field, value")
+    obj = args[0]
+    field = args[1].val
+    val = args[2]
+
+    if obj.type == "Instance":
+        obj.val.fields[field] = val
+        return obj
+    raise Exception(f"sys.struct.set expects Instance, got {obj.type}")
+
 INTRINSICS = {
     # Core
     "get": core_get,
@@ -429,6 +452,8 @@ INTRINSICS = {
     "sys.mem.read": sys_mem_read,
     "sys.mem.write": sys_mem_write,
     "sys.net.http.serve": sys_net_http_serve,
+    "sys.struct.get": sys_struct_get,
+    "sys.struct.set": sys_struct_set,
     "sys.str.get": sys_list_get,
     "sys.time.now": sys_time_now,
     "sys.time.sleep": sys_time_sleep,
@@ -535,12 +560,19 @@ def eval_node(node, scope):
             raise ReturnException(val)
 
         if node.data == "if_stmt":
-            cond = eval_node(node.children[0], scope)
-            if is_truthy(cond):
-                return eval_node(node.children[1], scope)
-            # Check for else block
-            elif len(node.children) > 2 and node.children[2]:
-                return eval_node(node.children[2], scope)
+            # Handle if - else if - else chain
+            num_children = len(node.children)
+            i = 0
+            while i + 1 < num_children:
+                cond = eval_node(node.children[i], scope)
+                if is_truthy(cond):
+                    return eval_node(node.children[i+1], scope)
+                i += 2
+
+            # Check for trailing else block
+            if i < num_children and node.children[i]:
+                return eval_node(node.children[i], scope)
+
             return ArkValue(None, "Unit")
 
         if node.data == "while_stmt":
@@ -765,10 +797,17 @@ def run_file(path):
     print(f"ark-prime: Running {path}")
     
     tree = parser.parse(code)
-    print(tree.pretty())
+    # print(tree.pretty())
     scope = Scope()
     scope.set("sys", ArkValue("sys", "Namespace"))
     
+    # Inject sys_args
+    sys_args_list = []
+    if len(sys.argv) > 2:
+        for arg in sys.argv[2:]:
+            sys_args_list.append(ArkValue(arg, "String"))
+    scope.set("sys_args", ArkValue(sys_args_list, "List"))
+
     # 3. Evaluate
     try:
         eval_node(tree, scope)

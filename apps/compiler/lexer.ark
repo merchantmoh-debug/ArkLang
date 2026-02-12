@@ -2,6 +2,10 @@
 // The Architect: Functional Lexer Implementation
 // Objective: Convert source string into a list of Tokens using Structs.
 
+// --- Global Constants ---
+true := 1
+false := 0
+
 // --- Constants ---
 // Token Types
 TOKEN_EOF := 0
