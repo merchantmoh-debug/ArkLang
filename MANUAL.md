@@ -1,14 +1,16 @@
 # The Ark-1 Programmer's Field Manual
 
-**Version:** 1.0 (Ouroboros Edition)
+**Version:** Omega-Point v112.0
 **Architect:** Mohamad Al-Zawahreh (Sovereign Systems)
-**Status:** PROTOTYPE / ACTIVE
+**Status:** ACTIVE / SOVEREIGN
 
 ---
 
 ## 🌌 Introduction
 
-**Ark** is a Neuro-Symbolic programming language designed for the Sovereign Individual. It offers a **Deterministic Core** (Rust) bridged to an **Infinite Mind** (AI).
+**Ark** is a Neuro-Symbolic programming language designed for the Sovereign Individual. It offers a **Dual-Runtime Architecture**:
+1.  **The Neuro-Bridge (Python):** Rapid prototyping, direct AI integration, and dynamic behavior.
+2.  **The Silicon Heart (Rust):** High-performance, memory-safe execution via the Ark Virtual Machine (AVM).
 
 ### The Philosophy
 1.  **Kinetic Syntax:** Code flows from Left to Right. Assignments are explicit actions (`:=`).
@@ -17,30 +19,49 @@
 
 ---
 
-## 🛠️ Installation
+## 🛠️ Installation & Setup
 
-Ark is currently distributed as a source-available prototype. You need **Python 3.10+** and **Rust (Cargo)**.
+Ark is distributed as a source-available sovereign stack.
 
 ### Prerequisites
-1.  **Rust**: [Install Rust](https://rustup.rs/)
-2.  **Python**: Ensure `python3` and `pip` are installed.
+1.  **Rust**: [Install Rust](https://rustup.rs/) (Required for the VM).
+2.  **Python 3.10+**: Required for the Bootstrap Compiler and Interpreter.
 3.  **Dependencies**:
     ```bash
     pip install lark
     ```
 
-### Cloning & Building (Assuming you forked the library otherwise clone directly from here)
+### Environment Variables
+To unlock the full power of Ark, you must configure your environment:
+
+| Variable | Description | Required For |
+| :--- | :--- | :--- |
+| `GOOGLE_API_KEY` | API Key for Gemini 2.0 Flash. | `intrinsic_ask_ai` |
+| `ALLOW_DANGEROUS_LOCAL_EXECUTION` | Set to `"true"` to enable `sys.exec` and file writes. | File I/O, Shell Commands |
+
+### Cloning & Building
 ```bash
 git clone https://github.com/your-repo/ark-0-zheng.git
 cd ark-0-zheng
 ```
 
-To verify your installation, run the "Hello World" example:
+---
+
+## ⚡ Execution Modes
+
+### 1. The Interpreter (Neuro-Bridge)
+Run `.ark` files directly. Best for development and AI workflows.
 ```bash
-# 1. Compile Ark Source to JSON MAST (Merkle-ized AST)
+python3 meta/ark.py run apps/hello.ark
+```
+
+### 2. The Compiler (Silicon Heart)
+Compile to JSON MAST (Merkle-ized AST) and execute on the Rust VM.
+```bash
+# 1. Compile
 python3 meta/compile.py apps/hello.ark hello.json
 
-# 2. Run the MAST using the Rust Loader
+# 2. Run
 cd core
 cargo run --bin ark_loader -- ../hello.json
 ```
@@ -100,55 +121,32 @@ while count > 0 {
 
 ---
 
-## 📦 Ownership & Semantics
+## 📦 Ownership & Linear Semantics
 
-Ark uses **Pass-by-Value** (Copy) semantics in the VM.
+Ark uses **Pass-by-Value** (Copy) semantics in the VM for most types, but **Linear Semantics** for Buffers and system resources.
 
-### Assigning & Copying
-When you assign a variable or pass it to a function, a **Copy** is made.
+### Buffers (Linear Types)
+Buffers are raw byte arrays. They must be handled linearly (consumed and returned) to ensure safety without Garbage Collection.
+
+```ark
+// Alloc
+buf := sys.mem.alloc(1024)
+
+// Write (Consumes 'buf', returns new 'buf')
+buf := sys.mem.write(buf, 0, 255)
+
+// Read (Consumes 'buf', returns [value, buf])
+res := sys.mem.read(buf, 0)
+val := res[0]
+buf := res[1] // Re-assign buffer to keep using it
+```
+
+### Structs & Lists
+Structs and Lists are currently **Copy-on-Write** or **Clone-on-Pass** in the VM.
 ```ark
 s := { x: 10 }
 s2 := s
-// 's2' is a clone of 's'. Modifying 's2' does NOT affect 's'.
-```
-
-### Field Access
-Reading a field (`p.x`) loads a copy of the object and extracts the field. The original object remains valid.
-```ark
-p := { x: 10, y: 20 }
-val := p.x
-// 'p' is still valid.
-```
-
-### Modifying Fields
-To update a field, use assignment to the field path.
-```ark
-p := { x: 10, y: 20 }
-p.x := 99
-print(p)   // { x: 99, y: 20 }
-```
-
----
-
-## 🏗️ Data Structures
-
-### Lists
-Lists are dynamic arrays.
-```ark
-l := [1, 2, 3]
-l2 := [4, 5]
-```
-
-**Note:** List indexing (`l[0]`) is currently mapped to `sys.list.get` which returns `[value, list]`. This is a legacy artifact of linear typing experiments.
-*Recommendation: Use destructuring or built-in iterators when available.*
-
-### Structs
-Structs are key-value maps (HashMaps).
-```ark
-user := {
-    name: "Neo",
-    id: 101
-}
+// 's2' is a clone. Modifying 's2' does NOT affect 's'.
 ```
 
 ---
@@ -173,15 +171,38 @@ res := add(10, 20)
 
 Ark provides powerful built-in functions.
 
+### Core
 | Function | Description |
 | :--- | :--- |
 | `print(...)` | Prints values to stdout. |
 | `sys.len(seq)` | Returns `[length, seq]`. |
+
+### System (Requires Security Flags)
+| Function | Description |
+| :--- | :--- |
 | `sys.exec(cmd)` | Executes a shell command (Security Warning!). |
 | `sys.fs.write(path, data)` | Writes string to file. |
 | `sys.fs.read(path)` | Reads string from file. |
-| `sys.list.append(list, item)` | Appends item, returns new list. |
+
+### AI & Neuro-Symbolic
+| Function | Description |
+| :--- | :--- |
 | `intrinsic_ask_ai(prompt)` | Queries Gemini AI (requires `GOOGLE_API_KEY`). |
+
+### Math & Crypto
+| Function | Description |
+| :--- | :--- |
+| `math.pow(base, exp)` | Power function. |
+| `math.sqrt(n)` | Square root. |
+| `sys.crypto.hash(str)` | SHA-256 Hash. |
+| `sys.crypto.merkle_root(list)` | Computes Merkle Root of a list of strings. |
+
+### Memory (Linear)
+| Function | Description |
+| :--- | :--- |
+| `sys.mem.alloc(size)` | Allocates a byte buffer. |
+| `sys.mem.write(buf, idx, val)` | Writes byte to buffer (Linear). |
+| `sys.mem.read(buf, idx)` | Reads byte from buffer (Linear). |
 
 ---
 
@@ -225,6 +246,11 @@ func double(n) {
 
 result := double(10)
 print(result)
+
+// 5. AI Integration
+prompt := "What is the meaning of life?"
+// answer := intrinsic_ask_ai(prompt) // Uncomment if API Key is set
+// print(answer)
 ```
 
 ---
