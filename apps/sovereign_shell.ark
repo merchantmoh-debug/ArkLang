@@ -1,0 +1,23 @@
+print("🔮 SOVEREIGN SHELL ONLINE")
+print("========================")
+
+running := true
+
+while running {
+    sys.io.write(">> ")
+    input := sys.io.read_line()
+
+    // Check for EOF (empty string)
+    if input == "" {
+        running := false
+    }
+
+    if running {
+        // Skip empty lines (just newline)
+        if input != "\n" {
+            prompt := "You are a shell assistant. Translate this user request into a system command or an Ark script. Request: " + input
+            response := intrinsic_ask_ai(prompt)
+            print("🤖 AI: " + response)
+        }
+    }
+}
