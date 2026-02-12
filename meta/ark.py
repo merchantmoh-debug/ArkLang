@@ -4,6 +4,7 @@ import re
 import time
 import math
 import json
+import ast
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import http.server
@@ -25,6 +26,14 @@ from cryptography.hazmat.primitives import serialization
 EVENT_QUEUE = queue.Queue()
 ARK_AI_MODE = None
 
+# --- Global Parser ---
+# Load grammar from file
+grammar_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ark.lark")
+with open(grammar_path, "r") as f:
+    ARK_GRAMMAR = f.read()
+
+ARK_PARSER = Lark(ARK_GRAMMAR, start="start", parser="lalr")
+
 # --- Security ---
 
 class SandboxViolation(Exception):
@@ -38,13 +47,13 @@ def check_path_security(path):
         return
 
     # Path Traversal Check
-    # Resolving path to absolute path
-    abs_path = os.path.abspath(path)
+    # Resolving path to canonical path (resolving symlinks)
+    abs_path = os.path.realpath(path)
     cwd = os.getcwd()
 
     # Check if path is within CWD (or is CWD itself)
     if not abs_path.startswith(cwd):
-        raise SandboxViolation(f"Access outside working directory is forbidden: {path}")
+        raise SandboxViolation(f"Access outside working directory is forbidden: {path} (Resolved to: {abs_path})")
 
 def check_exec_security():
     if os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() != "true":
@@ -172,6 +181,36 @@ def sys_fs_read(args: List[ArkValue]):
         return ArkValue(content, "String")
     except Exception as e:
         raise Exception(f"Error reading file {path}: {e}")
+
+def sys_fs_read_buffer(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.fs.read_buffer expects a string path argument")
+    path = args[0].val
+    check_path_security(path)
+    try:
+        with open(path, "rb") as f:
+            content = f.read()
+        return ArkValue(bytearray(content), "Buffer")
+    except Exception as e:
+        raise Exception(f"Error reading file {path}: {e}")
+
+def sys_chain_height(args: List[ArkValue]):
+    return ArkValue(1, "Integer")
+
+def sys_chain_get_balance(args: List[ArkValue]):
+    return ArkValue(100, "Integer")
+
+def sys_chain_submit_tx(args: List[ArkValue]):
+    return ArkValue("tx_hash_mock", "String")
+
+def math_sin_scaled(args: List[ArkValue]):
+    return ArkValue(0, "Integer")
+
+def math_cos_scaled(args: List[ArkValue]):
+    return ArkValue(0, "Integer")
+
+def math_pi_scaled(args: List[ArkValue]):
+    return ArkValue(314159, "Integer")
 
 def detect_ai_mode():
     global ARK_AI_MODE
@@ -652,21 +691,12 @@ def sys_struct_get(args: List[ArkValue]):
     struct_val = args[0]
     key = args[1].val
 
-    # In Python interpreter, struct is ArkInstance (from struct_init) or Dict?
-    # parser_new returns { tokens: ..., pos: ... } which is compiled to dict/struct?
-    # Let's handle both for robustness.
-
     fields = {}
     if struct_val.type == "Instance":
         fields = struct_val.val.fields
-    elif isinstance(struct_val.val, dict): # If implementation uses raw dicts
+    elif isinstance(struct_val.val, dict):
          fields = struct_val.val
-    else:
-         # Try to see if it's a dict wrapped in something else?
-         # Assuming Instance or Dict.
-         pass
 
-    # If Instance, fields is dict.
     if struct_val.type == "Instance":
         val = struct_val.val.fields.get(key)
         if val is None: raise Exception(f"Field {key} not found in Instance")
@@ -987,6 +1017,29 @@ def sys_z3_verify(args: List[ArkValue]):
              raise Exception("sys.z3.verify constraints list must contain Strings")
         constraints.append(item.val)
 
+def sys_vm_eval(args: List[ArkValue], scope: Scope):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.vm.eval expects a code string")
+    code = args[0].val
+    try:
+        tree = ARK_PARSER.parse(code)
+        return eval_node(tree, scope)
+    except Exception as e:
+        raise Exception(f"Eval Error: {e}")
+
+def sys_vm_source(args: List[ArkValue], scope: Scope):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.vm.source expects a file path")
+    path = args[0].val
+    check_path_security(path)
+    try:
+        with open(path, "r") as f:
+            code = f.read()
+        tree = ARK_PARSER.parse(code)
+        return eval_node(tree, scope)
+    except Exception as e:
+        raise Exception(f"Source Error: {e}")
+
 def sys_chain_verify_tx(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
     # Mock verification
@@ -1093,6 +1146,8 @@ INTRINSICS = {
     "sys.event.poll": sys_event_poll,
     "sys.func.apply": sys_func_apply,
     "sys.z3.verify": sys_z3_verify,
+    "sys.vm.eval": sys_vm_eval,
+    "sys.vm.source": sys_vm_source,
 
     # Intrinsics (Aliased / Specific)
     "time_now": sys_time_now,
@@ -1128,304 +1183,279 @@ INTRINSICS = {
     "intrinsic_math_atan2": intrinsic_math_atan2,
 }
 
+LINEAR_SPECS = {
+    "sys.mem.write": [0],
+    "sys.mem.read": [0],
+    "sys.list.append": [0],
+    "sys.list.pop": [0],
+}
 
+INTRINSICS_WITH_SCOPE = {
+    "sys.vm.eval",
+    "sys.vm.source",
+}
 
 # --- Evaluator ---
+
+def handle_block(node, scope):
+    return eval_block(node.children, scope)
+
+def handle_flow_stmt(node, scope):
+    return eval_node(node.children[0], scope)
+
+def handle_function_def(node, scope):
+    name = node.children[0].value
+    params = []
+    body_idx = 1
+    if len(node.children) > 1:
+        child1 = node.children[1]
+        if child1 is None:
+            body_idx = 2
+        elif hasattr(child1, "data") and child1.data == "param_list":
+            params = [t.value for t in child1.children]
+            body_idx = 2
+    body = node.children[body_idx]
+    func = ArkValue(ArkFunction(name, params, body, scope), "Function")
+    scope.set(name, func)
+    return func
+
+def handle_class_def(node, scope):
+    name = node.children[0].value
+    methods = {}
+    for child in node.children[1:]:
+        if child.data == "function_def":
+            m_name = child.children[0].value
+            m_params = []
+            m_body_idx = 1
+            if len(child.children) > 1 and hasattr(child.children[1], "data") and child.children[1].data == "param_list":
+                m_params = [t.value for t in child.children[1].children]
+                m_body_idx = 2
+            m_body = child.children[m_body_idx]
+            methods[m_name] = ArkFunction(m_name, m_params, m_body, scope)
+    klass = ArkValue(ArkClass(name, methods), "Class")
+    scope.set(name, klass)
+    return klass
+
+def handle_struct_init(node, scope):
+    fields = {}
+    if node.children:
+        child = node.children[0]
+        if hasattr(child, "data") and child.data == "field_list":
+             for field in child.children:
+                name = field.children[0].value
+                val = eval_node(field.children[1], scope)
+                fields[name] = val
+    return ArkValue(ArkInstance(None, fields), "Instance")
+
+def handle_return_stmt(node, scope):
+    val = eval_node(node.children[0], scope) if node.children else ArkValue(None, "Unit")
+    raise ReturnException(val)
+
+def handle_if_stmt(node, scope):
+    num_children = len(node.children)
+    i = 0
+    while i + 1 < num_children:
+        cond = eval_node(node.children[i], scope)
+        if is_truthy(cond):
+            return eval_node(node.children[i+1], scope)
+        i += 2
+    if i < num_children and node.children[i]:
+        return eval_node(node.children[i], scope)
+    return ArkValue(None, "Unit")
+
+def handle_while_stmt(node, scope):
+    cond_node = node.children[0]
+    body_node = node.children[1]
+    while is_truthy(eval_node(cond_node, scope)):
+        eval_node(body_node, scope)
+    return ArkValue(None, "Unit")
+
+def handle_logical_or(node, scope):
+    left = eval_node(node.children[0], scope)
+    if is_truthy(left): return ArkValue(True, "Boolean")
+    right = eval_node(node.children[-1], scope)
+    return ArkValue(is_truthy(right), "Boolean")
+
+def handle_logical_and(node, scope):
+    left = eval_node(node.children[0], scope)
+    if not is_truthy(left): return ArkValue(False, "Boolean")
+    right = eval_node(node.children[-1], scope)
+    return ArkValue(is_truthy(right), "Boolean")
+
+def handle_var(node, scope):
+    name = node.children[0].value
+    val = scope.get(name)
+    if val: return val
+    if name in INTRINSICS:
+        return ArkValue(name, "Intrinsic")
+    raise Exception(f"Undefined variable: {name}")
+
+def handle_assign_var(node, scope):
+    name = node.children[0].value
+    val = eval_node(node.children[1], scope)
+    scope.set(name, val)
+    return val
+
+def handle_assign_destructure(node, scope):
+    expr_node = node.children[-1]
+    var_tokens = node.children[:-1]
+    val = eval_node(expr_node, scope)
+    if val.type != "List":
+        raise Exception(f"Destructuring expects List, got {val.type}")
+    items = val.val
+    if len(items) < len(var_tokens):
+        raise Exception(f"Not enough items to destructure: needed {len(var_tokens)}, got {len(items)}")
+    for i, token in enumerate(var_tokens):
+        scope.set(token.value, items[i])
+    return val
+
+def handle_assign_attr(node, scope):
+    obj = eval_node(node.children[0], scope)
+    attr = node.children[1].value
+    val = eval_node(node.children[2], scope)
+    if obj.type == "Instance":
+        obj.val.fields[attr] = val
+        return val
+    raise Exception(f"Cannot set attribute on {obj.type}")
+
+def handle_get_attr(node, scope):
+    obj = eval_node(node.children[0], scope)
+    attr = node.children[1].value
+    if obj.type == "Namespace":
+        new_path = f"{obj.val}.{attr}"
+        if new_path in INTRINSICS:
+            return ArkValue(new_path, "Intrinsic")
+        return ArkValue(new_path, "Namespace")
+    if obj.type == "Instance":
+        if attr in obj.val.fields:
+            return obj.val.fields[attr]
+        klass = obj.val.klass
+        if klass and attr in klass.methods:
+            method = klass.methods[attr]
+            return ArkValue((method, obj), "BoundMethod")
+    raise Exception(f"Attribute {attr} not found on {obj.type}")
+
+def handle_call_expr(node, scope):
+    func_val = eval_node(node.children[0], scope)
+    args = []
+    arg_list_node = None
+    if len(node.children) > 1:
+        arg_list_node = node.children[1]
+        if hasattr(arg_list_node, "children"):
+            args = [eval_node(c, scope) for c in arg_list_node.children]
+    
+    if func_val.type == "Intrinsic":
+        intrinsic_name = func_val.val
+        if intrinsic_name in LINEAR_SPECS:
+            consumed_indices = LINEAR_SPECS[intrinsic_name]
+            if arg_list_node and hasattr(arg_list_node, "children"):
+                for idx in consumed_indices:
+                    if idx < len(arg_list_node.children):
+                        arg_node = arg_list_node.children[idx]
+                        if hasattr(arg_node, "data") and arg_node.data == "var":
+                            var_name = arg_node.children[0].value
+                            scope.mark_moved(var_name)
+        
+        if intrinsic_name in INTRINSICS_WITH_SCOPE:
+            return INTRINSICS[func_val.val](args, scope)
+        return INTRINSICS[func_val.val](args)
+
+    if func_val.type == "Function":
+        return call_user_func(func_val.val, args)
+
+    if func_val.type == "Class":
+        return instantiate_class(func_val.val, args)
+
+    if func_val.type == "BoundMethod":
+        method, instance = func_val.val
+        return call_user_func(method, args, instance)
+
+    raise Exception(f"Not callable: {func_val.type}")
+
+def handle_number(node, scope):
+    return ArkValue(int(node.children[0].value), "Integer")
+
+def handle_string(node, scope):
+    try:
+        s = ast.literal_eval(node.children[0].value)
+    except:
+         s = node.children[0].value[1:-1]
+    return ArkValue(s, "String")
+
+def handle_binop(node, scope):
+    left = eval_node(node.children[0], scope)
+    right = eval_node(node.children[1], scope)
+    return eval_binop(node.data, left, right)
+
+def handle_list_cons(node, scope):
+    items = []
+    if node.children:
+        child = node.children[0]
+        if hasattr(child, "data") and child.data == "expr_list":
+            items = [eval_node(c, scope) for c in child.children]
+    return ArkValue(items, "List")
+
+def handle_get_item(node, scope):
+    collection = eval_node(node.children[0], scope)
+    index_val = eval_node(node.children[1], scope)
+    if index_val.type != "Integer":
+         raise Exception(f"Index must be Integer, got {index_val.type}")
+    idx = index_val.val
+    if collection.type == "List":
+        if idx < 0 or idx >= len(collection.val):
+            raise Exception(f"List index out of range: {idx}")
+        return collection.val[idx]
+    if collection.type == "String":
+        if idx < 0 or idx >= len(collection.val):
+             raise Exception(f"String index out of range: {idx}")
+        return ArkValue(collection.val[idx], "String")
+    if collection.type == "Buffer":
+        if idx < 0 or idx >= len(collection.val):
+             raise Exception(f"Buffer index out of range: {idx}")
+        return ArkValue(int(collection.val[idx]), "Integer")
+    raise Exception(f"Cannot index type {collection.type}")
+
+NODE_HANDLERS = {
+    "start": handle_block,
+    "block": handle_block,
+    "flow_stmt": handle_flow_stmt,
+    "function_def": handle_function_def,
+    "class_def": handle_class_def,
+    "struct_init": handle_struct_init,
+    "return_stmt": handle_return_stmt,
+    "if_stmt": handle_if_stmt,
+    "while_stmt": handle_while_stmt,
+    "logical_or": handle_logical_or,
+    "logical_and": handle_logical_and,
+    "var": handle_var,
+    "assign_var": handle_assign_var,
+    "assign_destructure": handle_assign_destructure,
+    "assign_attr": handle_assign_attr,
+    "get_attr": handle_get_attr,
+    "call_expr": handle_call_expr,
+    "number": handle_number,
+    "string": handle_string,
+    "add": handle_binop,
+    "sub": handle_binop,
+    "mul": handle_binop,
+    "div": handle_binop,
+    "mod": handle_binop,
+    "lt": handle_binop,
+    "gt": handle_binop,
+    "le": handle_binop,
+    "ge": handle_binop,
+    "eq": handle_binop,
+    "neq": handle_binop,
+    "list_cons": handle_list_cons,
+    "get_item": handle_get_item,
+}
 
 def eval_node(node, scope):
     if node is None: return ArkValue(None, "Unit")
     if hasattr(node, "data"):
-        # print(f"DEBUG: Visiting {node.data}")
-        if node.data == "start":
-            return eval_block(node.children, scope)
-        if node.data == "block":
-            return eval_block(node.children, scope)
-        if node.data == "flow_stmt":
-            return eval_node(node.children[0], scope)
-            
-        # --- Definitions ---
-        if node.data == "function_def":
-            name = node.children[0].value
-            # param_list is optional. If present, it's children[1], body is children[2]
-            # If missing, body is children[1]
-            params = []
-            body_idx = 1
-
-            # Check for optional param_list
-            if len(node.children) > 1:
-                child1 = node.children[1]
-                if child1 is None:
-                    # [ID, None, Block]
-                    body_idx = 2
-                elif hasattr(child1, "data") and child1.data == "param_list":
-                    # [ID, ParamList, Block]
-                    params = [t.value for t in child1.children]
-                    body_idx = 2
-            
-            body = node.children[body_idx]
-            func = ArkValue(ArkFunction(name, params, body, scope), "Function")
-            scope.set(name, func)
-            return func
-
-        if node.data == "class_def":
-            name = node.children[0].value
-            methods = {}
-            # Iterate children to find functions
-            for child in node.children[1:]:
-                if child.data == "function_def":
-                    # Evaluate definition temporarily to capture it, but we need to strip it from scope? 
-                    # Actually better to process manually to avoid polluting current scope
-                    m_name = child.children[0].value
-                    m_params = []
-                    m_body_idx = 1
-                    if len(child.children) > 1 and hasattr(child.children[1], "data") and child.children[1].data == "param_list":
-                        m_params = [t.value for t in child.children[1].children]
-                        m_body_idx = 2
-                    m_body = child.children[m_body_idx]
-                    methods[m_name] = ArkFunction(m_name, m_params, m_body, scope)
-            
-            klass = ArkValue(ArkClass(name, methods), "Class")
-            scope.set(name, klass)
-            return klass
-
-        if node.data == "struct_init":
-            fields = {}
-            if node.children:
-                # children[0] might be field_list or empty list if parsed differently?
-                # Grammar: "{" [field_list] "}" -> struct_init
-                # If field_list exists, it's children[0]
-                child = node.children[0]
-                if hasattr(child, "data") and child.data == "field_list":
-                     for field in child.children:
-                        # field is field_init [ID, expr]
-                        name = field.children[0].value
-                        val = eval_node(field.children[1], scope)
-                        fields[name] = val
-            instance = ArkInstance(None, fields)
-            return ArkValue(instance, "Instance")
-
-        # --- Control Flow ---
-        if node.data == "return_stmt":
-            val = eval_node(node.children[0], scope) if node.children else ArkValue(None, "Unit")
-            raise ReturnException(val)
-
-        if node.data == "if_stmt":
-            # Handle if - else if - else chain
-            num_children = len(node.children)
-            i = 0
-            while i + 1 < num_children:
-                cond = eval_node(node.children[i], scope)
-                if is_truthy(cond):
-                    return eval_node(node.children[i+1], scope)
-                i += 2
-
-            # Check for trailing else block
-            if i < num_children and node.children[i]:
-                return eval_node(node.children[i], scope)
-
-            return ArkValue(None, "Unit")
-
-        if node.data == "while_stmt":
-            cond_node = node.children[0]
-            body_node = node.children[1]
-            while is_truthy(eval_node(cond_node, scope)):
-                # eval_node on block returns last value, but we ignore it here
-                eval_node(body_node, scope)
-            return ArkValue(None, "Unit")
-
-        if node.data == "logical_or":
-            # logical_or children might include the OR token because it is a named terminal in grammar
-            # Use first and last child to be safe
-            left = eval_node(node.children[0], scope)
-            if is_truthy(left): return ArkValue(True, "Boolean")
-            right = eval_node(node.children[-1], scope)
-            return ArkValue(is_truthy(right), "Boolean")
-
-        if node.data == "logical_and":
-            left = eval_node(node.children[0], scope)
-            if not is_truthy(left): return ArkValue(False, "Boolean")
-            right = eval_node(node.children[-1], scope)
-            return ArkValue(is_truthy(right), "Boolean")
-
-        if node.data == "var":
-            name = node.children[0].value
-            val = scope.get(name)
-            if val: return val
-            
-            # Verify if Intrinsic
-            if name in INTRINSICS:
-                return ArkValue(name, "Intrinsic")
-            
-            # print(f"Error: Undefined var {name}")
-            raise Exception(f"Undefined variable: {name}")
-        
-        if node.data == "assign_var":
-            name = node.children[0].value
-            val = eval_node(node.children[1], scope)
-            scope.set(name, val)
-            return val
-
-        if node.data == "assign_destructure":
-            # children: ID, ID, ..., expr
-            expr_node = node.children[-1]
-            var_tokens = node.children[:-1]
-
-            val = eval_node(expr_node, scope)
-
-            # Expect List for destructuring
-            if val.type != "List":
-                raise Exception(f"Destructuring expects List, got {val.type}")
-
-            items = val.val
-            if len(items) < len(var_tokens):
-                raise Exception(f"Not enough items to destructure: needed {len(var_tokens)}, got {len(items)}")
-
-            for i, token in enumerate(var_tokens):
-                scope.set(token.value, items[i])
-
-            return val
-
-        if node.data == "assign_attr":
-            obj = eval_node(node.children[0], scope)
-            attr = node.children[1].value
-            val = eval_node(node.children[2], scope)
-            
-            if obj.type == "Instance":
-                obj.val.fields[attr] = val
-                return val
-            raise Exception(f"Cannot set attribute on {obj.type}")
-
-        if node.data == "get_attr":
-            obj = eval_node(node.children[0], scope)
-            attr = node.children[1].value
-            
-            if obj.type == "Namespace":
-                new_path = f"{obj.val}.{attr}"
-                # Check if it is a known intrinsic
-                if new_path in INTRINSICS:
-                    return ArkValue(new_path, "Intrinsic")
-                # Otherwise return extended namespace
-                return ArkValue(new_path, "Namespace")
-            
-            if obj.type == "Instance":
-                # 1. Check fields
-                if attr in obj.val.fields:
-                    return obj.val.fields[attr]
-                # 2. Check methods (and bind this)
-                klass = obj.val.klass
-                if klass and attr in klass.methods:
-                    method = klass.methods[attr]
-                    # Return a Bound Method? Or just the function?
-                    # We need to pass 'obj' as 'this' when called.
-                    # Let's verify if 'ArkValue' can store a BoundMethod tuple
-                    return ArkValue((method, obj), "BoundMethod")
-
-            raise Exception(f"Attribute {attr} not found on {obj.type}")
-
-        if node.data == "call_expr":
-            func_val = eval_node(node.children[0], scope)
-            
-            args = []
-            arg_list_node = None
-            if len(node.children) > 1:
-                arg_list_node = node.children[1]
-                if hasattr(arg_list_node, "children"):
-                    args = [eval_node(c, scope) for c in arg_list_node.children]
-            
-            # 1. Intrinsics (stored as string names or Python callables?) 
-            # Wait, Intrinsics are in a dict, but how do we get them?
-            # If the user typed `print(...)`, `eval_node` for `var` would define loopup.
-            # But Intrinsics are NOT in the scope by default in my implementation!
-            # My logic for `var` is `scope.get()`.
-            # I need `var` to ALSO check Intrinsics if not found in scope? 
-            # OR I need `call_expr` to check if `func_val` is a string name of intrinsic?
-            # EVALUATION ORDER:
-            # `print` is parsed as `var`. `eval_node` returns value.
-            # If `print` is not in scope, `eval_node` returns Unit + Error (currently).
-            
-            if func_val.type == "Intrinsic":
-                intrinsic_name = func_val.val
-                if intrinsic_name in LINEAR_SPECS:
-                    consumed_indices = LINEAR_SPECS[intrinsic_name]
-                    if arg_list_node and hasattr(arg_list_node, "children"):
-                        for idx in consumed_indices:
-                            if idx < len(arg_list_node.children):
-                                arg_node = arg_list_node.children[idx]
-                                if hasattr(arg_node, "data") and arg_node.data == "var":
-                                    var_name = arg_node.children[0].value
-                                    scope.mark_moved(var_name)
-
-                return INTRINSICS[func_val.val](args)
-                
-            if func_val.type == "Function":
-                return call_user_func(func_val.val, args)
-                
-            if func_val.type == "Class":
-                return instantiate_class(func_val.val, args)
-                
-            if func_val.type == "BoundMethod":
-                method, instance = func_val.val
-                return call_user_func(method, args, instance)
-
-            raise Exception(f"Not callable: {func_val.type}")
-
-    # --- Expressions ---
-    if node.data == "number":
-        return ArkValue(int(node.children[0].value), "Integer")
-    
-    if node.data == "string":
-        # Use literal_eval to handle escapes (\n, \t, etc)
-        import ast
-        try:
-            s = ast.literal_eval(node.children[0].value)
-        except:
-             # Fallback if literal_eval fails (e.g. strict syntax issues), though unlikely for valid strings
-             s = node.children[0].value[1:-1]
-        return ArkValue(s, "String")
-        
-    if node.data in ["add", "sub", "mul", "div", "mod", "lt", "gt", "le", "ge", "eq", "neq"]:
-        left = eval_node(node.children[0], scope)
-        right = eval_node(node.children[1], scope)
-        return eval_binop(node.data, left, right)
-
-    if node.data == "list_cons":
-        items = []
-        if node.children:
-            # Check if child is expr_list
-            child = node.children[0]
-            if hasattr(child, "data") and child.data == "expr_list":
-                items = [eval_node(c, scope) for c in child.children]
-        return ArkValue(items, "List")
-
-    if node.data == "get_item":
-        # children[0] is the collection (list/string/buffer)
-        # children[1] is the index (expression)
-
-        collection = eval_node(node.children[0], scope)
-        index_val = eval_node(node.children[1], scope)
-
-        if index_val.type != "Integer":
-             raise Exception(f"Index must be Integer, got {index_val.type}")
-        idx = index_val.val
-
-        if collection.type == "List":
-            if idx < 0 or idx >= len(collection.val):
-                raise Exception(f"List index out of range: {idx}")
-            return collection.val[idx]
-
-        if collection.type == "String":
-            if idx < 0 or idx >= len(collection.val):
-                 raise Exception(f"String index out of range: {idx}")
-            return ArkValue(collection.val[idx], "String")
-
-        if collection.type == "Buffer":
-            if idx < 0 or idx >= len(collection.val):
-                 raise Exception(f"Buffer index out of range: {idx}")
-            # Return integer byte value
-            return ArkValue(int(collection.val[idx]), "Integer")
-
-        raise Exception(f"Cannot index type {collection.type}")
-
+        handler = NODE_HANDLERS.get(node.data)
+        if handler:
+            return handler(node, scope)
     return ArkValue(None, "Unit")
 
 def call_user_func(func: ArkFunction, args: List[ArkValue], instance: Optional[ArkValue] = None):
@@ -1488,15 +1518,10 @@ def eval_binop(op, left, right):
 # --- Main ---
 
 def run_file(path):
-    import os
-    grammar_path = os.path.join(os.path.dirname(__file__), "ark.lark")
-    with open(grammar_path, "r") as f: grammar = f.read()
-    parser = Lark(grammar, start="start", parser="lalr") # LALR for Infix
-    
-    with open(path, "r") as f: code = f.read()
     # print(f"ark-prime: Running {path}", file=sys.stderr)
+    with open(path, "r") as f: code = f.read()
     
-    tree = parser.parse(code)
+    tree = ARK_PARSER.parse(code)
     # print(tree.pretty(), file=sys.stderr)
     scope = Scope()
     scope.set("sys", ArkValue("sys", "Namespace"))
