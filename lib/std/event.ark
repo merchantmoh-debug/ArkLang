@@ -1,0 +1,34 @@
+// lib/std/event.ark
+
+// Define unit value for comparison (since is_truthy doesn't support List/Unit checks nicely yet)
+// sys.time.sleep(0) returns Unit
+unit := sys.time.sleep(0)
+
+func _event_poll() {
+    return sys.event.poll()
+}
+
+func _event_loop() {
+    // infinite loop
+    while 1 {
+        evt := sys.event.poll()
+        if evt != unit {
+            // evt is [callback, args_list]
+            cb := evt[0]
+            args := evt[1]
+            sys.func.apply(cb, args)
+        } else {
+            sys.time.sleep(0)
+        }
+    }
+}
+
+func _event_sleep(s) {
+    sys.time.sleep(s)
+}
+
+event := {
+    poll: _event_poll,
+    loop: _event_loop,
+    sleep: _event_sleep
+}
