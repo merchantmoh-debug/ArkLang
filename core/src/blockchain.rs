@@ -155,9 +155,12 @@ impl Blockchain {
     }
 }
 
-pub fn verify_code_hash(_hash: &str) -> bool {
+pub fn verify_code_hash(hash: &str) -> bool {
     // TODO: Implement actual blockchain lookup.
     // For now, in "Security Level 1", we mock this.
     // Real implementation would query `Blockchain::get_contract(hash)`.
+    if hash == "UNTRUSTED" {
+        return false;
+    }
     true
 }
