@@ -1,0 +1,25 @@
+
+func server_loop() {
+    print("[Test] Server Thread Started")
+    net.listen(8081)
+}
+
+print("[Test] Spawning Server...")
+sys.thread.spawn(server_loop)
+
+print("[Test] Sleeping 1s...")
+sys.time.sleep(1)
+
+print("[Test] Connecting...")
+net.connect("127.0.0.1", 8081)
+
+print("[Test] Sleeping 1s to allow handshake...")
+sys.time.sleep(1)
+
+print("[Test] Broadcasting Ping...")
+net.broadcast("Ping from Main Thread")
+
+print("[Test] Sleeping 2s to allow receive...")
+sys.time.sleep(2)
+
+print("[Test] Done.")
