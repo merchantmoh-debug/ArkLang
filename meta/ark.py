@@ -3,6 +3,7 @@ import os
 import re
 import time
 import json
+import math
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import http.server
@@ -404,10 +405,73 @@ def sys_or(args: List[ArkValue]):
     right = is_truthy(args[1])
     return ArkValue(left or right, "Boolean")
 
+def intrinsic_not(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("intrinsic_not expects 1 arg")
+    val = args[0]
+    is_true = False
+    if val.type == "Boolean": is_true = val.val
+    elif val.type == "Integer": is_true = val.val != 0
+
+    return ArkValue(not is_true, "Boolean")
+
 def sys_html_escape(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.html_escape expects a string")
     return ArkValue(html.escape(args[0].val), "String")
+
+def sys_fs_write_buffer(args: List[ArkValue]):
+    if len(args) != 2 or args[0].type != "String" or args[1].type != "Buffer":
+        raise Exception("sys.fs.write_buffer expects string path and buffer")
+    path = args[0].val
+    check_path_security(path)
+    buf = args[1].val
+    try:
+        with open(path, "wb") as f:
+            f.write(buf)
+        return ArkValue(None, "Unit")
+    except Exception as e:
+        raise Exception(f"Error writing buffer to {path}: {e}")
+
+def sys_fs_read_buffer(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.fs.read_buffer expects string path")
+    path = args[0].val
+    check_path_security(path)
+    try:
+        with open(path, "rb") as f:
+            content = bytearray(f.read())
+        return ArkValue(content, "Buffer")
+    except Exception as e:
+        raise Exception(f"Error reading buffer from {path}: {e}")
+
+def math_sin_scaled(args: List[ArkValue]):
+    if len(args) != 3: raise Exception("math.sin_scaled expects 3 args")
+    angle = args[0].val
+    scale_in = args[1].val
+    scale_out = args[2].val
+    if scale_in == 0: raise Exception("Scale in is 0")
+    res = math.sin(angle / scale_in) * scale_out
+    return ArkValue(int(round(res)), "Integer")
+
+def math_cos_scaled(args: List[ArkValue]):
+    if len(args) != 3: raise Exception("math.cos_scaled expects 3 args")
+    angle = args[0].val
+    scale_in = args[1].val
+    scale_out = args[2].val
+    if scale_in == 0: raise Exception("Scale in is 0")
+    res = math.cos(angle / scale_in) * scale_out
+    return ArkValue(int(round(res)), "Integer")
+
+def math_pi_scaled(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("math.pi_scaled expects 1 arg")
+    scale = args[0].val
+    res = math.pi * scale
+    return ArkValue(int(round(res)), "Integer")
+
+def sys_str_from_code(args: List[ArkValue]):
+    if len(args) != 1: raise Exception("sys.str.from_code expects 1 arg")
+    code = args[0].val
+    return ArkValue(chr(code), "String")
 
 INTRINSICS = {
     # Core
@@ -420,7 +484,9 @@ INTRINSICS = {
     "sys.crypto.merkle_root": sys_crypto_merkle_root,
     "sys.exec": sys_exec,
     "sys.fs.read": sys_fs_read,
+    "sys.fs.read_buffer": sys_fs_read_buffer,
     "sys.fs.write": sys_fs_write,
+    "sys.fs.write_buffer": sys_fs_write_buffer,
     "sys.len": sys_len,
     "sys.list.append": sys_list_append,
     "sys.list.get": sys_list_get,
@@ -432,9 +498,14 @@ INTRINSICS = {
     "sys.str.get": sys_list_get,
     "sys.time.now": sys_time_now,
     "sys.time.sleep": sys_time_sleep,
+    "math.sin_scaled": math_sin_scaled,
+    "math.cos_scaled": math_cos_scaled,
+    "math.pi_scaled": math_pi_scaled,
+    "sys.str.from_code": sys_str_from_code,
 
     # Intrinsics (Aliased / Specific)
     "intrinsic_and": sys_and,
+    "intrinsic_not": intrinsic_not,
     "intrinsic_ask_ai": ask_ai,
     "intrinsic_buffer_alloc": sys_mem_alloc,
     "intrinsic_buffer_inspect": sys_mem_inspect,
@@ -684,7 +755,7 @@ def eval_node(node, scope):
         s = node.children[0].value[1:-1]
         return ArkValue(s, "String")
         
-    if node.data in ["add", "sub", "mul", "div", "lt", "gt", "le", "ge", "eq"]:
+    if node.data in ["add", "sub", "mul", "div", "mod", "lt", "gt", "le", "ge", "eq"]:
         left = eval_node(node.children[0], scope)
         right = eval_node(node.children[1], scope)
         return eval_binop(node.data, left, right)
@@ -746,6 +817,7 @@ def eval_binop(op, left, right):
     if op == "sub": return ArkValue(l - r, "Integer")
     if op == "mul": return ArkValue(l * r, "Integer")
     if op == "div": return ArkValue(l // r, "Integer")
+    if op == "mod": return ArkValue(l % r, "Integer")
     if op == "lt": return ArkValue(l < r, "Boolean")
     if op == "gt": return ArkValue(l > r, "Boolean")
     if op == "le": return ArkValue(l <= r, "Boolean")
@@ -768,6 +840,7 @@ def run_file(path):
     print(tree.pretty())
     scope = Scope()
     scope.set("sys", ArkValue("sys", "Namespace"))
+    scope.set("math", ArkValue("math", "Namespace"))
     
     # 3. Evaluate
     try:
