@@ -561,6 +561,53 @@ def sys_struct_has(args: List[ArkValue]):
     if obj.type != "Instance": return ArkValue(False, "Boolean")
     return ArkValue(field in obj.val.fields, "Boolean")
 
+def sys_chain_height(args: List[ArkValue]):
+    if len(args) != 0:
+        raise Exception("sys.chain.height expects 0 arguments")
+    return ArkValue(10000, "Integer")
+
+def sys_chain_get_balance(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.chain.get_balance expects a string address")
+    return ArkValue(5000, "Integer")
+
+def sys_chain_submit_tx(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.chain.submit_tx expects a string payload")
+    return ArkValue("0x123...", "String")
+
+def sys_chain_verify_tx(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.chain.verify_tx expects a string tx_id")
+    return ArkValue(True, "Boolean")
+
+def intrinsic_math_pow(args: List[ArkValue]):
+    return ArkValue(int(math.pow(args[0].val, args[1].val)), "Integer")
+
+def intrinsic_math_sqrt(args: List[ArkValue]):
+    return ArkValue(int(math.sqrt(args[0].val)), "Integer")
+
+def intrinsic_math_sin(args: List[ArkValue]):
+    return ArkValue(int(math.sin(args[0].val/10000.0)*10000), "Integer")
+
+def intrinsic_math_cos(args: List[ArkValue]):
+    return ArkValue(int(math.cos(args[0].val/10000.0)*10000), "Integer")
+
+def intrinsic_math_tan(args: List[ArkValue]):
+    return ArkValue(int(math.tan(args[0].val/10000.0)*10000), "Integer")
+
+def intrinsic_math_asin(args: List[ArkValue]):
+    return ArkValue(int(math.asin(args[0].val/10000.0)*10000), "Integer")
+
+def intrinsic_math_acos(args: List[ArkValue]):
+    return ArkValue(int(math.acos(args[0].val/10000.0)*10000), "Integer")
+
+def intrinsic_math_atan(args: List[ArkValue]):
+    return ArkValue(int(math.atan(args[0].val/10000.0)*10000), "Integer")
+
+def intrinsic_math_atan2(args: List[ArkValue]):
+    return ArkValue(int(math.atan2(args[0].val/10000.0, args[1].val/10000.0)*10000), "Integer")
+
 INTRINSICS = {
     # Core
     "get": core_get,
@@ -582,12 +629,20 @@ INTRINSICS = {
     "sys.mem.write": sys_mem_write,
     "sys.net.http.request": sys_net_http_request,
     "sys.net.http.serve": sys_net_http_serve,
+    "sys.net.socket.connect": sys_net_socket_connect,
+    "sys.net.socket.send": sys_net_socket_send,
+    "sys.net.socket.recv": sys_net_socket_recv,
+    "sys.net.socket.close": sys_net_socket_close,
     "sys.struct.get": sys_struct_get,
     "sys.struct.set": sys_struct_set,
     "sys.str.get": sys_list_get,
     "sys.struct.get": sys_struct_get,
     "sys.struct.has": sys_struct_has,
     "sys.struct.set": sys_struct_set,
+    "sys.chain.height": sys_chain_height,
+    "sys.chain.get_balance": sys_chain_get_balance,
+    "sys.chain.submit_tx": sys_chain_submit_tx,
+    "sys.chain.verify_tx": sys_chain_verify_tx,
     "sys.time.now": sys_time_now,
     "sys.time.sleep": sys_time_sleep,
 

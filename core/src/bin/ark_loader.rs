@@ -33,8 +33,8 @@ fn main() {
     let json_content = fs::read_to_string(filename).expect("Failed to read file");
 
     match load_ark_program(&json_content) {
-        Ok(node) => {
-            // println!("MAST Loaded Successfully.");
+        Ok(mast) => {
+            // println!("MAST Loaded Successfully. Hash: {}", mast.hash);
 
             let mut ark_args = Vec::new();
             for arg in &args[1..] {
@@ -43,26 +43,38 @@ fn main() {
 
             // 1. JIT Compile
             let compiler = Compiler::new();
-            let chunk = compiler.compile(&node);
+            let chunk = compiler.compile(&mast.content);
 
             // 2. Setup VM
-            let mut vm = VM::new(chunk);
+            // Allow setting security level via env var (Default: 0)
+            let security_level = env::var("ARK_SECURITY_LEVEL")
+                .unwrap_or("0".to_string())
+                .parse::<u8>()
+                .unwrap_or(0);
 
-            // 3. Inject Args into Global Scope (Scope 0)
-            if let Some(scope) = vm.scopes.get_mut(0) {
-                scope.set(
-                    "sys_args".to_string(),
-                    ark_0_zheng::runtime::Value::List(ark_args),
-                );
-            }
+            match VM::new(chunk, &mast.hash, security_level) {
+                Ok(mut vm) => {
+                     // 3. Inject Args into Global Scope (Scope 0)
+                    if let Some(scope) = vm.scopes.get_mut(0) {
+                        scope.set(
+                            "sys_args".to_string(),
+                            ark_0_zheng::runtime::Value::List(ark_args),
+                        );
+                    }
 
-            // 4. Run
-            match vm.run() {
-                Ok(_val) => {
-                    // println!("Execution Result: {:?}", val);
+                    // 4. Run
+                    match vm.run() {
+                        Ok(_val) => {
+                            // println!("Execution Result: {:?}", val);
+                        }
+                        Err(e) => {
+                            eprintln!("Runtime Error: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
                 Err(e) => {
-                    eprintln!("Runtime Error: {}", e);
+                    eprintln!("VM Initialization Error: {}", e);
                     std::process::exit(1);
                 }
             }

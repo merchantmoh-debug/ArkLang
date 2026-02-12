@@ -17,11 +17,13 @@
  */
 
 pub mod ast;
+pub mod blockchain;
 #[cfg(feature = "ipc")]
 pub mod bridge;
 pub mod bytecode;
 pub mod checker;
 pub mod compiler;
+pub mod crypto;
 #[cfg(test)]
 pub mod eval; // Deprecated by VM, enabled for tests
 pub mod ffi;
