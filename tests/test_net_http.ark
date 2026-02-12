@@ -1,0 +1,25 @@
+// tests/test_net_http.ark
+
+func handler(path) {
+    return "Hello from Ark!"
+}
+
+print("Starting server on 8085...")
+sys.net.http.serve(8085, handler)
+
+print("Waiting for server...")
+sys.time.sleep(1)
+
+print("Sending request...")
+res := sys.net.http.request("GET", "http://localhost:8085/")
+status := res[0]
+body := res[1]
+
+print("Status:", status)
+print("Body:", body)
+
+if status == 200 {
+    print("HTTP Test Passed")
+} else {
+    print("HTTP Test Failed")
+}

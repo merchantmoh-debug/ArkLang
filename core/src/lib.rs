@@ -17,6 +17,7 @@
  */
 
 pub mod ast;
+pub mod blockchain;
 #[cfg(feature = "ipc")]
 pub mod bridge;
 pub mod bytecode;

@@ -1,0 +1,26 @@
+// tests/test_net_socket.ark
+
+func handler(path) {
+    return "Socket Target"
+}
+
+print("Starting server on 8086...")
+sys.net.http.serve(8086, handler)
+
+print("Waiting for server...")
+sys.time.sleep(1)
+
+print("Connecting to socket...")
+handle := sys.net.socket.connect("localhost", 8086)
+print("Connected, handle:", handle)
+
+req := "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+sys.net.socket.send(handle, req)
+print("Sent request")
+
+res := sys.net.socket.recv(handle, 1024)
+print("Received bytes:", sys.len(res))
+print("Response partial:", res)
+
+sys.net.socket.close(handle)
+print("Closed")
