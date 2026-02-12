@@ -1,0 +1,46 @@
+// tests/test_net.ark
+
+func handler(path) {
+    print("Server received request for: " + path)
+    return "Hello from Ark Server"
+}
+
+print("Starting server on port 8085...")
+sys.net.http.serve(8085, handler)
+
+// Sleep 1 second
+sys.time.sleep(1)
+
+print("Making client request...")
+let (status, content) := sys.net.http.request("GET", "http://localhost:8085/test")
+
+print("Status: " + status)
+print("Content: " + content)
+
+if status == 200 {
+    print("Test Passed: Status is 200")
+} else {
+    print("Test Failed: Status is " + status)
+}
+
+if content == "Hello from Ark Server" {
+    print("Test Passed: Content matches")
+} else {
+    print("Test Failed: Content mismatch")
+}
+
+print("Testing Socket Connect to Localhost...")
+try_socket := sys.net.socket.connect("localhost", 8085)
+print("Socket connected!")
+
+req := "GET /socket HTTP/1.1\r\nHost: localhost\r\n\r\n"
+sys.net.socket.send(try_socket, req)
+print("Socket sent data")
+
+resp := sys.net.socket.recv(try_socket, 1024)
+let (l, r) := sys.len(resp)
+print("Socket received bytes: " + l)
+// print("Socket response: " + resp)
+
+sys.net.socket.close(try_socket)
+print("Socket closed")
