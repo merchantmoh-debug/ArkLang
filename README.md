@@ -113,6 +113,20 @@ python3 meta/compile.py apps/law.ark law.json
 cd core && cargo run --bin ark_loader -- ../law.json
 ```
 
+### Step 3: The Sandbox (Docker Safe Mode) 📦
+For those who want to touch the Void without melting their host machine.
+
+```bash
+# 1. Enter the Simulation
+docker-compose up -d
+
+# 2. Jack In
+docker-compose exec ark-sandbox bash
+
+# 3. Cast Spells
+python meta/repl.py
+```
+
 ---
 
 ## 🧩 THE TRUTH (PHILOSOPHY)

@@ -1,0 +1,11 @@
+services:
+  ark-sandbox:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - ARK_SANDBOX=true
+      - ALLOW_DANGEROUS_LOCAL_EXECUTION=false
+    command: python meta/repl.py
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
