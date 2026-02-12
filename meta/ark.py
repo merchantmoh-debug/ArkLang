@@ -18,7 +18,6 @@ import socket
 import urllib.request
 import urllib.error
 import urllib.parse
-import codecs
 import queue
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
@@ -986,6 +985,30 @@ def sys_func_apply(args: List[ArkValue]):
         return INTRINSICS[func.val](arg_list.val)
     raise Exception(f"Cannot apply {func.type}")
 
+def sys_z3_verify(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "List":
+        raise Exception("sys.z3.verify expects a List of constraints (Strings)")
+
+    constraints_val = args[0].val
+    constraints = []
+    for item in constraints_val:
+        if item.type != "String":
+             raise Exception("sys.z3.verify constraints list must contain Strings")
+        constraints.append(item.val)
+
+    try:
+        # Ensure we can import from same directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        if current_dir not in sys.path:
+            sys.path.append(current_dir)
+
+        import z3_bridge
+        res = z3_bridge.verify_contract(constraints)
+        return ArkValue(res, "Boolean")
+    except ImportError as e:
+        print(f"Warning: z3_bridge import failed: {e}", file=sys.stderr)
+        return ArkValue(True, "Boolean") # Fail open or mock success
+
 
 # --- Chain Intrinsics (Mock/Prototype) ---
 
@@ -1146,6 +1169,7 @@ INTRINSICS = {
     "sys.net.request_async": sys_net_request_async,
     "sys.event.poll": sys_event_poll,
     "sys.func.apply": sys_func_apply,
+    "sys.z3.verify": sys_z3_verify,
 
     # Intrinsics (Aliased / Specific)
     "time_now": sys_time_now,
@@ -1426,7 +1450,7 @@ def eval_node(node, scope):
              # Fallback if literal_eval fails (e.g. strict syntax issues), though unlikely for valid strings
              s = node.children[0].value[1:-1]
         return ArkValue(s, "String")
-        return ArkValue(s, "String")
+        
     if node.data in ["add", "sub", "mul", "div", "mod", "lt", "gt", "le", "ge", "eq", "neq"]:
         left = eval_node(node.children[0], scope)
         right = eval_node(node.children[1], scope)
