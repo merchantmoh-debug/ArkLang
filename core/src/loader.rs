@@ -16,7 +16,7 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
-use crate::ast::ArkNode;
+use crate::ast::{ArkNode, MastNode, AstError};
 use serde_json::from_str;
 use thiserror::Error;
 
@@ -24,9 +24,12 @@ use thiserror::Error;
 pub enum LoadError {
     #[error("JSON Parse Error: {0}")]
     ParseError(#[from] serde_json::Error),
+    #[error("AST Error: {0}")]
+    AstError(#[from] AstError),
 }
 
-pub fn load_ark_program(json: &str) -> Result<ArkNode, LoadError> {
+pub fn load_ark_program(json: &str) -> Result<MastNode, LoadError> {
     let node: ArkNode = from_str(json)?;
-    Ok(node)
+    let mast = MastNode::new(node)?;
+    Ok(mast)
 }

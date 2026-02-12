@@ -1,0 +1,11 @@
+while (1) {
+    sys.time.sleep(2)
+    res := sys.net.http.request("http://localhost:8000/height")
+    status := res[0]
+    if (status == 200) {
+        height := res[1]
+        print("Wallet synced: Height " + height)
+    } else {
+        print("Wallet: Connection failed")
+    }
+}
