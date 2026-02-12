@@ -16,9 +16,9 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
-use crate::eval::Interpreter;
+use crate::compiler::Compiler;
 use crate::loader::load_ark_program;
-use crate::runtime::Scope;
+use crate::vm::VM;
 use std::mem;
 use std::slice;
 use std::str;
@@ -60,9 +60,10 @@ pub unsafe extern "C" fn ark_eval(input_ptr: *mut u8, input_len: usize) -> *mut 
     // 2. Load and Execute
     let response = match load_ark_program(input_str) {
         Ok(node) => {
-            let mut scope = Scope::new();
-            let mut interpreter = Interpreter::new();
-            match interpreter.eval(&node, &mut scope) {
+            let compiler = Compiler::new();
+            let chunk = compiler.compile(&node);
+            let mut vm = VM::new(chunk);
+            match vm.run() {
                 Ok(val) => format!("Result: {:?}", val),
                 Err(e) => format!("Runtime Error: {:?}", e),
             }
