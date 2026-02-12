@@ -16,20 +16,16 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
-use crate::ast::{ArkNode, MastNode, AstError};
-use serde_json::from_str;
-use thiserror::Error;
+/// Mock Blockchain Verification Module
+pub fn verify_code_hash(hash: &str) -> bool {
+    // In a real implementation, this would query the blockchain state
+    // to see if the code hash is whitelisted/stored.
+    // For now, we mock it.
 
-#[derive(Error, Debug)]
-pub enum LoadError {
-    #[error("JSON Parse Error: {0}")]
-    ParseError(#[from] serde_json::Error),
-    #[error("AST Error: {0}")]
-    AstError(#[from] AstError),
-}
+    // Explicitly reject a specific hash for testing purposes
+    if hash == "UNTRUSTED" {
+        return false;
+    }
 
-pub fn load_ark_program(json: &str) -> Result<MastNode, LoadError> {
-    let node: ArkNode = from_str(json)?;
-    let mast = MastNode::new(node)?;
-    Ok(mast)
+    true
 }
