@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ark Snake</title>
+    <style>
+        body { background: #333; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: monospace; }
+        canvas { border: 2px solid #555; background: #000; }
+    </style>
+</head>
+<body>
+    <canvas id="game" width="400" height="400"></canvas>
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const SCALE = 20;
+
+        async function update() {
+            try {
+                const res = await fetch('/state');
+                const state = await res.json();
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw Snake
+                ctx.fillStyle = 'lime';
+                for (let part of state.snake) {
+                    ctx.fillRect(part[0] * SCALE, part[1] * SCALE, SCALE - 1, SCALE - 1);
+                }
+
+                // Draw Apple
+                ctx.fillStyle = 'red';
+                ctx.fillRect(state.apple[0] * SCALE, state.apple[1] * SCALE, SCALE - 1, SCALE - 1);
+
+                if (state.game_over) {
+                    ctx.fillStyle = 'white';
+                    ctx.font = '30px Arial';
+                    ctx.fillText("GAME OVER", 100, 200);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') fetch('/up');
+            if (e.key === 'ArrowDown') fetch('/down');
+            if (e.key === 'ArrowLeft') fetch('/left');
+            if (e.key === 'ArrowRight') fetch('/right');
+        });
+
+        setInterval(update, 100);
+    </script>
+</body>
+</html>
