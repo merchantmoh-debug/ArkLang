@@ -1,0 +1,2 @@
+sys.fs.write(".git/SECURITY_TEST", "fail")
+print("Should not be reached")

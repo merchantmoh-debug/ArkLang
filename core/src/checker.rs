@@ -17,7 +17,7 @@
  */
 
 use crate::ast::{ArkNode, Expression, FunctionDef, Statement};
-use std::collections::HashSet;
+use std::collections::HashMap;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -30,18 +30,24 @@ pub enum LinearError {
     NotFound(String),
 }
 
+#[derive(Debug, Clone)]
+struct VarState {
+    is_linear: bool,
+    is_active: bool,
+}
+
 pub struct LinearChecker {
-    // Tracks currently active (unconsumed) linear variables
-    active_linears: HashSet<String>,
-    // Tracks ALL variables declared as linear in this scope (to detect double use)
-    declared_linears: HashSet<String>,
+    // Map variable name to stack of states (for shadowing).
+    var_states: HashMap<String, Vec<VarState>>,
+    // Stack of scopes. Each scope contains a list of variables declared in it.
+    scope_stack: Vec<Vec<String>>,
 }
 
 impl LinearChecker {
     pub fn new() -> Self {
         LinearChecker {
-            active_linears: HashSet::new(),
-            declared_linears: HashSet::new(),
+            var_states: HashMap::new(),
+            scope_stack: Vec::new(),
         }
     }
 
@@ -68,22 +74,96 @@ impl LinearChecker {
         }
     }
 
+    // Scoping helpers
+    fn enter_scope(&mut self) {
+        self.scope_stack.push(Vec::new());
+    }
+
+    fn exit_scope(&mut self) -> Result<(), LinearError> {
+        let scope_vars = self.scope_stack.pop().unwrap_or_default();
+        // Check for unused linear resources declared in this scope (lifo order)
+        for var_name in scope_vars.iter().rev() {
+             if let Some(states) = self.var_states.get_mut(var_name) {
+                 if let Some(state) = states.pop() {
+                     if state.is_linear && state.is_active {
+                         return Err(LinearError::UnusedResource(var_name.clone()));
+                     }
+                 }
+                 // Clean up empty vector entries if needed, but not strictly required
+                 if states.is_empty() {
+                     self.var_states.remove(var_name);
+                 }
+             }
+        }
+        Ok(())
+    }
+
+    fn declare_var(&mut self, name: String, is_linear: bool) {
+        let state = VarState {
+            is_linear,
+            is_active: is_linear, // Only linear vars track activity
+        };
+        self.var_states.entry(name.clone()).or_default().push(state);
+
+        if let Some(current_scope) = self.scope_stack.last_mut() {
+            current_scope.push(name);
+        } else {
+            // Fallback if not inside explicit scope (e.g. top level without enter_scope)
+            // But we should always use scopes.
+        }
+    }
+
+    fn use_var(&mut self, name: &str) -> Result<(), LinearError> {
+        if let Some(states) = self.var_states.get_mut(name) {
+            if let Some(state) = states.last_mut() {
+                if state.is_linear {
+                    if state.is_active {
+                        state.is_active = false;
+                        return Ok(());
+                    } else {
+                        return Err(LinearError::DoubleUse(name.to_string()));
+                    }
+                } else {
+                    // Shared/Affine - no tracking needed
+                    return Ok(());
+                }
+            }
+        }
+        // If variable not found, assume shared/global
+        Ok(())
+    }
+
+    fn is_var_linear_and_active(&self, name: &str) -> bool {
+        if let Some(states) = self.var_states.get(name) {
+            if let Some(state) = states.last() {
+                return state.is_linear && state.is_active;
+            }
+        }
+        false
+    }
+
+    #[cfg(test)]
+    pub fn is_linear_active(&self, name: &str) -> bool {
+        self.is_var_linear_and_active(name)
+    }
+
+    #[cfg(test)]
+    pub fn is_declared(&self, name: &str) -> bool {
+        self.var_states.contains_key(name)
+    }
+
     pub fn check_function(&mut self, func: &FunctionDef) -> Result<(), LinearError> {
+        self.enter_scope();
+
         // 1. Register input arguments
         for (name, ty) in &func.inputs {
-            if ty.is_linear() {
-                self.active_linears.insert(name.clone());
-                self.declared_linears.insert(name.clone());
-            }
+            let is_linear = ty.is_linear();
+            self.declare_var(name.clone(), is_linear);
         }
 
         self.traverse_node(&func.body.content)?;
 
-        // 3. Verify all linear resources are consumed
-        if !self.active_linears.is_empty() {
-            let unused = self.active_linears.iter().next().unwrap();
-            return Err(LinearError::UnusedResource(unused.clone()));
-        }
+        self.exit_scope()?;
 
         Ok(())
     }
@@ -100,15 +180,16 @@ impl LinearChecker {
         match stmt {
             Statement::Let { name, ty, value } => {
                 // Heuristic: Check if RHS is a linear variable being moved
-                // This must be done BEFORE traverse_node consumes it
                 let mut inferred_linear = false;
+
+                // Peek linearity of RHS before consuming
                 if let Expression::Variable(v) = value {
-                    if self.declared_linears.contains(v) {
+                    if self.is_var_linear_and_active(v) {
                         inferred_linear = true;
                     }
                 }
 
-                // Also check if RHS is a Call to a linear intrinsic
+                // Intrinsic check
                 if let Expression::Call { function_hash, .. } = value {
                      let sig = Self::get_intrinsic_return_linearity(function_hash);
                      if sig.len() == 1 && sig[0] {
@@ -116,17 +197,13 @@ impl LinearChecker {
                      }
                 }
 
+                // Process RHS (consume linear vars)
                 self.traverse_node(&ArkNode::Expression(value.clone()))?;
 
-                // Check for shadowing of active linear variable
-                if self.active_linears.contains(name) {
-                    return Err(LinearError::UnusedResource(name.clone()));
-                }
+                // Determine linearity of new var
+                let is_linear = inferred_linear || ty.as_ref().map(|t| t.is_linear()).unwrap_or(false);
 
-                if inferred_linear || ty.as_ref().map(|t| t.is_linear()).unwrap_or(false) {
-                    self.active_linears.insert(name.clone());
-                    self.declared_linears.insert(name.clone());
-                }
+                self.declare_var(name.clone(), is_linear);
                 Ok(())
             }
             Statement::LetDestructure { names, value } => {
@@ -143,20 +220,21 @@ impl LinearChecker {
                      if i < call_signature.len() && call_signature[i] {
                          is_linear = true;
                      }
-                     // 2. Check shadowing
-                     if self.declared_linears.contains(name) {
-                         is_linear = true;
-                     }
-
-                     if is_linear {
-                         // Check for shadowing of active linear variable
-                         if self.active_linears.contains(name) {
-                             return Err(LinearError::UnusedResource(name.clone()));
+                     // 2. Check shadowing heuristic (from original logic):
+                     // If name currently maps to a linear var, assume new one is linear?
+                     // This is tricky. Let's rely on type info or signature mostly.
+                     // But for 'unknown_func' test compatibility, we might need to assume linearity if it was linear.
+                     // But strictly speaking, shadowing shouldn't inherit type unless inferred.
+                     // The original code used `declared_linears.contains(name)`.
+                     if let Some(states) = self.var_states.get(name) {
+                         if let Some(state) = states.last() {
+                             if state.is_linear {
+                                 is_linear = true;
+                             }
                          }
-
-                         self.active_linears.insert(name.clone());
-                         self.declared_linears.insert(name.clone());
                      }
+
+                     self.declare_var(name.clone(), is_linear);
                 }
                 Ok(())
             }
@@ -167,9 +245,11 @@ impl LinearChecker {
             } => self.traverse_node(&ArkNode::Expression(value.clone())),
             Statement::Return(expr) => self.traverse_node(&ArkNode::Expression(expr.clone())),
             Statement::Block(stmts) => {
+                self.enter_scope();
                 for s in stmts {
                     self.check_statement(s)?;
                 }
+                self.exit_scope()?;
                 Ok(())
             }
             Statement::Expression(expr) => self.check_expression(expr),
@@ -179,21 +259,28 @@ impl LinearChecker {
                 else_block,
             } => {
                 self.check_expression(condition)?;
+                self.enter_scope();
                 for stmt in then_block {
                     self.check_statement(stmt)?;
                 }
+                self.exit_scope()?;
+
                 if let Some(else_stmts) = else_block {
+                    self.enter_scope();
                     for stmt in else_stmts {
                         self.check_statement(stmt)?;
                     }
+                    self.exit_scope()?;
                 }
                 Ok(())
             }
             Statement::While { condition, body } => {
                 self.check_expression(condition)?;
+                self.enter_scope();
                 for stmt in body {
                     self.check_statement(stmt)?;
                 }
+                self.exit_scope()?;
                 Ok(())
             }
             Statement::Function(func_def) => {
@@ -207,17 +294,7 @@ impl LinearChecker {
     fn check_expression(&mut self, expr: &Expression) -> Result<(), LinearError> {
         match expr {
             Expression::Variable(name) => {
-                if self.active_linears.contains(name) {
-                    // Consume it
-                    self.active_linears.remove(name);
-                    Ok(())
-                } else if self.declared_linears.contains(name) {
-                    // It was declared linear but is no longer active -> Double Use!
-                    Err(LinearError::DoubleUse(name.clone()))
-                } else {
-                    // Not linear (Shared/Affine), permissible to use multiple times
-                    Ok(())
-                }
+                self.use_var(name)
             }
             Expression::Call { args, .. } => {
                 for arg in args {
@@ -423,7 +500,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: Enable when type inference is implemented for linear moves
     fn test_linear_let_untyped_move() {
         let func = FunctionDef {
             name: "untyped_move".to_string(),
@@ -495,11 +571,16 @@ mod tests {
         };
 
         let mut checker = LinearChecker::new();
+        // Manually enter scope for statement check if needed, but check_statement calls enter_scope for Block.
+        // For individual Let, we must ensure declaring works.
+        // declare_var handles empty stack by pushing but no scope cleanup?
+        // check_statement for Let calls declare_var.
+        checker.enter_scope(); // Ensure scope exists
         let result = checker.check_statement(&stmt);
 
         assert!(result.is_ok());
-        assert!(checker.active_linears.contains("x"));
-        assert!(checker.declared_linears.contains("x"));
+        assert!(checker.is_linear_active("x"));
+        assert!(checker.is_declared("x"));
     }
 
     #[test]
@@ -511,11 +592,14 @@ mod tests {
         };
 
         let mut checker = LinearChecker::new();
+        checker.enter_scope();
         let result = checker.check_statement(&stmt);
 
         assert!(result.is_ok());
-        assert!(!checker.active_linears.contains("y"));
-        assert!(!checker.declared_linears.contains("y"));
+        assert!(!checker.is_linear_active("y"));
+        // y is declared, but not linear active.
+        // is_declared returns true if it exists in var_states.
+        assert!(checker.is_declared("y"));
     }
 
     #[test]

@@ -4,9 +4,9 @@ import sys
 from unittest.mock import patch
 
 # Ensure src is in path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from sandbox.local import LocalSandbox
+from src.sandbox.local import LocalSandbox
 
 class TestLocalSandboxSecurity(unittest.TestCase):
     def setUp(self):
