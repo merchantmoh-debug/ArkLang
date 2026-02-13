@@ -62,7 +62,11 @@ def check_path_security(path, is_write=False):
         repo_root = os.path.dirname(meta_dir)
 
         # Protected directories
-        protected_dirs = ["meta", "core", "lib", "src", "tests"]
+        protected_dirs = [
+            "meta", "core", "lib", "src", "tests",
+            "apps", "benchmarks", "docs", "examples", "ops", "web",
+            ".git", ".agent", ".antigravity", ".context", "artifacts"
+        ]
         for d in protected_dirs:
             protected_path = os.path.realpath(os.path.join(repo_root, d))
             if abs_path.startswith(protected_path):
@@ -71,7 +75,9 @@ def check_path_security(path, is_write=False):
         # Protected root files
         protected_files = [
             "Cargo.toml", "README.md", "LICENSE", "requirements.txt",
-            "MANUAL.md", "ARK_OMEGA_POINT.md", "SWARM_PLAN.md", "CLA.md"
+            "MANUAL.md", "ARK_OMEGA_POINT.md", "SWARM_PLAN.md", "CLA.md",
+            "Dockerfile", "docker-compose.yml", "sovereign_launch.bat",
+            "pyproject.toml", "Cargo.lock", "debug_build.py"
         ]
         for f in protected_files:
             protected_file_path = os.path.realpath(os.path.join(repo_root, f))
