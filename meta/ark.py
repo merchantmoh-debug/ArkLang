@@ -946,6 +946,31 @@ def sys_exit(args: List[ArkValue]):
         code = args[0].val
     sys.exit(code)
 
+def sys_net_http_serve(args: List[ArkValue]):
+    if len(args) != 2:
+        raise Exception("sys.net.http.serve expects port(int) and handler(function)")
+
+    port = int(args[0].val)
+    # handler_func = args[1]
+
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    class ArkHTTPHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Hello from Ark Server (Stub)")
+
+    server_address = ('', port)
+    httpd = HTTPServer(server_address, ArkHTTPHandler)
+    print(f"Serving HTTP on port {port}...")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    httpd.server_close()
+    return ArkValue(None, "Unit")
+
 def sys_struct_has(args: List[ArkValue]):
     if len(args) != 2: raise Exception("sys.struct.has expects obj, field")
     obj = args[0]
