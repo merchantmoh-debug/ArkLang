@@ -148,6 +148,30 @@ The **Ark Swarm** is the labor force that operates the machinery.
 
 ---
 
+## 🌍 THE DISTRIBUTION (BROWSER & ECONOMICS)
+
+**"The Cloud is just someone else's computer." - We give you your computer back.**
+
+Ark compiles to **WebAssembly (WASM)**. This is not a "feature." It is an economic revolution.
+
+### 1. Full Browser Integration 🖥️
+**Proof:** `web/main.js` calls `wasmExports.ark_eval()`.
+When you run Ark in the browser, **there is no server**.
+*   **The Runtime:** The entire Graph VM runs inside Chrome/Firefox/Edge.
+*   **The Latency:** **0ms**. (Once loaded, execution is local).
+*   **The Privacy:** Your data never leaves your machine. The AI runs on *your* silicon.
+
+### 2. The Economic Equation 💸
+Computing costs money. Who pays?
+*   **The Old Way (SaaS):** You pay $20/month/user to cover *their* AWS bill.
+*   **The Ark Way (Sovereign):** You pay **$0**. The user's device provides the compute.
+
+**Cost to Scale to 1M Users:**
+*   **Python/API Backend:** ~$50,000 / month.
+*   **Ark WASM:** **$0 / month** (Static file hosting only).
+
+---
+
 ## 📊 THE MARKET REALITY
 
 The industry is selling you "Abstractions." We are building "Primitives."
