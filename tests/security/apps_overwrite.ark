@@ -1,0 +1,2 @@
+sys.fs.write("apps/SECURITY_TEST", "fail")
+print("Should not be reached")

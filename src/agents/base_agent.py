@@ -6,8 +6,9 @@ and communication with the Gemini API.
 """
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 from google import genai
+from google.genai import types
 from src.config import settings
 from src.utils.dummy_client import DummyClient
 
@@ -57,7 +58,7 @@ class BaseAgent:
             The agent's response as a string.
         """
         # Build the full prompt
-        prompt_parts = [self.system_prompt, f"\n\nTask: {task}"]
+        prompt_parts = [f"Task: {task}"]
         
         # Add context if provided
         if context:
@@ -68,11 +69,17 @@ class BaseAgent:
         
         full_prompt = "".join(prompt_parts)
         
+        # Configure system prompt
+        config = types.GenerateContentConfig(
+            system_instruction=self.system_prompt
+        )
+
         # Call Gemini API
         try:
             response = self.client.models.generate_content(
                 model=settings.GEMINI_MODEL_NAME,
-                contents=full_prompt
+                contents=full_prompt,
+                config=config
             )
             result = getattr(response, "text", str(response)).strip()
             
