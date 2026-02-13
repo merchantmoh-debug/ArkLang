@@ -5,3 +5,4 @@ google-genai
 lark
 prompt_toolkit
 pygments
+requests
