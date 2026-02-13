@@ -3,7 +3,7 @@ import tempfile
 import time
 from typing import Optional
 
-from .base import CodeSandbox, ExecutionResult
+from .base import CodeSandbox, ExecutionResult, truncate_output
 
 
 class DockerSandbox(CodeSandbox):
@@ -114,15 +114,25 @@ class DockerSandbox(CodeSandbox):
                 logs = container.logs(stdout=True, stderr=True)
                 out = logs.decode("utf-8", errors="ignore")
                 # Split rough stdout/stderr is non-trivial; return all in stdout for now
+
+                # Apply truncation
+                max_output_kb = int(os.getenv("SANDBOX_MAX_OUTPUT_KB", "10"))
+                max_bytes = max_output_kb * 1024
+                stdout_trunc, truncated = truncate_output(out, max_bytes)
+
                 return ExecutionResult(
-                    stdout=out,
+                    stdout=stdout_trunc,
                     stderr="",
                     exit_code=int(exit_code),
                     duration=time.time() - start,
                     meta={
                         "runtime": "docker",
                         "timed_out": False,
-                        "truncated": False,
+                        "truncated": truncated,
+                        "resource_limits": {
+                            "timeout_sec": timeout,
+                            "max_output_kb": max_output_kb,
+                        },
                     },
                 )
             except Exception as exc:
