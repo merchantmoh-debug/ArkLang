@@ -431,8 +431,10 @@ mod tests {
     #[test]
     fn test_vm_security_level_one_allows_trusted() {
         let chunk = Chunk::new();
-        // Security level 1 should allow trusted hash (anything not "UNTRUSTED" in our mock)
-        let vm = VM::new(chunk, "TRUSTED_HASH", 1);
+        // Security level 1 requires the hash to be in the blockchain.
+        // We register a dummy code and get its hash.
+        let hash = crate::blockchain::submit_code("TRUSTED_CODE_PAYLOAD");
+        let vm = VM::new(chunk, &hash, 1);
         assert!(vm.is_ok());
     }
 

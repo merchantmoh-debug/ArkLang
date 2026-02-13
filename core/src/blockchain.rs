@@ -2,6 +2,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt;
+use std::sync::{Mutex, OnceLock};
 
 // --- 1. Basic Structures ---
 
@@ -153,14 +154,36 @@ impl Blockchain {
         }
         true
     }
+
+    pub fn get_contract(&self, hash: &str) -> Option<&Transaction> {
+        for block in &self.chain {
+            for tx in &block.transactions {
+                // Check if payload hash matches
+                let payload_hash = format!("{:x}", Sha256::digest(tx.payload.as_bytes()));
+                if payload_hash == hash {
+                    return Some(tx);
+                }
+            }
+        }
+        None
+    }
+}
+
+static CHAIN_INSTANCE: OnceLock<Mutex<Blockchain>> = OnceLock::new();
+
+pub fn get_chain() -> &'static Mutex<Blockchain> {
+    CHAIN_INSTANCE.get_or_init(|| Mutex::new(Blockchain::new(4)))
 }
 
 pub fn verify_code_hash(hash: &str) -> bool {
-    // TODO: Implement actual blockchain lookup.
-    // For now, in "Security Level 1", we mock this.
-    // Real implementation would query `Blockchain::get_contract(hash)`.
-    if hash == "UNTRUSTED" {
-        return false;
-    }
-    true
+    let chain = get_chain().lock().unwrap();
+    chain.get_contract(hash).is_some()
+}
+
+pub fn submit_code(code: &str) -> String {
+    let tx = Transaction::new(code.to_string());
+    let hash = format!("{:x}", Sha256::digest(code.as_bytes()));
+    let mut chain = get_chain().lock().unwrap();
+    chain.add_block(vec![tx]);
+    hash
 }
