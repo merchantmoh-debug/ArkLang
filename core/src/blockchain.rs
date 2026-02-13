@@ -1,7 +1,6 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::fmt;
 
 // --- 1. Basic Structures ---
 
@@ -40,7 +39,12 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(index: u64, prev_hash: String, transactions: Vec<Transaction>) -> Self {
+    pub fn new(
+        index: u64,
+        prev_hash: String,
+        transactions: Vec<Transaction>,
+        difficulty: usize,
+    ) -> Self {
         let timestamp = Utc::now().timestamp();
         let merkle_root = Self::calculate_merkle_root(&transactions);
 
@@ -54,13 +58,13 @@ impl Block {
             transactions,
         };
 
-        block.mine_block(4); // Difficulty: 4 leading zeros
+        block.mine_block(difficulty);
         block
     }
 
-    pub fn genesis() -> Self {
+    pub fn genesis(difficulty: usize) -> Self {
         let genesis_tx = Transaction::new("GENESIS_BLOCK_PROTOCOL_OMEGA".to_string());
-        Self::new(0, "0".to_string(), vec![genesis_tx])
+        Self::new(0, "0".to_string(), vec![genesis_tx], difficulty)
     }
 
     pub fn calculate_hash(&self) -> String {
@@ -123,18 +127,19 @@ pub struct Blockchain {
 impl Blockchain {
     pub fn new(difficulty: usize) -> Self {
         Blockchain {
-            chain: vec![Block::genesis()],
+            chain: vec![Block::genesis(difficulty)],
             difficulty,
         }
     }
 
     pub fn add_block(&mut self, transactions: Vec<Transaction>) {
         let prev_block = self.chain.last().unwrap();
-        let new_block = Block::new(prev_block.index + 1, prev_block.hash.clone(), transactions);
-        // Note: Block::new already mines it. Implementation detail.
-        // If we wanted dynamic difficulty we'd pass it here.
-        // For now Block mining is hardcoded to 4 in new(), we should fix that.
-        // But for this initial version it proves the point.
+        let new_block = Block::new(
+            prev_block.index + 1,
+            prev_block.hash.clone(),
+            transactions,
+            self.difficulty,
+        );
         self.chain.push(new_block);
     }
 
@@ -163,4 +168,34 @@ pub fn verify_code_hash(hash: &str) -> bool {
         return false;
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dynamic_difficulty() {
+        // Test difficulty 1
+        let mut chain1 = Blockchain::new(1);
+        let genesis1 = &chain1.chain[0];
+        // Ensure genesis block meets the difficulty requirement
+        assert!(genesis1.hash.starts_with("0"));
+
+        // Add a block with difficulty 1
+        let tx = Transaction::new("Test Payload".to_string());
+        chain1.add_block(vec![tx]);
+        let block1 = &chain1.chain[1];
+        assert!(block1.hash.starts_with("0"));
+
+        // Test difficulty 3 (higher difficulty)
+        let mut chain2 = Blockchain::new(3);
+        let genesis2 = &chain2.chain[0];
+        assert!(genesis2.hash.starts_with("000"));
+
+        let tx2 = Transaction::new("Test Payload 2".to_string());
+        chain2.add_block(vec![tx2]);
+        let block2 = &chain2.chain[1];
+        assert!(block2.hash.starts_with("000"));
+    }
 }

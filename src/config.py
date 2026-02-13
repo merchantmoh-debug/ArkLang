@@ -50,6 +50,9 @@ class Settings(BaseSettings):
         default="gpt-4o-mini",
         description="Default model name for OpenAI-compatible chat completions.",
     )
+    LLM_TIMEOUT: int = Field(
+        default=30, description="Timeout in seconds for LLM API calls"
+    )
 
     # Memory Configuration
     MEMORY_FILE: str = "agent_memory.enc"

@@ -4,7 +4,7 @@ import time
 import tempfile
 import subprocess
 import ast
-from typing import Tuple, List, Set
+from typing import List, Set
 
 from src.config import settings
 from .base import CodeSandbox, ExecutionResult
@@ -164,8 +164,8 @@ class LocalSandbox(CodeSandbox):
 
         duration = time.time() - start
 
-        stdout, trunc_out = _truncate_output(stdout, max_bytes)
-        stderr, trunc_err = _truncate_output(stderr, max_bytes)
+        stdout, trunc_out = truncate_output(stdout, max_bytes)
+        stderr, trunc_err = truncate_output(stderr, max_bytes)
 
         return ExecutionResult(
             stdout=stdout,
