@@ -28,18 +28,23 @@ class SecurityVisitor(ast.NodeVisitor):
         self.banned_imports: Set[str] = {
             "os", "sys", "subprocess", "shutil", "importlib", "socket",
             "pickle", "urllib", "http", "xml", "base64", "pty", "pdb",
-            "platform", "venv", "ensurepip", "site", "imp", "posix", "nt"
+            "platform", "venv", "ensurepip", "site", "imp", "posix", "nt",
+            "builtins", "ctypes", "asyncio", "inspect", "types", "weakref"
         }
         # Blacklist of dangerous builtins/functions
         self.banned_functions: Set[str] = {
             "open", "exec", "eval", "compile", "__import__", "input",
             "exit", "quit", "help", "dir", "vars", "globals", "locals",
-            "breakpoint", "memoryview"
+            "breakpoint", "memoryview", "getattr", "setattr", "delattr",
+            "hasattr", "__builtins__"
         }
         # Blacklist of dangerous attributes often used for exploits
         self.banned_attributes: Set[str] = {
             "__subclasses__", "__bases__", "__globals__", "__code__",
-            "__closure__", "__func__", "__self__", "__module__", "__dict__"
+            "__closure__", "__func__", "__self__", "__module__", "__dict__",
+            "__class__", "__base__", "__mro__", "__loader__", "__spec__",
+            "f_globals", "f_builtins", "f_locals", "getattr", "setattr",
+            "delattr", "eval", "exec", "open", "__import__"
         }
 
     def visit_Import(self, node: ast.Import) -> None:
