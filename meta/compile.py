@@ -197,18 +197,56 @@ class ArkCompiler:
                 # It is a string (Token or str)
                 inputs.append([str(item), {"Linear": "Integer"}]) 
         
+        # 1. Construct Content First
+        content = {
+            "Statement": {
+                "Block": body_stmts
+            }
+        }
+
+        # 2. Compute Deterministic Hash (Merkle Node)
+        # We must serialize exactly as the Rust Loader expects (Bincode or JSON?)
+        # The Rust Loader (loader.rs) uses: 
+        #   let serialized = bincode::serialize(&mast.content)
+        # Wait. Rust uses BINCODE for the hash payload?
+        # That's a problem for Python. Bincode is Rust-specific.
+        # Let's check loader.rs again.
+        # "let serialized = bincode::serialize(&mast.content)"
+        # 
+        # If Rust uses bincode, Python cannot easily match it without a bincode lib.
+        # Checking loader.rs Step Id 2992...
+        # Line 46: `let serialized = bincode::serialize(&mast.content)`
+        #
+        # CRITICAL ARCHITECTURE MISMATCH.
+        # Python `json.dumps` != Rust `bincode::serialize`.
+        #
+        # FIX PLAN:
+        # Change Rust `loader.rs` to use JSON for hashing (canonical).
+        # OR Change Python to use a bincode library (unlikely to have).
+        #
+        # I will change THIS implementation to use "todo_hash" for now to avoid breaking compilation
+        # BUT I will note this mismatch.
+        # Actually, let's look at `loader.rs`.
+        # It uses `serde_json::from_str` to LOAD the file.
+        # But `verify_mast_integrity` uses `bincode::serialize`.
+        #
+        # I MUST update `loader.rs` to use JSON serialization for the hash check if I want Python to match it.
+        #
+        # For this step, I will calculate the hash using JSON canonical dump.
+        # Then I will update `loader.rs` to ALSO use JSON canonical dump.
+        
+        import hashlib
+        canonical_json = json.dumps(content, sort_keys=True, separators=(',', ':'))
+        content_hash = hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
+
         return {
             "Function": {
                 "name": name,
                 "inputs": inputs,
                 "output": {"Linear": "Integer"},
                 "body": {
-                    "hash": "todo_hash", 
-                    "content": {
-                        "Statement": {
-                            "Block": body_stmts
-                        }
-                    }
+                    "hash": content_hash, 
+                    "content": content
                 }
             }
         }
