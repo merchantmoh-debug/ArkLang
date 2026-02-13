@@ -18,6 +18,7 @@ import socket
 import urllib.request
 import urllib.error
 import urllib.parse
+import ipaddress
 import queue
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
@@ -480,19 +481,67 @@ def sys_net_socket_set_timeout(args: List[ArkValue]):
     s.settimeout(timeout)
     return ArkValue(None, "Unit")
 
+def validate_url_security(url):
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception as e:
+        raise Exception(f"Invalid URL: {e}")
+
+    if parsed.scheme not in ('http', 'https'):
+        raise Exception(f"URL scheme '{parsed.scheme}' is not allowed (only http/https)")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise Exception("Invalid URL: missing hostname")
+
+    # Resolve hostname to IP
+    try:
+        # socket.getaddrinfo handles both IPv4 and IPv6
+        addr_info = socket.getaddrinfo(hostname, None)
+    except socket.gaierror as e:
+        raise Exception(f"DNS resolution failed for {hostname}: {e}")
+
+    for _, _, _, _, sockaddr in addr_info:
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue # Skip invalid IPs if any
+
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+             raise SandboxViolation(f"Access to private/local/reserved IP '{ip_str}' is forbidden")
+
+        # Explicitly block 0.0.0.0
+        if str(ip) == "0.0.0.0":
+             raise SandboxViolation("Access to 0.0.0.0 is forbidden")
+
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Validate the redirect URL
+        validate_url_security(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
 def sys_net_http_request(args: List[ArkValue]):
     # args: method, url, [body]
     if len(args) < 2:
         raise Exception("sys.net.http.request expects method, url")
     method = args[0].val
     url = args[1].val
+
+    # 1. Validate initial URL
+    validate_url_security(url)
+
     data = None
     if len(args) > 2:
         data = args[2].val.encode('utf-8')
 
+    # 2. Use custom opener to handle redirects securely
+    opener = urllib.request.build_opener(SafeRedirectHandler)
+
     req = urllib.request.Request(url, data=data, method=method)
     try:
-        with urllib.request.urlopen(req) as response:
+        # utilize opener.open instead of urlopen
+        with opener.open(req) as response:
             status = response.getcode()
             body = response.read().decode('utf-8')
             return ArkValue([ArkValue(status, "Integer"), ArkValue(body, "String")], "List")
