@@ -36,7 +36,10 @@ def main():
     tests = [
         "tests/security/path_traversal.ark",
         "tests/security/exec_violation.ark",
-        "tests/security/repo_overwrite.ark"
+        "tests/security/repo_overwrite.ark",
+        "tests/security/apps_overwrite.ark",
+        "tests/security/root_file_overwrite.ark",
+        "tests/security/git_overwrite.ark"
     ]
 
     failures = 0

@@ -1,0 +1,2 @@
+sys.fs.write("debug_build.py", "fail")
+print("Should not be reached")
