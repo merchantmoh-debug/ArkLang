@@ -425,13 +425,13 @@ def sys_net_socket_send(args: List[ArkValue]):
 
     handle = args[0]
     data = args[1].val
-    s = get_socket(handle)
 
     try:
+        s = get_socket(handle)
         s.sendall(data.encode('utf-8'))
-        return ArkValue(None, "Unit")
+        return ArkValue(True, "Boolean")
     except Exception as e:
-        raise Exception(f"Send failed: {e}")
+        return ArkValue(False, "Boolean")
 
 def sys_net_socket_recv(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "Integer" or args[1].type != "Integer":
@@ -792,6 +792,16 @@ def sys_list_pop(args: List[ArkValue]):
     val = lst.val.pop(idx)
     return val # Return popped value
 
+def sys_list_delete(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.list.delete expects list, index")
+    lst = args[0]
+    idx = args[1].val
+    if lst.type != "List": raise Exception("sys.list.delete expects List")
+    if idx < 0 or idx >= len(lst.val): return ArkValue(None, "Unit")
+
+    lst.val.pop(idx)
+    return ArkValue(None, "Unit")
+
 def sys_len(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.len expects 1 argument")
     val = args[0]
@@ -1117,6 +1127,7 @@ INTRINSICS = {
     "sys.len": sys_len,
     "sys.list.append": sys_list_append,
     "sys.list.pop": sys_list_pop,
+    "sys.list.delete": sys_list_delete,
     "sys.list.get": sys_list_get,
     "sys.mem.alloc": sys_mem_alloc,
     "sys.mem.inspect": sys_mem_inspect,
