@@ -6,7 +6,18 @@ import subprocess
 import ast
 from typing import List, Set
 
-from .base import CodeSandbox, ExecutionResult, truncate_output
+from src.config import settings
+from .base import CodeSandbox, ExecutionResult
+
+
+def _truncate_output(text: str, max_bytes: int) -> Tuple[str, bool]:
+    if max_bytes <= 0:
+        return text, False
+    encoded = text.encode("utf-8", errors="ignore")
+    if len(encoded) <= max_bytes:
+        return text, False
+    truncated = encoded[: max_bytes - 32].decode("utf-8", errors="ignore")
+    return truncated + "\n... (output truncated)", True
 
 
 class SecurityVisitor(ast.NodeVisitor):
@@ -15,27 +26,11 @@ class SecurityVisitor(ast.NodeVisitor):
     def __init__(self):
         self.errors: List[str] = []
         # Blacklist of dangerous modules
-        self.banned_imports: Set[str] = {
-            "os", "sys", "subprocess", "shutil", "importlib", "socket",
-            "pickle", "urllib", "http", "xml", "base64", "pty", "pdb",
-            "platform", "venv", "ensurepip", "site", "imp", "posix", "nt",
-            "builtins", "ctypes", "asyncio", "inspect", "types", "weakref"
-        }
+        self.banned_imports: Set[str] = settings.BANNED_IMPORTS
         # Blacklist of dangerous builtins/functions
-        self.banned_functions: Set[str] = {
-            "open", "exec", "eval", "compile", "__import__", "input",
-            "exit", "quit", "help", "dir", "vars", "globals", "locals",
-            "breakpoint", "memoryview", "getattr", "setattr", "delattr",
-            "hasattr", "__builtins__"
-        }
+        self.banned_functions: Set[str] = settings.BANNED_FUNCTIONS
         # Blacklist of dangerous attributes often used for exploits
-        self.banned_attributes: Set[str] = {
-            "__subclasses__", "__bases__", "__globals__", "__code__",
-            "__closure__", "__func__", "__self__", "__module__", "__dict__",
-            "__class__", "__base__", "__mro__", "__loader__", "__spec__",
-            "f_globals", "f_builtins", "f_locals", "getattr", "setattr",
-            "delattr", "eval", "exec", "open", "__import__"
-        }
+        self.banned_attributes: Set[str] = settings.BANNED_ATTRIBUTES
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
