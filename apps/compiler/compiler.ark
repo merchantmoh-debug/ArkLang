@@ -20,6 +20,9 @@ TOKEN_KEYWORD_WHILE := 102
 TOKEN_KEYWORD_FUNC := 103
 TOKEN_KEYWORD_RETURN := 104
 TOKEN_KEYWORD_LET := 105
+TOKEN_KEYWORD_CLASS := 106
+TOKEN_KEYWORD_TRUE := 107
+TOKEN_KEYWORD_FALSE := 108
 TOKEN_AND := 23
 TOKEN_OR := 24
 
@@ -112,9 +115,9 @@ func check_keyword(ident_str) {
     if ident_str == "let" { return TOKEN_KEYWORD_LET }
     if ident_str == "and" { return TOKEN_AND }
     if ident_str == "or" { return TOKEN_OR }
-    if ident_str == "class" { return TOKEN_KEYWORD }
-    if ident_str == "true" { return TOKEN_KEYWORD }
-    if ident_str == "false" { return TOKEN_KEYWORD }
+    if ident_str == "class" { return TOKEN_KEYWORD_CLASS }
+    if ident_str == "true" { return TOKEN_KEYWORD_TRUE }
+    if ident_str == "false" { return TOKEN_KEYWORD_FALSE }
     return TOKEN_IDENTIFIER
 }
 
@@ -246,6 +249,9 @@ TOKEN_KEYWORD_WHILE := 102
 TOKEN_KEYWORD_FUNC := 103
 TOKEN_KEYWORD_RETURN := 104
 TOKEN_KEYWORD_LET := 105
+TOKEN_KEYWORD_CLASS := 106
+TOKEN_KEYWORD_TRUE := 107
+TOKEN_KEYWORD_FALSE := 108
 
 // --- AST Node Types ---
 NODE_PROGRAM := 0
@@ -311,6 +317,20 @@ func parse_primary(parser) {
         p_adv := parser_advance(p_peek)
         node := { kind: NODE_EXPR_LITERAL_INT, value: val }
         return [node, p_adv]
+    }
+
+    // TOKEN_KEYWORD_TRUE := 107
+    if ttype == 107 {
+         p_adv := parser_advance(p_peek)
+         node := { kind: NODE_EXPR_LITERAL_BOOL, value: "true" }
+         return [node, p_adv]
+    }
+
+    // TOKEN_KEYWORD_FALSE := 108
+    if ttype == 108 {
+         p_adv := parser_advance(p_peek)
+         node := { kind: NODE_EXPR_LITERAL_BOOL, value: "false" }
+         return [node, p_adv]
     }
     
     // TOKEN_IDENTIFIER := 1
@@ -822,6 +842,10 @@ func parse_program(tokens) {
         } else if ttype == 103 { // TOKEN_KEYWORD_FUNC
             let (node, p_next) := parse_func_def(p_prog_peek)
             children := sys.list.append(children, node)
+            ref_parser := [p_next]
+        } else if ttype == 106 { // TOKEN_KEYWORD_CLASS
+            print("Warning: Class definitions not supported in parser yet. Skipping 'class' keyword.")
+            p_next := parser_advance(p_prog_peek)
             ref_parser := [p_next]
         } else {
             // Use parse_stmt
