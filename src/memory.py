@@ -61,8 +61,22 @@ class MemoryManager:
         """Loads memory from the encrypted file (or legacy JSON if present)."""
         self.summary = ""
 
-        # Check for legacy plaintext file first if we are using the new default extension
+        if self._migrate_legacy_memory():
+            return
+
+        data = self._read_encrypted_file()
+        if data is not None:
+            self._process_loaded_data(data)
+        else:
+            self._memory = []
+
+    def _migrate_legacy_memory(self) -> bool:
+        """
+        Checks for and migrates a legacy plaintext memory file.
+        Returns True if migration occurred (memory loaded), False otherwise.
+        """
         legacy_file = "agent_memory.json"
+        # Check for legacy plaintext file first if we are using the new default extension
         if not os.path.exists(self.memory_file) and os.path.exists(legacy_file):
             print(f"Found legacy memory file: {legacy_file}. Migrating to encrypted storage...")
             try:
@@ -74,48 +88,51 @@ class MemoryManager:
                 # Rename legacy file to .bak
                 os.rename(legacy_file, legacy_file + ".bak")
                 print(f"Migration complete. Legacy file moved to {legacy_file}.bak")
-                return
+                return True
             except Exception as e:
                 print(f"Error migrating legacy memory: {e}")
                 # Fall through to normal load attempt
+        return False
 
-        if os.path.exists(self.memory_file):
-            try:
-                with open(self.memory_file, 'rb') as f:
-                    file_content = f.read()
+    def _read_encrypted_file(self) -> Optional[Any]:
+        """
+        Reads the memory file, attempting decryption.
+        Handles fallback to plaintext for migration/recovery.
+        Returns the parsed data structure or None if failed/missing.
+        """
+        if not os.path.exists(self.memory_file):
+            return None
 
-                # Attempt to decrypt
-                if self._fernet:
+        try:
+            with open(self.memory_file, 'rb') as f:
+                file_content = f.read()
+
+            # Attempt to decrypt
+            if self._fernet:
+                try:
+                    decrypted_content = self._fernet.decrypt(file_content)
+                    return json.loads(decrypted_content.decode('utf-8'))
+                except Exception:
+                    # Fallback: maybe it's a plaintext file with the new name?
+                    # Or the key changed?
                     try:
-                        decrypted_content = self._fernet.decrypt(file_content)
-                        data = json.loads(decrypted_content.decode('utf-8'))
-                    except Exception:
-                        # Fallback: maybe it's a plaintext file with the new name?
-                        # Or the key changed?
-                        try:
-                            data = json.loads(file_content.decode('utf-8'))
-                            print("Warning: Memory file was plaintext. Saving as encrypted now.")
-                            self._process_loaded_data(data)
-                            self.save_memory()
-                            return
-                        except json.JSONDecodeError:
-                            print(f"Error: Could not decrypt or decode memory file {self.memory_file}.")
-                            data = None
-                else:
-                    # Should be unreachable if _init_encryption works correctly,
-                    # but defensively handle it.
-                    raise RuntimeError("Encryption not initialized.")
+                        data = json.loads(file_content.decode('utf-8'))
+                        print("Warning: Memory file was plaintext. Saving as encrypted now.")
+                        # We must process data immediately to save it correctly
+                        self._process_loaded_data(data)
+                        self.save_memory()
+                        return data
+                    except json.JSONDecodeError:
+                        print(f"Error: Could not decrypt or decode memory file {self.memory_file}.")
+                        return None
+            else:
+                # Should be unreachable if _init_encryption works correctly,
+                # but defensively handle it.
+                raise RuntimeError("Encryption not initialized.")
 
-                if data is not None:
-                    self._process_loaded_data(data)
-                else:
-                     self._memory = []
-
-            except Exception as e:
-                print(f"Warning: Failed to load memory from {self.memory_file}: {e}")
-                self._memory = []
-        else:
-            self._memory = []
+        except Exception as e:
+            print(f"Warning: Failed to load memory from {self.memory_file}: {e}")
+            return None
 
     def _process_loaded_data(self, data):
         """Helper to process the raw loaded data structure."""
