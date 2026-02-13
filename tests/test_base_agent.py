@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 mock_genai = MagicMock()
 sys.modules["google"] = MagicMock()
 sys.modules["google.genai"] = mock_genai
+sys.modules["requests"] = MagicMock()
 
 mock_pydantic = MagicMock()
 sys.modules["pydantic"] = mock_pydantic
