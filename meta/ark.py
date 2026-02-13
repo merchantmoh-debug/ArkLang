@@ -432,13 +432,13 @@ def sys_net_socket_send(args: List[ArkValue]):
 
     handle = args[0]
     data = args[1].val
-    s = get_socket(handle)
 
     try:
+        s = get_socket(handle)
         s.sendall(data.encode('utf-8'))
-        return ArkValue(None, "Unit")
+        return ArkValue(True, "Boolean")
     except Exception as e:
-        raise Exception(f"Send failed: {e}")
+        return ArkValue(False, "Boolean")
 
 def sys_net_socket_recv(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "Integer" or args[1].type != "Integer":
@@ -765,6 +765,16 @@ def sys_list_pop(args: List[ArkValue]):
     val = lst.val.pop(idx)
     return val # Return popped value
 
+def sys_list_delete(args: List[ArkValue]):
+    if len(args) != 2: raise Exception("sys.list.delete expects list, index")
+    lst = args[0]
+    idx = args[1].val
+    if lst.type != "List": raise Exception("sys.list.delete expects List")
+    if idx < 0 or idx >= len(lst.val): return ArkValue(None, "Unit")
+
+    lst.val.pop(idx)
+    return ArkValue(None, "Unit")
+
 def sys_len(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.len expects 1 argument")
     val = args[0]
@@ -1038,6 +1048,59 @@ def sys_str_from_code(args: List[ArkValue]):
     code = args[0].val
     return ArkValue(chr(code), "String")
 
+INTRINSICS = {
+    # Core
+    "get": core_get,
+    "len": core_len,
+    "print": core_print,
+
+    # System
+    "sys.crypto.hash": sys_crypto_hash,
+    "sys.crypto.merkle_root": sys_crypto_merkle_root,
+    "sys.crypto.ed25519.gen": sys_crypto_ed25519_gen,
+    "sys.crypto.ed25519.sign": sys_crypto_ed25519_sign,
+    "sys.crypto.ed25519.verify": sys_crypto_ed25519_verify,
+    "sys.exec": sys_exec,
+    "sys.fs.read": sys_fs_read,
+    "sys.fs.read_buffer": sys_fs_read_buffer,
+    "sys.fs.write": sys_fs_write,
+    "sys.fs.write_buffer": sys_fs_write_buffer,
+    "sys.len": sys_len,
+    "sys.list.append": sys_list_append,
+    "sys.list.pop": sys_list_pop,
+    "sys.list.delete": sys_list_delete,
+    "sys.list.get": sys_list_get,
+    "sys.mem.alloc": sys_mem_alloc,
+    "sys.mem.inspect": sys_mem_inspect,
+    "sys.mem.read": sys_mem_read,
+    "sys.mem.write": sys_mem_write,
+    "sys.net.http.request": sys_net_http_request,
+    "sys.net.http.serve": sys_net_http_serve,
+    "sys.net.socket.bind": sys_net_socket_bind,
+    "sys.net.socket.accept": sys_net_socket_accept,
+    "sys.net.socket.connect": sys_net_socket_connect,
+    "sys.net.socket.send": sys_net_socket_send,
+    "sys.net.socket.recv": sys_net_socket_recv,
+    "sys.net.socket.close": sys_net_socket_close,
+    "sys.net.socket.set_timeout": sys_net_socket_set_timeout,
+    "sys.thread.spawn": sys_thread_spawn,
+    "sys.struct.get": sys_struct_get,
+    "sys.struct.set": sys_struct_set,
+    "sys.str.get": sys_list_get,
+    "sys.struct.get": sys_struct_get,
+    "sys.struct.has": sys_struct_has,
+    "sys.struct.set": sys_struct_set,
+    "sys.chain.height": sys_chain_height,
+    "sys.chain.get_balance": sys_chain_get_balance,
+    "sys.chain.submit_tx": sys_chain_submit_tx,
+    "sys.chain.verify_tx": sys_chain_verify_tx,
+    "sys.time.now": sys_time_now,
+    "sys.time.sleep": sys_time_sleep,
+    "sys.time.sleep": sys_time_sleep,
+    "math.sin_scaled": math_sin_scaled,
+    "math.cos_scaled": math_cos_scaled,
+    "math.pi_scaled": math_pi_scaled,
+    "sys.str.from_code": sys_str_from_code,
 
 
 
