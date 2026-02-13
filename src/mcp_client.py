@@ -524,94 +524,74 @@ class MCPClientManagerSync:
     Synchronous wrapper for MCPClientManager.
 
     Provides blocking methods for environments that don't support async/await.
+    Uses a dedicated background thread and event loop to ensure thread safety
+    and proper state management for asyncio components.
     """
 
     def __init__(self, config_path: Optional[str] = None):
-        self._async_manager = MCPClientManager(config_path)
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._tool_cache: Dict[str, Callable[..., Any]] = {}
-
-    def _get_loop(self) -> Tuple[asyncio.AbstractEventLoop, bool]:
-        """Get or create an event loop.
-
-        Returns:
-            Tuple of the event loop and whether the current thread already
-            has a running loop.
-        """
-        try:
-            running_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            running_loop = None
-
-        if running_loop is not None:
-            # Avoid calling run_until_complete on a running loop, which raises
-            # RuntimeError. Use a separate loop (via a new thread) instead.
-            return running_loop, True
-
-        if self._loop is None or self._loop.is_closed():
-            self._loop = asyncio.new_event_loop()
-
-        return self._loop, False
-
-    def _run_in_new_thread(self, coro: Awaitable[Any]) -> Any:
-        """Run a coroutine in a new event loop on a dedicated thread.
-
-        Args:
-            coro: Coroutine to execute.
-
-        Returns:
-            Result of the coroutine.
-
-        Raises:
-            Exception: Any exception raised by the coroutine.
-        """
         import threading
 
-        result: Dict[str, Any] = {}
+        self._async_manager = MCPClientManager(config_path)
+        self._tool_cache: Dict[str, Callable[..., Any]] = {}
 
-        def runner() -> None:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        # Create a dedicated event loop and thread
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._run_loop_forever, daemon=True)
+        self._thread.start()
+
+    def _run_loop_forever(self) -> None:
+        """Run the dedicated event loop forever."""
+        asyncio.set_event_loop(self._loop)
+        try:
+            self._loop.run_forever()
+        finally:
+            # Clean up pending tasks
             try:
-                result["value"] = loop.run_until_complete(coro)
-            except Exception as exc:
-                result["error"] = exc
-            finally:
-                loop.close()
+                tasks = asyncio.all_tasks(self._loop)
+                for task in tasks:
+                    task.cancel()
 
-        thread = threading.Thread(target=runner, daemon=True)
-        thread.start()
-        thread.join()
+                # Allow cancelled tasks to cleanup
+                if tasks:
+                    self._loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
 
-        if "error" in result:
-            raise result["error"]
+                self._loop.close()
+            except Exception as e:
+                print(f"Error cleaning up MCP sync loop: {e}")
 
-        return result.get("value")
+    def _run_async(self, coro: Awaitable[Any]) -> Any:
+        """
+        Run a coroutine on the background thread and wait for result.
+
+        Args:
+            coro: The coroutine to run
+
+        Returns:
+            The result of the coroutine
+        """
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result()
 
     def initialize(self) -> None:
         """Initialize MCP connections synchronously."""
-        loop, running = self._get_loop()
-        if running:
-            self._run_in_new_thread(self._async_manager.initialize())
-            return
-        loop.run_until_complete(self._async_manager.initialize())
+        self._run_async(self._async_manager.initialize())
 
     def get_all_tools_as_callables(self) -> Dict[str, Callable[..., Any]]:
         """Get all tools as sync-wrapped callables."""
         if self._tool_cache:
             return self._tool_cache
 
-        async_callables = self._async_manager.get_all_tools_as_callables()
+        async def _get_callables():
+            return self._async_manager.get_all_tools_as_callables()
+
+        async_callables = self._run_async(_get_callables())
         sync_callables = {}
 
         for name, async_fn in async_callables.items():
 
             def make_sync_wrapper(afn):
                 def sync_wrapper(**kwargs):
-                    loop, running = self._get_loop()
-                    if running:
-                        return self._run_in_new_thread(afn(**kwargs))
-                    return loop.run_until_complete(afn(**kwargs))
+                    return self._run_async(afn(**kwargs))
 
                 sync_wrapper.__name__ = afn.__name__
                 sync_wrapper.__doc__ = afn.__doc__
@@ -624,17 +604,30 @@ class MCPClientManagerSync:
 
     def get_tool_descriptions(self) -> str:
         """Get tool descriptions."""
-        return self._async_manager.get_tool_descriptions()
+        async def _get_desc():
+            return self._async_manager.get_tool_descriptions()
+        return self._run_async(_get_desc())
 
     def shutdown(self) -> None:
-        """Shutdown connections."""
-        self._tool_cache.clear()
-        loop, running = self._get_loop()
-        if running:
-            self._run_in_new_thread(self._async_manager.shutdown())
-            return
-        loop.run_until_complete(self._async_manager.shutdown())
+        """Shutdown connections and stop the background thread."""
+        try:
+            self._tool_cache.clear()
+            # Only attempt to shutdown manager if loop is running
+            if not self._loop.is_closed():
+                self._run_async(self._async_manager.shutdown())
+        except Exception as e:
+            print(f"Error shutting down MCP sync manager: {e}")
+        finally:
+            # Stop the loop if it's still running
+            if not self._loop.is_closed():
+                self._loop.call_soon_threadsafe(self._loop.stop)
+
+            # Join the thread
+            if self._thread.is_alive():
+                self._thread.join(timeout=5.0)
 
     def get_status(self) -> Dict[str, Any]:
         """Get status information."""
-        return self._async_manager.get_status()
+        async def _get_stat():
+            return self._async_manager.get_status()
+        return self._run_async(_get_stat())
