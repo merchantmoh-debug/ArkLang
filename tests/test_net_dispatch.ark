@@ -1,0 +1,65 @@
+
+// tests/test_net_dispatch.ark
+
+sys.vm.source("lib/std/net.ark")
+
+// Enable noise for consistency but not required
+net.config.ENABLE_NOISE := false
+
+// Shared state for verification
+state := {
+    received: false,
+    msg: ""
+}
+
+func my_handler(peer, msg) {
+    print("[Test Handler] Received message from " + peer.ip + ": " + msg)
+    state.received := true
+    state.msg := msg
+}
+
+func server_loop() {
+    print("[Test] Server Thread Started on port 8083")
+    // This call will fail until net.listen is updated to accept a handler
+    net.listen(8083, my_handler)
+}
+
+print("[Test] Spawning Server...")
+sys.thread.spawn(server_loop)
+
+print("[Test] Sleeping 1s to allow server start...")
+sys.time.sleep(1)
+
+print("[Test] Connecting to server...")
+handle := net.connect("127.0.0.1", 8083)
+
+if handle == -1 {
+    print("[Test] Connection Failed!")
+    sys.exit(1)
+}
+
+print("[Test] Connected. Handle: " + handle)
+
+print("[Test] Sleeping 1s to separate packets...")
+sys.time.sleep(1)
+
+print("[Test] Sending 'Hello Dispatch'...")
+// Send directly on the socket handle, or use net.broadcast if peers are synced
+// Since net.connect adds to peers, broadcast should work too, but let's be explicit
+sys.net.socket.send(handle, "Hello Dispatch")
+
+print("[Test] Sleeping 2s to allow message processing...")
+sys.time.sleep(2)
+
+if state.received {
+    if state.msg == "Hello Dispatch" {
+        print("[Test] PASS: Handler received correct message.")
+    } else {
+        print("[Test] FAIL: Handler received wrong message: " + state.msg)
+    }
+} else {
+    print("[Test] FAIL: Handler was not called.")
+}
+
+// Cleanup
+sys.net.socket.close(handle)

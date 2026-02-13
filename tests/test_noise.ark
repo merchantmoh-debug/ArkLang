@@ -1,12 +1,18 @@
 // tests/test_noise.ark
 
+sys.vm.source("lib/std/net.ark")
+
 // Enable Noise
 net.config.ENABLE_NOISE := true
 print("[Test] Noise Enabled: " + net.config.ENABLE_NOISE)
 
+func dummy_handler(peer, msg) {
+    print("[Test Handler] Recv: " + msg)
+}
+
 func server_loop() {
     print("[Test] Server Thread Started")
-    net.listen(8082)
+    net.listen(8082, dummy_handler)
 }
 
 print("[Test] Spawning Server...")
