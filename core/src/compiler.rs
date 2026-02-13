@@ -172,6 +172,10 @@ impl Compiler {
                 self.chunk.write(OpCode::GetField(field.clone()));
             }
 
+            Expression::Literal(s) => {
+                self.chunk.write(OpCode::Push(Value::String(s.clone())));
+            }
+
             Expression::Variable(name) => {
                 self.chunk.write(OpCode::Load(name.clone()));
             }
@@ -249,9 +253,6 @@ impl Compiler {
                         self.chunk.write(OpCode::Call(args.len()));
                     }
                 }
-            }
-            _ => {
-                // println!("Compiler Warning: Unimplemented expr");
             }
         }
     }

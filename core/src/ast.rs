@@ -18,6 +18,7 @@
 
 use crate::types::ArkType;
 use serde::{Deserialize, Serialize};
+use serde_json::{to_string, to_value};
 use thiserror::Error;
 
 use hex;
@@ -39,9 +40,12 @@ pub struct MastNode {
 
 impl MastNode {
     pub fn new(content: ArkNode) -> Result<Self, AstError> {
-        let serialized = bincode::serialize(&content)?;
+        // Serialize content to Canonical JSON (Matches verification in loader.rs)
+        let val = to_value(&content).map_err(|e| bincode::Error::new(bincode::ErrorKind::Custom(e.to_string())))?;
+        let canonical = to_string(&val).map_err(|e| bincode::Error::new(bincode::ErrorKind::Custom(e.to_string())))?;
+
         let mut hasher = Sha256::new();
-        hasher.update(&serialized);
+        hasher.update(canonical.as_bytes());
         let result = hasher.finalize();
         let hash = hex::encode(result);
         Ok(MastNode { hash, content })

@@ -9,10 +9,15 @@
 use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
 use serde_json::json;
 use std::fs;
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+#[cfg(not(target_arch = "wasm32"))]
+static AI_CLIENT: OnceLock<Client> = OnceLock::new();
 
 pub struct IntrinsicRegistry;
 
@@ -352,7 +357,14 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
             api_key
         );
 
-        let client = Client::new();
+        // Optimization: Reuse Client (Connection Pool)
+        let client = AI_CLIENT.get_or_init(|| {
+            Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .unwrap_or_else(|_| Client::new())
+        });
+
         let payload = json!({
             "contents": [{
                 "parts": [{"text": prompt}]
