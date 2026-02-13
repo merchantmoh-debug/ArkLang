@@ -42,9 +42,14 @@ pub fn load_ark_program(json: &str) -> Result<MastNode, LoadError> {
 }
 
 fn verify_mast_integrity(mast: &MastNode) -> Result<(), LoadError> {
-    // 1. Serialize content using bincode (matching MastNode::new)
-    let serialized = bincode::serialize(&mast.content)
-        .map_err(|e| AstError::Serialization(e))?;
+    // 1. Serialize content using JSON (to match Python compiler)
+    // canonical? serde_json::to_string isn't strictly canonical (whitespace etc).
+    // But duplicate key handling etc?
+    // Ideally we'd use serde_jcs but for now let's reliance on standard to_string execution parity.
+    // Python uses separators=(',', ':')
+    // We need to ensure we don't have spaces.
+    // serde_json::to_string produces tight JSON.
+    let serialized = serde_json::to_string(&mast.content).map_err(|e| LoadError::ParseError(e))?;
 
     // 2. Compute Hash
     let mut hasher = Sha256::new();

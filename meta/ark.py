@@ -1087,21 +1087,19 @@ INTRINSICS = {
     "sys.struct.get": sys_struct_get,
     "sys.struct.set": sys_struct_set,
     "sys.str.get": sys_list_get,
-    "sys.struct.get": sys_struct_get,
     "sys.struct.has": sys_struct_has,
-    "sys.struct.set": sys_struct_set,
     "sys.chain.height": sys_chain_height,
     "sys.chain.get_balance": sys_chain_get_balance,
     "sys.chain.submit_tx": sys_chain_submit_tx,
     "sys.chain.verify_tx": sys_chain_verify_tx,
     "sys.time.now": sys_time_now,
     "sys.time.sleep": sys_time_sleep,
-    "sys.time.sleep": sys_time_sleep,
+
     "math.sin_scaled": math_sin_scaled,
     "math.cos_scaled": math_cos_scaled,
     "math.pi_scaled": math_pi_scaled,
     "sys.str.from_code": sys_str_from_code,
-
+}
 
 
 # --- Evaluator ---
