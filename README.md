@@ -15,23 +15,51 @@
   > PROTOCOL OMEGA: QUANTUM LEAP >
 ```
 
-# ARK: THE SOVEREIGN LANGUAGE (v113.1)
+# ARK: THE SOVEREIGN LANGUAGE (v113.2)
 ### *System Classification: NEURO-SYMBOLIC COMPILER*
 
-![Status](https://img.shields.io/badge/Language-RUST_CORE-orange?style=for-the-badge) ![Intel](https://img.shields.io/badge/Intelligence-NATIVE_AI-00ffff?style=for-the-badge) ![Proof](https://img.shields.io/badge/Self_Hosted-YES-00ff00?style=for-the-badge)
+![Status](https://img.shields.io/badge/Language-RUST_CORE-orange?style=for-the-badge) ![Intel](https://img.shields.io/badge/Intelligence-NATIVE_AI-00ffff?style=for-the-badge) ![Arch](https://img.shields.io/badge/Architecture-DUAL_RUNTIME-purple?style=for-the-badge)
 
 ---
 
-> **"This is not a wrapper. This is a Civilization."**
+## 🏗️ 1. THE ARCHITECTURE (WHAT IS ARK?)
+
+**Ark is a statically-typed, graph-based programming language designed for the Age of AI.**
+
+Before we talk about "Sovereignty" or "Manifestos," you need to understand the machine.
+
+### A. The Language (Syntax)
+Ark looks like a fusion of Go and Rust. It uses **Linear Types** to manage memory without a Garbage Collector.
+*   **File Extension:** `.ark`
+*   **Paradigm:** Imperative, Functional, Graph-Based.
+*   **Key Feature:** `intrinsic_ask_ai` (LLMs are Treated as CPU Instructions).
+
+### B. The Dual-Runtime Engine
+Ark is unique because it runs on **Two Engines**:
+1.  **The Genesis Engine (Python):** `meta/ark.py`
+    *   **Role:** The Bootstrapper.
+    *   **What it does:** It parses Ark code and interprets it immediately. This allows for rapid prototyping and self-modification of the compiler.
+    *   **Why:** Because Python is the language of AI (PyTorch/TensorFlow). Ark lives where the AI lives.
+2.  **The Prime Engine (Rust):** `core/src/`
+    *   **Role:** The Heavy Lifter.
+    *   **What it does:** It enables the **Graph Virtual Machine (GVM)**. It executes Ark Bytecode at native speeds using `Tokio` for async I/O.
+    *   **Why:** Because Sovereignty requires performance and memory safety.
+
+### C. The Memory Model (Graph Arena)
+Traditional languages use a Stack and a Heap.
+Ark uses a **Directed Acyclic Graph (DAG)** of resources.
+*   **Code as Data:** Functions are stored as nodes in a Merkle Tree.
+*   **Data as Graph:** Objects are nodes in a `GraphArena` (`core/src/vm.rs`).
+*   **Result:** The entire runtime state is hash-verifiable. This is the foundation of the **Sovereign Blockchain**.
 
 ---
 
 ## 📜 TABLE OF CONTENTS
-1.  [The Deep Core (What We Built)](#-the-deep-core-what-we-built)
-2.  [The Language (Ark)](#-the-language-ark)
-3.  [The Factory (The Swarm)](#-the-factory-the-swarm)
-4.  [The Market Reality](#-the-market-reality)
-5.  [The Proof](#-the-proof)
+1.  [The Architecture (What is Ark?)](#-1-the-architecture-what-is-ark)
+2.  [The Deep Core (What We Built)](#-the-deep-core-what-we-built)
+3.  [The Language (Sovereign Code)](#-the-language-sovereign-code)
+4.  [The Factory (The Swarm)](#-the-factory-the-swarm)
+5.  [The Market Reality](#-the-market-reality)
 6.  [Initiation Protocols](#-initiation-protocols)
 
 ---
@@ -63,13 +91,12 @@ Ark runs on Metal (Rust) and in the Matrix (Browser).
 
 ---
 
-## 🧬 THE LANGUAGE (ARK)
+## 🧬 THE LANGUAGE (SOVEREIGN CODE)
 
-Ark is a compiled, statically-analysed language built on **Rust**.
-It is designed to solve the "Crisis of Computation": The gap between **Safe Systems** and **AI Creativity**.
+Ark is designed to solve the "Crisis of Computation": The gap between **Safe Systems** and **AI Creativity**.
 
 ### 1. The Physics of Linear Types ⚡
-Ark uses **Linear Types** to enforce memory safety without a Garbage Collector.
+Ark uses **Linear Types** to enforce memory safety.
 Every resource (memory buffer, file handle, socket) has a single owner. It must be consumed exactly once.
 
 **The Code:**
@@ -124,7 +151,7 @@ The industry is selling you "Abstractions." We are building "Primitives."
 | Feature | Ark (Sovereign) | Devin / Cursor (Corporate) | LangChain (Legacy) |
 | :--- | :--- | :--- | :--- |
 | **Philosophy** | **Civilization Platform** | VS Code Plugin | Python Library |
-| **Self-Hosting** | **Yes (`lsp.ark`)** | No (Closed Source) | No (Python Dependency) |
+| **Architecture** | **Dual-Runtime (Py/Rust)** | Closed Source | Python-Only |
 | **Execution** | **Linear Types** (Safe) | Untyped Python/JS | Spaghetti Code |
 | **Economy** | **Native Blockchain** | Stripe/Credit Card | N/A |
 | **Cost** | **$0 (Open Source)** | $500/month/seat | $Expensive Enterprise |
