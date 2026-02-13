@@ -5,10 +5,10 @@ from unittest.mock import patch, MagicMock
 import subprocess
 
 # Add src to path
-sys.path.append(os.path.abspath("src"))
+sys.path.append(os.path.abspath("."))
 
-from sandbox.local import LocalSandbox
-from sandbox.base import ExecutionResult
+from src.sandbox.local import LocalSandbox
+from src.sandbox.base import ExecutionResult
 
 class TestLocalSandbox(unittest.TestCase):
 
