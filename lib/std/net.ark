@@ -96,7 +96,9 @@ socket := {
 // --- P2P Network Logic ---
 
 // Global Peers List
-peers := []
+_net_state := {
+    peers: []
+}
 
 func net_connect(ip, port) {
     // 1. Connect
@@ -124,32 +126,23 @@ func net_connect(ip, port) {
         last_seen: sys.time.now(),
         socket: handle
     }
-    sys.list.append(peers, peer)
+    sys.list.append(_net_state.peers, peer)
     print("[Net] Connected to " + ip + ":" + port)
     return handle
 }
 
 func net_broadcast(msg) {
     i := 0
-    // Use dynamic length check as we might remove peers
-    while i < len(peers) {
-        p := peers[i]
-
-        // Handle disconnected peers
-        res := sys.net.socket.send(p.socket, msg)
-
-        if res == false {
-            print("[Net] Peer " + p.ip + " disconnected (send failed). Removing.")
-            sys.net.socket.close(p.socket)
-            sys.list.delete(peers, i)
-            // Do not increment i, as the next peer shifted to this index
-        } else {
-            i := i + 1
-        }
+    len_peers := len(_net_state.peers)
+    while i < len_peers {
+        p := _net_state.peers[i]
+        // TODO: Handle disconnected peers
+        sys.net.socket.send(p.socket, msg)
+        i := i + 1
     }
 }
 
-func net_listen(port) {
+func net_listen(port, handler) {
     server := sys.net.socket.bind(port)
     sys.net.socket.set_timeout(server, 100)
 
@@ -186,14 +179,14 @@ func net_listen(port) {
                     last_seen: sys.time.now(),
                     socket: client
                 }
-                sys.list.append(peers, peer)
+                sys.list.append(_net_state.peers, peer)
             }
         }
 
         // 2. Poll Existing Peers
         i := 0
-        while i < len(peers) {
-            p := peers[i]
+        while i < len(_net_state.peers) {
+            p := _net_state.peers[i]
             msg := sys.net.socket.recv(p.socket, 1024)
 
             if msg != false {
@@ -201,12 +194,13 @@ func net_listen(port) {
                     // EOF / Closed
                     print("[Net] Peer " + p.ip + " disconnected")
                     sys.net.socket.close(p.socket)
-                    sys.list.delete(peers, i)
+                    sys.list.pop(_net_state.peers, i)
                     // Don't increment i, next item shifted to i
                 } else {
                     p.last_seen := sys.time.now()
                     print("[Net] Recv from " + p.ip + ": " + msg)
-                    // TODO: Dispatch message handler
+                    // Dispatch message handler
+                    handler(p, msg)
                     i := i + 1
                 }
             } else {
@@ -234,5 +228,5 @@ net := {
     connect: net_connect,
     listen: net_listen,
     broadcast: net_broadcast,
-    peers: peers
+    peers: _net_state.peers
 }

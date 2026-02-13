@@ -1,7 +1,13 @@
 
+sys.vm.source("lib/std/net.ark")
+
+func dummy_handler(peer, msg) {
+    print("[Test Handler] Recv: " + msg)
+}
+
 func server_loop() {
     print("[Test] Server Thread Started")
-    net.listen(8081)
+    net.listen(8081, dummy_handler)
 }
 
 print("[Test] Spawning Server...")
