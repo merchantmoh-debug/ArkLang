@@ -50,6 +50,9 @@ class TestMemoryManager(unittest.TestCase):
         manager.add_entry("user", "Hello, world!")
         manager.save_memory()
 
+        # JULES-FIX: Wait for async save to complete
+        manager.wait_for_persistence()
+
         # Verify file exists
         self.assertTrue(os.path.exists(self.memory_file))
 
@@ -83,11 +86,10 @@ class TestMemoryManager(unittest.TestCase):
             json.dump(legacy_data, f)
 
         # Initialize manager - should trigger migration
-        # Note: Manager defaults to checking "agent_memory.json" if main file missing
-        # We need to make sure we use a filename that triggers this logic if passed explicitly?
-        # The logic is: `if not os.path.exists(self.memory_file) and os.path.exists(legacy_file):`
-        # So passing any new filename works as long as it doesn't exist yet.
         manager = MemoryManager(memory_file=self.memory_file)
+
+        # JULES-FIX: Wait for async save (triggered by migration) to complete
+        manager.wait_for_persistence()
 
         # Check migration results
         self.assertTrue(os.path.exists(legacy_file + ".bak"))
@@ -105,6 +107,9 @@ class TestMemoryManager(unittest.TestCase):
         # Add 5 messages
         for i in range(5):
             manager.add_entry("user", f"Message {i}")
+
+        # Wait for persistence for clean state (optional but good)
+        manager.wait_for_persistence()
 
         # Request context window with max_messages=2
         # Should summarize the first 3 messages
@@ -126,6 +131,10 @@ class TestMemoryManager(unittest.TestCase):
         self.assertIn("Message 1", manager.summary)
         self.assertIn("Message 2", manager.summary)
 
+        # Ensure summary change was persisted
+        manager.wait_for_persistence()
+        # (Could check file here, but test_persistence_and_encryption covers format)
+
     def test_corrupt_memory_file(self):
         """Test handling of a corrupt memory file."""
         # Write garbage to the file
@@ -142,8 +151,10 @@ class TestMemoryManager(unittest.TestCase):
         manager.add_entry("user", "test")
         manager.summary = "summary"
         manager.save_memory()
+        manager.wait_for_persistence()
 
         manager.clear_memory()
+        manager.wait_for_persistence()
 
         self.assertEqual(manager.get_history(), [])
         self.assertEqual(manager.summary, "")
