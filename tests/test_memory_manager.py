@@ -163,5 +163,64 @@ class TestMemoryManager(unittest.TestCase):
         new_manager = MemoryManager(memory_file=self.memory_file)
         self.assertEqual(new_manager.get_history(), [])
 
+    def test_legacy_migration_corrupt_file(self):
+        """Test that a corrupt legacy file is not migrated and remains untouched."""
+        legacy_file = "agent_memory.json"
+
+        # Ensure target memory file does not exist, so migration logic triggers
+        if os.path.exists(self.memory_file):
+            os.remove(self.memory_file)
+
+        with open(legacy_file, "w") as f:
+            f.write("INVALID_JSON")
+
+        try:
+            # Initialize manager - should attempt migration but fail gracefully
+            manager = MemoryManager(memory_file=self.memory_file)
+
+            # Check migration failure
+            self.assertTrue(os.path.exists(legacy_file))  # Should still exist
+            self.assertFalse(os.path.exists(legacy_file + ".bak"))  # Should not be renamed
+
+            # Memory should be empty (since load failed)
+            self.assertEqual(manager.get_history(), [])
+        finally:
+            # Explicit cleanup
+            if os.path.exists(legacy_file):
+                os.remove(legacy_file)
+
+    def test_plaintext_memory_file_fallback(self):
+        """Test fallback to loading plaintext memory file if encryption fails."""
+        # Create a plaintext memory file (simulating older version or key loss)
+        plaintext_data = {
+            "summary": "Plaintext Summary",
+            "history": [{"role": "system", "content": "Plaintext Content"}]
+        }
+        with open(self.memory_file, "w") as f:
+            json.dump(plaintext_data, f)
+
+        # Initialize manager - should detect plaintext and load it
+        manager = MemoryManager(memory_file=self.memory_file)
+
+        # Check loaded data
+        self.assertEqual(manager.summary, "Plaintext Summary")
+        self.assertEqual(len(manager.get_history()), 1)
+        self.assertEqual(manager.get_history()[0]["content"], "Plaintext Content")
+
+        # Verify file is now encrypted
+        with open(self.memory_file, "rb") as f:
+            content = f.read()
+            # Should fail to decode as utf-8 json directly
+            try:
+                json.loads(content.decode("utf-8"))
+                self.fail("File was not encrypted after load!")
+            except json.JSONDecodeError:
+                pass  # Good, likely encrypted
+            except UnicodeDecodeError:
+                pass  # Good, encrypted binary data
+
+            # Should be decryptable
+            manager._fernet.decrypt(content)
+
 if __name__ == "__main__":
     unittest.main()
