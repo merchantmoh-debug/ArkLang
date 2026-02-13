@@ -1361,6 +1361,9 @@ def handle_get_attr(node, scope):
         if klass and attr in klass.methods:
             method = klass.methods[attr]
             return ArkValue((method, obj), "BoundMethod")
+    if obj.type == "Class":
+        if attr in obj.val.methods:
+            return ArkValue(obj.val.methods[attr], "Function")
     raise Exception(f"Attribute {attr} not found on {obj.type}")
 
 def handle_call_expr(node, scope):
