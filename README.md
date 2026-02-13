@@ -1,4 +1,6 @@
 
+<div align="center">
+
 ```text
       ___           ___           ___     
      /\  \         /\  \         /\__\    
@@ -19,6 +21,9 @@
 ### *System Classification: NEURO-SYMBOLIC COMPILER*
 
 ![Status](https://img.shields.io/badge/Language-RUST_CORE-orange?style=for-the-badge) ![Intel](https://img.shields.io/badge/Intelligence-NATIVE_AI-00ffff?style=for-the-badge) ![Arch](https://img.shields.io/badge/Architecture-DUAL_RUNTIME-purple?style=for-the-badge)
+
+</div>
+
 
 ---
 
