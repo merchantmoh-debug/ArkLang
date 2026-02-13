@@ -1,0 +1,17 @@
+// Test AI Agent
+sys.vm.source("lib/std/ai.ark")
+
+print("Loaded ai.ark")
+
+// Define a test function
+func test_agent() {
+    print("Testing Agent.new()...")
+    a := Agent.new("You are a helpful assistant.")
+    print("Agent instance created.")
+
+    // Test chat method (mock AI will return a string)
+    res := a.chat("Hello world")
+    print("Chat response: " + res)
+}
+
+test_agent()

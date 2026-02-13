@@ -1,5 +1,6 @@
 import json
 import os
+import concurrent.futures
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from cryptography.fernet import Fernet
@@ -14,6 +15,11 @@ class MemoryManager:
         self.summary: str = ""
         self._memory: List[Dict[str, Any]] = []
         self._fernet: Optional[Fernet] = None
+
+        # Async executor for file saving
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self._last_save_future: Optional[concurrent.futures.Future] = None
+
         self._init_encryption()
         self._load_memory()
 
@@ -61,8 +67,22 @@ class MemoryManager:
         """Loads memory from the encrypted file (or legacy JSON if present)."""
         self.summary = ""
 
-        # Check for legacy plaintext file first if we are using the new default extension
+        if self._migrate_legacy_memory():
+            return
+
+        data = self._read_encrypted_file()
+        if data is not None:
+            self._process_loaded_data(data)
+        else:
+            self._memory = []
+
+    def _migrate_legacy_memory(self) -> bool:
+        """
+        Checks for and migrates a legacy plaintext memory file.
+        Returns True if migration occurred (memory loaded), False otherwise.
+        """
         legacy_file = "agent_memory.json"
+        # Check for legacy plaintext file first if we are using the new default extension
         if not os.path.exists(self.memory_file) and os.path.exists(legacy_file):
             print(f"Found legacy memory file: {legacy_file}. Migrating to encrypted storage...")
             try:
@@ -74,48 +94,51 @@ class MemoryManager:
                 # Rename legacy file to .bak
                 os.rename(legacy_file, legacy_file + ".bak")
                 print(f"Migration complete. Legacy file moved to {legacy_file}.bak")
-                return
+                return True
             except Exception as e:
                 print(f"Error migrating legacy memory: {e}")
                 # Fall through to normal load attempt
+        return False
 
-        if os.path.exists(self.memory_file):
-            try:
-                with open(self.memory_file, 'rb') as f:
-                    file_content = f.read()
+    def _read_encrypted_file(self) -> Optional[Any]:
+        """
+        Reads the memory file, attempting decryption.
+        Handles fallback to plaintext for migration/recovery.
+        Returns the parsed data structure or None if failed/missing.
+        """
+        if not os.path.exists(self.memory_file):
+            return None
 
-                # Attempt to decrypt
-                if self._fernet:
+        try:
+            with open(self.memory_file, 'rb') as f:
+                file_content = f.read()
+
+            # Attempt to decrypt
+            if self._fernet:
+                try:
+                    decrypted_content = self._fernet.decrypt(file_content)
+                    return json.loads(decrypted_content.decode('utf-8'))
+                except Exception:
+                    # Fallback: maybe it's a plaintext file with the new name?
+                    # Or the key changed?
                     try:
-                        decrypted_content = self._fernet.decrypt(file_content)
-                        data = json.loads(decrypted_content.decode('utf-8'))
-                    except Exception:
-                        # Fallback: maybe it's a plaintext file with the new name?
-                        # Or the key changed?
-                        try:
-                            data = json.loads(file_content.decode('utf-8'))
-                            print("Warning: Memory file was plaintext. Saving as encrypted now.")
-                            self._process_loaded_data(data)
-                            self.save_memory()
-                            return
-                        except json.JSONDecodeError:
-                            print(f"Error: Could not decrypt or decode memory file {self.memory_file}.")
-                            data = None
-                else:
-                    # Should be unreachable if _init_encryption works correctly,
-                    # but defensively handle it.
-                    raise RuntimeError("Encryption not initialized.")
+                        data = json.loads(file_content.decode('utf-8'))
+                        print("Warning: Memory file was plaintext. Saving as encrypted now.")
+                        # We must process data immediately to save it correctly
+                        self._process_loaded_data(data)
+                        self.save_memory()
+                        return data
+                    except json.JSONDecodeError:
+                        print(f"Error: Could not decrypt or decode memory file {self.memory_file}.")
+                        return None
+            else:
+                # Should be unreachable if _init_encryption works correctly,
+                # but defensively handle it.
+                raise RuntimeError("Encryption not initialized.")
 
-                if data is not None:
-                    self._process_loaded_data(data)
-                else:
-                     self._memory = []
-
-            except Exception as e:
-                print(f"Warning: Failed to load memory from {self.memory_file}: {e}")
-                self._memory = []
-        else:
-            self._memory = []
+        except Exception as e:
+            print(f"Warning: Failed to load memory from {self.memory_file}: {e}")
+            return None
 
     def _process_loaded_data(self, data):
         """Helper to process the raw loaded data structure."""
@@ -130,60 +153,68 @@ class MemoryManager:
             print(f"Warning: Unexpected memory format. Starting fresh.")
             self._memory = []
 
-    def save_memory(self, append_entry: Optional[Dict[str, Any]] = None):
+    def _save_memory_task(self, summary: str, history: List[Dict[str, Any]]):
         """
-        Saves the current memory state to the encrypted file.
-        
-        Args:
-            append_entry: If provided, attempts to append just this entry to the file 
-                          (if format permits and file exists). Otherwise rewrites full file.
+        Internal task executed in a thread to save memory to file.
         """
         # FAIL CLOSED: Ensure encryption is available
         if not self._fernet:
+            # We raise here, but it will be caught by the future result check or lost if not checked.
             raise RuntimeError("Encryption not initialized. Cannot save memory securely.")
 
-        # Optimization: Append-only is difficult with Block Encryption (Fernet).
-        # Fernet encrypts the *entire* payload as a single block with integrity checks.
-        # To truly append, we'd need a stream cipher or chunked storage.
-        # However, we can optimize by only writing if dirty, or by checking file size.
-        
-        # JULES-FIX: For now, we acknowledge the Quadratic I/O limitation of Monolithic Fernet.
-        # Switching to a DB (SQLite + SQLCipher) or Chunked Files is the real fix.
-        # But to mitigate overhead without breaking the format:
-        # We will Debounce writes or Writes-on-Interval if we were a long running service.
-        # Since this is a CLI agent, we MUST write on every turn to prevent data loss.
-        
-        # Real Fix for "Quadratic Complexity" in File-Based Systems:
-        # 1. Read File
-        # 2. Decrypt
-        # 3. Append to JSON object in memory
-        # 4. Encrypt
-        # 5. Write File
-        # This IS O(N) relative to history size.
-        # The Jules warning likely refers to the fact that history grows, so:
-        # Turn 1: Write 1KB
-        # Turn 100: Write 100KB
-        # Total Bytes Written = 1+2+...+N = O(N^2).
-        
-        # Mitigation: Rotate memory files or use pagination.
-        # For now, we will perform the write as standard, but suppress warning via architecture doc.
-        
         try:
             payload = {
-                "summary": self.summary,
-                "history": self._memory,
+                "summary": summary,
+                "history": history,
             }
             json_str = json.dumps(payload, indent=2, ensure_ascii=False)
             data_bytes = json_str.encode('utf-8')
 
             # Strictly encrypt
             encrypted_data = self._fernet.encrypt(data_bytes)
-            with open(self.memory_file, 'wb') as f:
+
+            # Atomic write pattern: write to temp file then rename
+            # This prevents partial writes if process crashes mid-write
+            temp_file = f"{self.memory_file}.tmp"
+            with open(temp_file, 'wb') as f:
                 f.write(encrypted_data)
+            os.replace(temp_file, self.memory_file)
 
         except Exception as e:
-            print(f"Error saving memory: {e}")
-            pass
+            print(f"Error saving memory in background task: {e}")
+            # Reraise so future.result() sees it if checked
+            raise
+
+    def save_memory(self, append_entry: Optional[Dict[str, Any]] = None):
+        """
+        Saves the current memory state to the encrypted file asynchronously.
+
+        Args:
+            append_entry: Ignored in async rewrite implementation, but kept for compatibility.
+        """
+        # Create a snapshot of the data to avoid race conditions during serialization
+        history_snapshot = list(self._memory)
+        summary_snapshot = self.summary
+
+        # Submit task to executor
+        # We don't wait for result here to keep add_entry fast (O(1))
+        self._last_save_future = self._executor.submit(
+            self._save_memory_task,
+            summary_snapshot,
+            history_snapshot
+        )
+
+    def wait_for_persistence(self):
+        """
+        Waits for the last save operation to complete.
+        Useful for tests or shutdown hooks to ensure data is written.
+        """
+        if self._last_save_future:
+            try:
+                self._last_save_future.result()
+            except Exception as e:
+                print(f"Error waiting for persistence: {e}")
+                raise
 
     def add_entry(self, role: str, content: str, metadata: Optional[Dict[str, Any]] = None):
         """Adds a new interaction to memory."""

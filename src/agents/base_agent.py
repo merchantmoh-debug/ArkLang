@@ -6,9 +6,11 @@ and communication with the Gemini API.
 """
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 from google import genai
+from google.genai import types
 from src.config import settings
+from src.tools.openai_proxy import call_openai_chat
 
 
 class BaseAgent:
@@ -30,34 +32,38 @@ class BaseAgent:
         self.role = role
         self.system_prompt = system_prompt
         self.conversation_history: List[Dict[str, str]] = []
+        self.use_openai_backend = False
         
-        # Initialize Gemini client
+        # Initialize Client
         running_under_pytest = "PYTEST_CURRENT_TEST" in os.environ
+
+        # Define Dummy Client for fallbacks
+        class _DummyClient:
+            class _Models:
+                def generate_content(self, model, contents):
+                    class _R:
+                        text = f"[{role}] Task completed"
+                    return _R()
+            def __init__(self):
+                self.models = self._Models()
+
         if running_under_pytest:
             # Dummy client for testing
-            class _DummyClient:
-                class _Models:
-                    def generate_content(self, model, contents):
-                        class _R:
-                            text = f"[{role}] Task completed"
-                        return _R()
-                def __init__(self):
-                    self.models = self._Models()
             self.client = _DummyClient()
         else:
             try:
-                self.client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+                if settings.GOOGLE_API_KEY:
+                    self.client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+                elif settings.OPENAI_BASE_URL:
+                    self.use_openai_backend = True
+                    self.client = None # Not used for OpenAI backend
+                    print(f"🔄 {role} agent: Using OpenAI-compatible backend at {settings.OPENAI_BASE_URL}")
+                else:
+                    # No keys found, raise to trigger fallback
+                    raise ValueError("No GOOGLE_API_KEY or OPENAI_BASE_URL configured")
             except Exception as e:
-                print(f"⚠️ {role} agent: genai client not initialized: {e}")
+                print(f"⚠️ {role} agent: client not initialized: {e}")
                 # Fallback to dummy client
-                class _DummyClient:
-                    class _Models:
-                        def generate_content(self, model, contents):
-                            class _R:
-                                text = f"[{role}] Task completed"
-                            return _R()
-                    def __init__(self):
-                        self.models = self._Models()
                 self.client = _DummyClient()
     
     def execute(self, task: str, context: Optional[List[Dict[str, str]]] = None) -> str:
@@ -72,7 +78,7 @@ class BaseAgent:
             The agent's response as a string.
         """
         # Build the full prompt
-        prompt_parts = [self.system_prompt, f"\n\nTask: {task}"]
+        prompt_parts = [f"Task: {task}"]
         
         # Add context if provided
         if context:
@@ -83,13 +89,23 @@ class BaseAgent:
         
         full_prompt = "".join(prompt_parts)
         
-        # Call Gemini API
         try:
-            response = self.client.models.generate_content(
-                model=settings.GEMINI_MODEL_NAME,
-                contents=full_prompt
-            )
-            result = getattr(response, "text", str(response)).strip()
+            if self.use_openai_backend:
+                # Call OpenAI-compatible API
+                # We pass the full_prompt as the user message.
+                # Alternatively, we could pass system_prompt as 'system', but BaseAgent
+                # historically concatenates everything. Sticking to historical behavior for consistency.
+                result = call_openai_chat(
+                    prompt=full_prompt,
+                    model=settings.OPENAI_MODEL
+                )
+            else:
+                # Call Gemini API
+                response = self.client.models.generate_content(
+                    model=settings.GEMINI_MODEL_NAME,
+                    contents=full_prompt
+                )
+                result = getattr(response, "text", str(response)).strip()
             
             # Store in conversation history
             self.conversation_history.append({
