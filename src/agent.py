@@ -11,14 +11,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-try:
-    from google import genai
-except ImportError:
-    genai = None
+from google import genai
 
-from src.config import settings  # noqa: E402
-from src.memory import MemoryManager  # noqa: E402
-from src.tools.openai_proxy import call_openai_chat  # noqa: E402
+from src.config import settings
+from src.memory import MemoryManager
+from src.utils.dummy_client import DummyClient
+from src.tools.openai_proxy import call_openai_chat
 
 
 class GeminiAgent:
@@ -73,19 +71,7 @@ class GeminiAgent:
         )
 
         if running_under_pytest:
-
-            class _DummyClient:
-                class _Models:
-                    def generate_content(self, model, contents):
-                        class _R:
-                            text = "I have completed the task"
-
-                        return _R()
-
-                def __init__(self):
-                    self.models = self._Models()
-
-            self.client = _DummyClient()
+            self.client = DummyClient(response_text="I have completed the task")
         else:
             try:
                 # If a Google API key is provided, prefer Gemini.
@@ -105,19 +91,7 @@ class GeminiAgent:
                         raise ValueError("No GOOGLE_API_KEY or OPENAI_BASE_URL configured")
             except Exception as e:
                 print(f"⚠️ genai client not initialized: {e}")
-
-                class _DummyClientFallback:
-                    class _Models:
-                        def generate_content(self, model, contents):
-                            class _R:
-                                text = "I have completed the task"
-
-                            return _R()
-
-                    def __init__(self):
-                        self.models = self._Models()
-
-                self.client = _DummyClientFallback()
+                self.client = DummyClient(response_text="I have completed the task")
 
     def _initialize_mcp(self) -> None:
         """
