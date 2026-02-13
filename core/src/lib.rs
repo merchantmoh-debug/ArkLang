@@ -35,4 +35,6 @@ pub mod runtime;
 pub mod types;
 pub mod vm;
 pub mod wasm;
+#[cfg(test)]
+pub mod bench_intrinsics;
 pub use wasm::*;

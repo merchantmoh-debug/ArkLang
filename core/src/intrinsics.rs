@@ -514,16 +514,30 @@ pub fn intrinsic_add(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 2 {
         return Err(RuntimeError::NotExecutable);
     }
-    match (&args[0], &args[1]) {
+
+    let mut iter = args.into_iter();
+    let left = iter.next().unwrap();
+    let right = iter.next().unwrap();
+
+    match (left, right) {
         (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(a + b)),
-        (Value::String(a), Value::String(b)) => Ok(Value::String(format!("{}{}", a, b))),
-        (Value::String(a), Value::Integer(b)) => Ok(Value::String(format!("{}{}", a, b))),
+        (Value::String(mut a), Value::String(b)) => {
+            a.push_str(&b);
+            Ok(Value::String(a))
+        }
+        (Value::String(mut a), Value::Integer(b)) => {
+            a.push_str(&b.to_string());
+            Ok(Value::String(a))
+        }
         (Value::Integer(a), Value::String(b)) => Ok(Value::String(format!("{}{}", a, b))),
-        (Value::String(a), Value::Boolean(b)) => Ok(Value::String(format!("{}{}", a, b))),
+        (Value::String(mut a), Value::Boolean(b)) => {
+            a.push_str(&b.to_string());
+            Ok(Value::String(a))
+        }
         (Value::Boolean(a), Value::String(b)) => Ok(Value::String(format!("{}{}", a, b))),
-        _ => Err(RuntimeError::TypeMismatch(
+        (l, _) => Err(RuntimeError::TypeMismatch(
             "Integer, String, or Boolean".to_string(),
-            args[0].clone(),
+            l,
         )),
     }
 }
