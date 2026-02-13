@@ -91,38 +91,46 @@ class MCPClientManager:
         """
         Load MCP server configurations from JSON file.
 
+        This method offloads the blocking file I/O and JSON parsing to a thread
+        to prevent event loop starvation.
+
         Returns:
             List of MCPServerConfig objects
         """
+        return await asyncio.to_thread(self._load_config_sync)
 
-        def _load():
-            config_file = Path(self.config_path)
+    def _load_config_sync(self) -> List[MCPServerConfig]:
+        """
+        Synchronous helper to load MCP server configurations.
 
-            if not config_file.exists():
-                print(f"   ⚠️ MCP config file not found: {config_file}")
-                return []
+        Note: This method performs blocking I/O (file read) and CPU-bound
+        tasks (JSON parsing) and should always be run in a separate thread.
+        """
+        config_file = Path(self.config_path)
 
-            try:
-                with open(config_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
+        if not config_file.exists():
+            print(f"   ⚠️ MCP config file not found: {config_file}")
+            return []
 
-                servers = data.get("servers", [])
-                configs = []
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
-                for server_data in servers:
-                    if server_data.get("enabled", True):
-                        configs.append(MCPServerConfig(**server_data))
+            servers = data.get("servers", [])
+            configs = []
 
-                return configs
+            for server_data in servers:
+                if server_data.get("enabled", True):
+                    configs.append(MCPServerConfig(**server_data))
 
-            except json.JSONDecodeError as e:
-                print(f"   ❌ Invalid JSON in MCP config: {e}")
-                return []
-            except Exception as e:
-                print(f"   ❌ Error loading MCP config: {e}")
-                return []
+            return configs
 
-        return await asyncio.to_thread(_load)
+        except json.JSONDecodeError as e:
+            print(f"   ❌ Invalid JSON in MCP config: {e}")
+            return []
+        except Exception as e:
+            print(f"   ❌ Error loading MCP config: {e}")
+            return []
 
     async def initialize(self) -> None:
         """
