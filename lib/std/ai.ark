@@ -8,14 +8,16 @@ func ask(prompt) {
 // Struct for an Agent with persona
 class Agent {
     func new(persona) {
-        // Todo: Struct support in Ark-1 is limited to simple maps/tuples in practice.
-        // We will return a closure-like structure or just a config object.
-        return { persona: persona }
+        // Create Instance of Agent (empty fields)
+        a := Agent()
+        // Initialize fields
+        a.persona := persona
+        return a
     }
     
-    func chat(agent_obj, message) {
-        // Basic prompt engineering
-        p := agent_obj.persona
+    func chat(message) {
+        // Use 'this' to access instance state
+        p := this.persona
         full_prompt := "System: " + p + "\nUser: " + message
         return intrinsic_ask_ai(full_prompt)
     }

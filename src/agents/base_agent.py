@@ -6,8 +6,9 @@ and communication with the Gemini API.
 """
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 from google import genai
+from google.genai import types
 from src.config import settings
 from src.tools.openai_proxy import call_openai_chat
 
@@ -77,7 +78,7 @@ class BaseAgent:
             The agent's response as a string.
         """
         # Build the full prompt
-        prompt_parts = [self.system_prompt, f"\n\nTask: {task}"]
+        prompt_parts = [f"Task: {task}"]
         
         # Add context if provided
         if context:

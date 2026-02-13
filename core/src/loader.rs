@@ -42,13 +42,13 @@ pub fn load_ark_program(json: &str) -> Result<MastNode, LoadError> {
 }
 
 fn verify_mast_integrity(mast: &MastNode) -> Result<(), LoadError> {
-    // 1. Serialize content to Canonical JSON (BTreeMap order = Sorted Keys)
-    let val = to_value(&mast.content)?;
-    let canonical = to_string(&val)?;
+    // 1. Serialize content using bincode (matching MastNode::new)
+    let serialized = bincode::serialize(&mast.content)
+        .map_err(|e| AstError::Serialization(e))?;
 
     // 2. Compute Hash
     let mut hasher = Sha256::new();
-    hasher.update(canonical.as_bytes());
+    hasher.update(&serialized);
     let result = hasher.finalize();
     let computed_hash = hex::encode(result);
 
