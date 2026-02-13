@@ -197,9 +197,9 @@ impl LinearChecker {
                 Ok(())
             }
             Statement::Function(func_def) => {
-                // Todo: Check function body with new scope?
-                // For now, just traverse linear usage
-                self.check_function(func_def)
+                // Check function body with new scope to ensure isolation
+                let mut function_checker = LinearChecker::new();
+                function_checker.check_function(func_def)
             }
         }
     }
@@ -658,5 +658,35 @@ mod tests {
             Err(LinearError::UnusedResource(name)) => assert_eq!(name, "buf"),
             _ => panic!("Expected UnusedResource for shadowed variable in destructure of unknown function"),
         }
+    }
+
+    #[test]
+    fn test_nested_function_scope_isolation() {
+        let func = FunctionDef {
+            name: "outer".to_string(),
+            inputs: vec![("x".to_string(), ArkType::Linear("Resource".to_string()))],
+            output: ArkType::Linear("Resource".to_string()),
+            body: Box::new(
+                MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                    Statement::Function(FunctionDef {
+                        name: "inner".to_string(),
+                        inputs: vec![],
+                        output: ArkType::Shared("Void".to_string()),
+                        body: Box::new(
+                            MastNode::new(ArkNode::Statement(Statement::Return(Expression::Literal(
+                                "void".to_string(),
+                            ))))
+                            .unwrap(),
+                        ),
+                    }),
+                    Statement::Return(Expression::Variable("x".to_string())),
+                ])))
+                .unwrap(),
+            ),
+        };
+
+        let mut checker = LinearChecker::new();
+        let result = checker.check_function(&func);
+        assert!(result.is_ok(), "Nested function caused scope leak or false positive unused resource");
     }
 }
