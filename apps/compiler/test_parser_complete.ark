@@ -196,7 +196,7 @@ func parse_term(parser) {
             ref_parser := [p_rhs]
         } else {
             running := false
-            ref_parser := [p_peek] // Fix: Use peek
+            ref_parser := [p_peek] // Use the updated parser state from peek
         }
     }
     let (final, _) := sys.list.get(ref_lhs, 0)

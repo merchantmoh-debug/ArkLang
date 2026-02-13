@@ -9,10 +9,15 @@
 use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
 use serde_json::json;
 use std::fs;
 use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+#[cfg(not(target_arch = "wasm32"))]
+static AI_CLIENT: OnceLock<Client> = OnceLock::new();
 
 pub struct IntrinsicRegistry;
 
@@ -352,7 +357,14 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
             api_key
         );
 
-        let client = Client::new();
+        // Optimization: Reuse Client (Connection Pool)
+        let client = AI_CLIENT.get_or_init(|| {
+            Client::builder()
+                .timeout(Duration::from_secs(30))
+                .build()
+                .unwrap_or_else(|_| Client::new())
+        });
+
         let payload = json!({
             "contents": [{
                 "parts": [{"text": prompt}]
@@ -361,40 +373,49 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
         println!("[Ark:AI] Contacting Gemini (Native Rust)...");
 
-        // Simple Retry Logic
-        for attempt in 0..3 {
-            match client.post(&url).json(&payload).send() {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        let json_resp: serde_json::Value = resp.json().map_err(|e| {
-                            println!("[Ark:AI] JSON Error: {}", e);
-                            RuntimeError::NotExecutable
-                        })?;
+        // Execute async logic within blocking context
+        // SAFETY: This blocks the current thread. Do not call this from within an existing
+        // Tokio runtime context (e.g., inside an async function running on a runtime)
+        // or it will panic. The VM is designed to run in a dedicated thread or process.
+        runtime.block_on(async {
+            // Simple Retry Logic
+            for attempt in 0..3 {
+                match client.post(&url).json(&payload).send().await {
+                    Ok(resp) => {
+                        if resp.status().is_success() {
+                            let json_resp = match resp.json::<serde_json::Value>().await {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    println!("[Ark:AI] JSON Error: {}", e);
+                                    return Err(RuntimeError::NotExecutable);
+                                }
+                            };
 
-                        if let Some(text) =
-                            json_resp["candidates"][0]["content"]["parts"][0]["text"].as_str()
-                        {
-                            return Ok(Value::String(text.to_string()));
+                            if let Some(text) =
+                                json_resp["candidates"][0]["content"]["parts"][0]["text"].as_str()
+                            {
+                                return Ok(Value::String(text.to_string()));
+                            }
+                        } else if resp.status().as_u16() == 429 {
+                            println!("[Ark:AI] Rate limit (429). Retrying...");
+                            tokio::time::sleep(Duration::from_secs(2u64.pow(attempt))).await;
+                            continue;
+                        } else {
+                            println!("[Ark:AI] HTTP Error: {}", resp.status());
                         }
-                    } else if resp.status().as_u16() == 429 {
-                        println!("[Ark:AI] Rate limit (429). Retrying...");
-                        std::thread::sleep(Duration::from_secs(2u64.pow(attempt)));
-                        continue;
-                    } else {
-                        println!("[Ark:AI] HTTP Error: {}", resp.status());
                     }
+                    Err(e) => println!("[Ark:AI] Network Error: {}", e),
                 }
-                Err(e) => println!("[Ark:AI] Network Error: {}", e),
             }
-        }
 
-        // Fallback Mock
-        println!("[Ark:AI] WARNING: API Failed. Using Fallback Mock.");
-        let start = "```python\n";
-        let code =
-            "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
-        let end = "```";
-        Ok(Value::String(format!("{}{}{}", start, code, end)))
+            // Fallback Mock
+            println!("[Ark:AI] WARNING: API Failed. Using Fallback Mock.");
+            let start = "```python\n";
+            let code =
+                "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
+            let end = "```";
+            Ok(Value::String(format!("{}{}{}", start, code, end)))
+        })
     }
 }
 
