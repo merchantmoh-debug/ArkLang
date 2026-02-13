@@ -1,5 +1,6 @@
 import json
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 import requests
 
@@ -16,21 +17,25 @@ def call_local_ollama(
     
     Security: Restricts 'host' to generic local loopback addresses to prevent SSRF.
     """
-    # SSRF Protection: Only allow local loopback
-    allowed_hosts = ["http://127.0.0.1", "http://localhost", "https://127.0.0.1", "https://localhost"]
     clean_host = host.rstrip('/')
     
-    # Check if host starts with any allowed prefix
-    if not any(clean_host.startswith(allowed) for allowed in allowed_hosts):
-         # Also allow specific port 11434 checks if needed, but simplest is prefix
-         # Actually, let's be strict.
-         if not (clean_host == "http://127.0.0.1:11434" or clean_host == "http://localhost:11434"):
-             # Fallback for custom ports on localhost: check hostname parsing
-             from urllib.parse import urlparse
-             parsed = urlparse(clean_host)
-             if parsed.hostname not in ("127.0.0.1", "localhost"):
-                  return f"[Security Block] Host '{host}' is not allowed. Localhost only."
+    # SSRF Protection: Strict hostname validation
+    try:
+        parsed = urlparse(clean_host)
+    except Exception:
+        return f"[Security Block] Invalid host format: '{host}'"
 
+    # Validate scheme
+    if parsed.scheme not in ("http", "https"):
+        return f"[Security Block] Scheme '{parsed.scheme}' not allowed. HTTP/HTTPS only."
+
+    # Validate hostname (must be exactly localhost or 127.0.0.1)
+    if parsed.hostname not in ("127.0.0.1", "localhost"):
+        return f"[Security Block] Host '{parsed.hostname}' is not allowed. Localhost only."
+
+    # Reconstruct URL safely
+    # Note: We use the original clean_host structure but now we know the hostname is safe.
+    # We could reconstruct from parsed, but clean_host is sufficient given the checks.
     url = f"{clean_host}/api/generate"
     payload = {
         "model": model,
