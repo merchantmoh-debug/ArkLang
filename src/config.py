@@ -1,6 +1,5 @@
-import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -54,6 +53,31 @@ class Settings(BaseSettings):
 
     # Memory Configuration
     MEMORY_FILE: str = "agent_memory.enc"
+
+    # Sandbox Security Configuration
+    BANNED_IMPORTS: Set[str] = Field(
+        default={
+            "os", "sys", "subprocess", "shutil", "importlib", "socket",
+            "pickle", "urllib", "http", "xml", "base64", "pty", "pdb",
+            "platform", "venv", "ensurepip", "site", "imp", "posix", "nt"
+        },
+        description="Set of banned modules for local sandbox execution"
+    )
+    BANNED_FUNCTIONS: Set[str] = Field(
+        default={
+            "open", "exec", "eval", "compile", "__import__", "input",
+            "exit", "quit", "help", "dir", "vars", "globals", "locals",
+            "breakpoint", "memoryview"
+        },
+        description="Set of banned built-in functions for local sandbox execution"
+    )
+    BANNED_ATTRIBUTES: Set[str] = Field(
+        default={
+            "__subclasses__", "__bases__", "__globals__", "__code__",
+            "__closure__", "__func__", "__self__", "__module__", "__dict__"
+        },
+        description="Set of banned attributes for local sandbox execution"
+    )
 
     # MCP Configuration
     MCP_ENABLED: bool = Field(default=False, description="Enable MCP integration")

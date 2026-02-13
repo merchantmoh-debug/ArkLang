@@ -6,6 +6,7 @@ import subprocess
 import ast
 from typing import Tuple, List, Set
 
+from src.config import settings
 from .base import CodeSandbox, ExecutionResult
 
 
@@ -25,22 +26,11 @@ class SecurityVisitor(ast.NodeVisitor):
     def __init__(self):
         self.errors: List[str] = []
         # Blacklist of dangerous modules
-        self.banned_imports: Set[str] = {
-            "os", "sys", "subprocess", "shutil", "importlib", "socket",
-            "pickle", "urllib", "http", "xml", "base64", "pty", "pdb",
-            "platform", "venv", "ensurepip", "site", "imp", "posix", "nt"
-        }
+        self.banned_imports: Set[str] = settings.BANNED_IMPORTS
         # Blacklist of dangerous builtins/functions
-        self.banned_functions: Set[str] = {
-            "open", "exec", "eval", "compile", "__import__", "input",
-            "exit", "quit", "help", "dir", "vars", "globals", "locals",
-            "breakpoint", "memoryview"
-        }
+        self.banned_functions: Set[str] = settings.BANNED_FUNCTIONS
         # Blacklist of dangerous attributes often used for exploits
-        self.banned_attributes: Set[str] = {
-            "__subclasses__", "__bases__", "__globals__", "__code__",
-            "__closure__", "__func__", "__self__", "__module__", "__dict__"
-        }
+        self.banned_attributes: Set[str] = settings.BANNED_ATTRIBUTES
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
