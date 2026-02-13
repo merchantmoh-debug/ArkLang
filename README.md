@@ -46,6 +46,8 @@ We are not building tools for employees.
 7.  [Red Team Analysis (The Truth)](#-7-red-team-analysis-why-you-should-doubt-us)
 8.  [Initiation Protocols](#-8-initiation-protocols)
 
+> **📘 DOCUMENTATION:** [**READ THE USER MANUAL**](docs/USER_MANUAL.md) | [Technical Dossier](docs/ARK_TECHNICAL_DOSSIER.md)
+
 ---
 
 ## 🔥 1. THE MANIFESTO: WHY SOFTWARE IS BROKEN
@@ -255,6 +257,15 @@ export ARK_API_KEY="sk-..."
 
 # Deploy the Agents to build a new feature
 python3 meta/swarm_bridge.py
+```
+
+### D. The Docker Sanctuary (Isolation)
+```bash
+# Build the Container
+docker build -t ark-compiler .
+
+# Enter the Sovereign Shell
+docker run -it --rm ark-compiler
 ```
 
 ---
