@@ -11,11 +11,14 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from google import genai
+try:
+    from google import genai
+except ImportError:
+    genai = None
 
-from src.config import settings
-from src.memory import MemoryManager
-from src.tools.openai_proxy import call_openai_chat
+from src.config import settings  # noqa: E402
+from src.memory import MemoryManager  # noqa: E402
+from src.tools.openai_proxy import call_openai_chat  # noqa: E402
 
 
 class GeminiAgent:
