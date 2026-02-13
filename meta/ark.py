@@ -951,15 +951,42 @@ def sys_net_http_serve(args: List[ArkValue]):
         raise Exception("sys.net.http.serve expects port(int) and handler(function)")
 
     port = int(args[0].val)
-    # handler_func = args[1]
+    handler_func = args[1]
+    
+    if handler_func.type != "Function":
+        raise Exception("Handler must be a function")
 
     from http.server import BaseHTTPRequestHandler, HTTPServer
 
     class ArkHTTPHandler(BaseHTTPRequestHandler):
         def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Hello from Ark Server (Stub)")
+            # Map request to Ark Value
+            req_path = ArkValue(self.path, "String")
+            
+            # Call Ark Function
+            # We need to construct arguments list
+            call_args = [req_path]
+            
+            # Invoke the interpreter synchronously
+            # Note: This blocks the server thread, which is fine for this proof-of-concept
+            try:
+                result = call_user_func(handler_func.val, call_args)
+                
+                # Convert Result back to bytes
+                resp_body = b""
+                if result.type == "String":
+                    resp_body = result.val.encode('utf-8')
+                else:
+                    resp_body = str(result.val).encode('utf-8')
+
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(resp_body)
+            except Exception as e:
+                print(f"Ark Handler Error: {e}")
+                self.send_response(500)
+                self.end_headers()
+                self.wfile.write(str(e).encode('utf-8'))
 
     server_address = ('', port)
     httpd = HTTPServer(server_address, ArkHTTPHandler)
@@ -1073,58 +1100,7 @@ def sys_str_from_code(args: List[ArkValue]):
     code = args[0].val
     return ArkValue(chr(code), "String")
 
-INTRINSICS = {
-    # Core
-    "get": core_get,
-    "len": core_len,
-    "print": core_print,
 
-    # System
-    "sys.crypto.hash": sys_crypto_hash,
-    "sys.crypto.merkle_root": sys_crypto_merkle_root,
-    "sys.crypto.ed25519.gen": sys_crypto_ed25519_gen,
-    "sys.crypto.ed25519.sign": sys_crypto_ed25519_sign,
-    "sys.crypto.ed25519.verify": sys_crypto_ed25519_verify,
-    "sys.exec": sys_exec,
-    "sys.fs.read": sys_fs_read,
-    "sys.fs.read_buffer": sys_fs_read_buffer,
-    "sys.fs.write": sys_fs_write,
-    "sys.fs.write_buffer": sys_fs_write_buffer,
-    "sys.len": sys_len,
-    "sys.list.append": sys_list_append,
-    "sys.list.pop": sys_list_pop,
-    "sys.list.delete": sys_list_delete,
-    "sys.list.get": sys_list_get,
-    "sys.mem.alloc": sys_mem_alloc,
-    "sys.mem.inspect": sys_mem_inspect,
-    "sys.mem.read": sys_mem_read,
-    "sys.mem.write": sys_mem_write,
-    "sys.net.http.request": sys_net_http_request,
-    "sys.net.http.serve": sys_net_http_serve,
-    "sys.net.socket.bind": sys_net_socket_bind,
-    "sys.net.socket.accept": sys_net_socket_accept,
-    "sys.net.socket.connect": sys_net_socket_connect,
-    "sys.net.socket.send": sys_net_socket_send,
-    "sys.net.socket.recv": sys_net_socket_recv,
-    "sys.net.socket.close": sys_net_socket_close,
-    "sys.net.socket.set_timeout": sys_net_socket_set_timeout,
-    "sys.thread.spawn": sys_thread_spawn,
-    "sys.struct.get": sys_struct_get,
-    "sys.struct.set": sys_struct_set,
-    "sys.str.get": sys_list_get,
-    "sys.struct.has": sys_struct_has,
-    "sys.chain.height": sys_chain_height,
-    "sys.chain.get_balance": sys_chain_get_balance,
-    "sys.chain.submit_tx": sys_chain_submit_tx,
-    "sys.chain.verify_tx": sys_chain_verify_tx,
-    "sys.time.now": sys_time_now,
-    "sys.time.sleep": sys_time_sleep,
-
-    "math.sin_scaled": math_sin_scaled,
-    "math.cos_scaled": math_cos_scaled,
-    "math.pi_scaled": math_pi_scaled,
-    "sys.str.from_code": sys_str_from_code,
-}
 
 
 # --- Evaluator ---
@@ -1474,60 +1450,6 @@ def sys_thread_spawn(args: List[ArkValue]):
     return ArkValue(None, "Unit")
 
 
-def sys_net_http_serve(args: List[ArkValue]):
-    check_exec_security()
-    # print(f"DEBUG: sys.net.http.serve args: {[a.type for a in args]}")
-    if len(args) != 2 or args[0].type != "Integer" or args[1].type != "Function":
-        print(f"DEBUG: sys.net.http.serve args: {[a.type for a in args]}")
-        raise Exception("sys.net.http.serve expects an integer port and a function handler")
-    port = args[0].val
-    handler_func = args[1].val # ArkFunction
-
-    # We need a closure to capture the handler_func for the RequestHandler class
-    # Since socketserver.TCPServer expects a Class, not an instance, we use a factory or partial.
-    print(f"Starting Ark Web Server on port {port}...")
-
-    # To allow `call_user_func` to be accessible within the handler,
-    # we inject it into the class namespace or use a global reference.
-    # A safer way is to assign it to the class directly.
-
-    class ArkHttpHandler(http.server.SimpleHTTPRequestHandler):
-        def do_GET(self):
-            # 1. Build Ark Request Object (Mock for now, just path)
-            # In a real impl, we would create an ArkInstance of 'Request' class
-            # For now, pass path as string or maybe a dict/map if we had them.
-            # Let's pass the PATH as a string for simplicity.
-            req_path = ArkValue(self.path, "String")
-
-            # 2. Call Ark Handler
-            # We use call_user_func which is defined earlier in the file.
-            response_val = call_user_func(handler_func, [req_path])
-
-            # 3. Send Response
-            self.send_response(200)
-            self.end_headers()
-            if response_val.type == "String":
-                self.wfile.write(response_val.val.encode())
-            else:
-                self.wfile.write(str(response_val.val).encode())
-
-    # Create Server
-    # Allow address reuse
-    socketserver.TCPServer.allow_reuse_address = True
-    # Use a thread to run the server so the main program can continue
-    # This is a simple way to handle it, for production, more robust threading/async might be needed.
-    server_address = ("127.0.0.1", port)
-    httpd = socketserver.TCPServer(server_address, ArkHttpHandler)
-
-    server_thread = threading.Thread(target=httpd.serve_forever)
-    server_thread.daemon = True # Allow the main program to exit even if the thread is running
-    server_thread.start()
-
-    print(f"Server running in background on port {port}. Press Ctrl+C to stop.")
-
-    return ArkValue(None, "Unit")
-
-
 def sys_func_apply(args: List[ArkValue]):
     if len(args) != 2: raise Exception("sys.func.apply expects func, args_list")
     func = args[0]
@@ -1679,6 +1601,106 @@ INTRINSICS = {
     "intrinsic_math_atan": intrinsic_math_atan,
     "intrinsic_math_atan2": intrinsic_math_atan2,
 }
+
+
+INTRINSICS = {
+    # Core
+    "get": core_get,
+    "len": core_len,
+    "print": core_print,
+
+    # System
+    "sys.crypto.hash": sys_crypto_hash,
+    "sys.crypto.merkle_root": sys_crypto_merkle_root,
+    "sys.crypto.ed25519.gen": sys_crypto_ed25519_gen,
+    "sys.crypto.ed25519.sign": sys_crypto_ed25519_sign,
+    "sys.crypto.ed25519.verify": sys_crypto_ed25519_verify,
+    "sys.exec": sys_exec,
+    "sys.fs.read": sys_fs_read,
+    "sys.fs.read_buffer": sys_fs_read_buffer,
+    "sys.fs.write": sys_fs_write,
+    "sys.fs.write_buffer": sys_fs_write_buffer,
+    "sys.len": sys_len,
+    "sys.list.append": sys_list_append,
+    "sys.list.pop": sys_list_pop,
+    "sys.list.delete": sys_list_delete,
+    "sys.list.get": sys_list_get,
+    "sys.mem.alloc": sys_mem_alloc,
+    "sys.mem.inspect": sys_mem_inspect,
+    "sys.mem.read": sys_mem_read,
+    "sys.mem.write": sys_mem_write,
+    "sys.net.http.request": sys_net_http_request,
+    "sys.net.http.serve": sys_net_http_serve,
+    "sys.net.socket.bind": sys_net_socket_bind,
+    "sys.net.socket.accept": sys_net_socket_accept,
+    "sys.net.socket.connect": sys_net_socket_connect,
+    "sys.net.socket.send": sys_net_socket_send,
+    "sys.net.socket.recv": sys_net_socket_recv,
+    "sys.net.socket.close": sys_net_socket_close,
+    "sys.net.socket.set_timeout": sys_net_socket_set_timeout,
+    "sys.thread.spawn": sys_thread_spawn,
+    "sys.struct.get": sys_struct_get,
+    "sys.struct.set": sys_struct_set,
+    "sys.str.get": sys_list_get,
+    "sys.struct.has": sys_struct_has,
+    "sys.chain.height": sys_chain_height,
+    "sys.chain.get_balance": sys_chain_get_balance,
+    "sys.chain.submit_tx": sys_chain_submit_tx,
+    "sys.chain.verify_tx": sys_chain_verify_tx,
+    "sys.time.now": sys_time_now,
+    "sys.time.sleep": sys_time_sleep,
+    "sys.str.from_code": sys_str_from_code,
+
+    # Math
+    "math.sin_scaled": math_sin_scaled,
+    "math.cos_scaled": math_cos_scaled,
+    "math.pi_scaled": math_pi_scaled,
+    "math.pow": intrinsic_math_pow,
+    "math.sqrt": intrinsic_math_sqrt,
+    "math.sin": intrinsic_math_sin,
+    "math.cos": intrinsic_math_cos,
+    "math.tan": intrinsic_math_tan,
+    "math.asin": intrinsic_math_asin,
+    "math.acos": intrinsic_math_acos,
+    "math.atan": intrinsic_math_atan,
+    "math.atan2": intrinsic_math_atan2,
+    
+    # Intrinsic Wrappers (Aliases for Intrinsics struct)
+    "intrinsic_and": sys_and,
+    "intrinsic_not": intrinsic_not,
+    "intrinsic_ask_ai": ask_ai,
+    "intrinsic_buffer_alloc": sys_mem_alloc,
+    "intrinsic_buffer_inspect": sys_mem_inspect,
+    "intrinsic_buffer_read": sys_mem_read,
+    "intrinsic_buffer_write": sys_mem_write,
+    "intrinsic_crypto_hash": sys_crypto_hash,
+    "intrinsic_extract_code": extract_code,
+    # "intrinsic_ge": ... (handled by lambdas which we can't easily inline here without recreating them)
+    # We will just merge the two dictionaries or keep this simple
+}
+
+# Add Lambdas and others to INTRINSICS
+INTRINSICS.update({
+    "intrinsic_ge": lambda args: eval_binop("ge", args[0], args[1]),
+    "intrinsic_gt": lambda args: eval_binop("gt", args[0], args[1]),
+    "intrinsic_le": lambda args: eval_binop("le", args[0], args[1]),
+    "intrinsic_lt": lambda args: eval_binop("lt", args[0], args[1]),
+    "intrinsic_len": sys_len,
+    "intrinsic_list_append": sys_list_append,
+    "intrinsic_list_get": sys_list_get,
+    "intrinsic_merkle_root": sys_crypto_merkle_root,
+    "intrinsic_or": sys_or,
+    "intrinsic_time_now": sys_time_now,
+    "intrinsic_math_pow": intrinsic_math_pow,
+    "intrinsic_math_sqrt": intrinsic_math_sqrt,
+    "intrinsic_math_sin": intrinsic_math_sin,
+    "intrinsic_math_cos": intrinsic_math_cos,
+    "intrinsic_math_tan": intrinsic_math_tan,
+    "intrinsic_math_asin": intrinsic_math_asin,
+    "intrinsic_math_acos": intrinsic_math_acos,
+    "intrinsic_math_atan": intrinsic_math_atan,
+    "intrinsic_math_atan2": intrinsic_math_atan2,
+})
 
 
 LINEAR_SPECS = {

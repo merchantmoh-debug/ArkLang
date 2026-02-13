@@ -1,0 +1,15 @@
+
+// tests/test_http_bridge.ark
+// Verifies the sys.net.http.serve bridge
+
+func handler(path) {
+    print("Received request for: " + path)
+    return "Hello from Ark Bridge! You requested: " + path
+}
+
+func main() {
+    print("Starting Ark HTTP Server on port 8888...")
+    sys.net.http.serve(8888, handler)
+}
+
+main()
