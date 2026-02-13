@@ -117,31 +117,10 @@ impl<'a> VM<'a> {
     pub fn run(&mut self) -> Result<Value, String> {
         loop {
             if self.ip >= self.chunk.code.len() {
-                // End of chunk.
-                if !self.frames.is_empty() {
-                    // Implicit Return Unit
-                    // Logic matches OpCode::Ret
-                    let result = self.stack.pop().unwrap_or(Value::Unit);
-
-                    if let Some(frame_idx) = self.frames.pop() {
-                        // Restore Context from Heap
-                        if let Some(node) = self.heap.get(frame_idx) {
-                            let GraphData::Frame(ref frame) = node.data;
-                            self.chunk = frame.chunk.clone();
-                            self.ip = frame.ip;
-                        } else {
-                            return Err(format!("Frame not found at index {}", frame_idx));
-                        }
-
-                        // Decrement ref count (and free if 0)
-                        self.heap.decref(frame_idx);
-
-                        self.scopes.pop();
-                        self.stack.push(result);
-                        continue; // Continue loop in previous frame
-                    }
+                if let Some(val) = self.op_return()? {
+                    return Ok(val);
                 }
-                return Ok(Value::Unit);
+                continue;
             }
 
             let op = &self.chunk.code[self.ip];
@@ -213,41 +192,11 @@ impl<'a> VM<'a> {
                     #[cfg(test)]
                     let _ = val;
                 }
-                OpCode::Destructure => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
-                    if let Value::List(items) = val {
-                        // Push in reverse order so first item is on top for first Store
-                        for item in items.into_iter().rev() {
-                            self.stack.push(item);
-                        }
-                    } else {
-                        return Err(format!("Destructure expected List, got {:?}", val));
-                    }
-                }
+                OpCode::Destructure => self.op_destructure()?,
 
-                OpCode::MakeList(size) => {
-                    let mut items = Vec::new();
-                    for _ in 0..*size {
-                        items.push(self.stack.pop().ok_or("Stack underflow")?);
-                    }
-                    items.reverse();
-                    self.stack.push(Value::List(items));
-                }
+                OpCode::MakeList(size) => self.op_make_list(*size)?,
 
-                OpCode::MakeStruct(size) => {
-                    let mut fields = std::collections::HashMap::new();
-                    for _ in 0..*size {
-                        let key_val = self.stack.pop().ok_or("Stack underflow")?;
-                        let val = self.stack.pop().ok_or("Stack underflow")?;
-
-                        if let Value::String(key) = key_val {
-                            fields.insert(key, val);
-                        } else {
-                            return Err(format!("Struct key must be string, got {:?}", key_val));
-                        }
-                    }
-                    self.stack.push(Value::Struct(fields));
-                }
+                OpCode::MakeStruct(size) => self.op_make_struct(*size)?,
 
                 OpCode::GetField(field) => {
                     let obj = self.stack.pop().ok_or("Stack underflow")?;
@@ -306,69 +255,11 @@ impl<'a> VM<'a> {
                     }
                 }
 
-                OpCode::Call(arg_count) => {
-                    let func_val = self.stack.pop().ok_or("Stack underflow during call")?;
-                    match func_val {
-                        Value::Function(chunk) => {
-                            // Allocation on Heap (Zero-Copy Ref Count)
-                            let frame = CallFrame {
-                                ip: self.ip,
-                                chunk: self.chunk.clone(),
-                            };
-                            let frame_idx = self.heap.alloc(GraphData::Frame(frame));
-                            self.frames.push(frame_idx);
-
-                            // Switch Context
-                            self.chunk = chunk;
-                            self.ip = 0;
-                            // Push Scope
-                            self.scopes.push(Scope::new());
-                        }
-                        Value::NativeFunction(func) => {
-                            let mut args = Vec::new();
-                            for _ in 0..*arg_count {
-                                args.push(
-                                    self.stack
-                                        .pop()
-                                        .ok_or("Stack underflow during native call")?,
-                                );
-                            }
-                            // Arguments popped in reverse order (last arg first)
-                            // We need them in forward order [arg1, arg2]
-                            args.reverse();
-
-                            let result = func(args).map_err(|e| format!("{:?}", e))?;
-                            self.stack.push(result);
-                        }
-                        _ => {
-                            return Err(format!("Calling non-function value: {:?}", func_val));
-                        }
-                    }
-                }
+                OpCode::Call(arg_count) => self.op_call(*arg_count)?,
 
                 OpCode::Ret => {
-                    let result = self.stack.pop().unwrap_or(Value::Unit);
-
-                    if let Some(frame_idx) = self.frames.pop() {
-                        // Restore Context from Heap
-                        if let Some(node) = self.heap.get(frame_idx) {
-                            let GraphData::Frame(ref frame) = node.data;
-                            self.chunk = frame.chunk.clone();
-                            self.ip = frame.ip;
-                        } else {
-                            return Err(format!("Frame not found at index {}", frame_idx));
-                        }
-
-                        // Decrement ref count (and free if 0)
-                        self.heap.decref(frame_idx);
-
-                        // Pop Scope
-                        self.scopes.pop();
-                        // Push Result
-                        self.stack.push(result);
-                    } else {
-                        // Return from main
-                        return Ok(result);
+                    if let Some(val) = self.op_return()? {
+                        return Ok(val);
                     }
                 }
             }
@@ -395,6 +286,117 @@ impl<'a> VM<'a> {
         let res = op_fn(a, b)?;
         self.stack.push(res);
         Ok(())
+    }
+
+    #[inline]
+    fn op_return(&mut self) -> Result<Option<Value>, String> {
+        let result = self.stack.pop().unwrap_or(Value::Unit);
+
+        if let Some(frame_idx) = self.frames.pop() {
+            // Restore Context from Heap
+            let (new_chunk, new_ip) = if let Some(node) = self.heap.get(frame_idx) {
+                let GraphData::Frame(ref frame) = node.data;
+                (frame.chunk.clone(), frame.ip)
+            } else {
+                return Err(format!("Frame not found at index {}", frame_idx));
+            };
+
+            self.chunk = new_chunk;
+            self.ip = new_ip;
+
+            // Decrement ref count (and free if 0)
+            self.heap.decref(frame_idx);
+
+            self.scopes.pop();
+            self.stack.push(result);
+            Ok(None) // Continue loop
+        } else {
+            // Return from main
+            Ok(Some(result))
+        }
+    }
+
+    #[inline]
+    fn op_call(&mut self, arg_count: usize) -> Result<(), String> {
+        let func_val = self.stack.pop().ok_or("Stack underflow during call")?;
+        match func_val {
+            Value::Function(chunk) => {
+                // Allocation on Heap (Zero-Copy Ref Count)
+                let frame = CallFrame {
+                    ip: self.ip,
+                    chunk: self.chunk.clone(),
+                };
+                let frame_idx = self.heap.alloc(GraphData::Frame(frame));
+                self.frames.push(frame_idx);
+
+                // Switch Context
+                self.chunk = chunk;
+                self.ip = 0;
+                // Push Scope
+                self.scopes.push(Scope::new());
+                Ok(())
+            }
+            Value::NativeFunction(func) => {
+                let mut args = Vec::new();
+                for _ in 0..arg_count {
+                    args.push(
+                        self.stack
+                            .pop()
+                            .ok_or("Stack underflow during native call")?,
+                    );
+                }
+                // Arguments popped in reverse order (last arg first)
+                // We need them in forward order [arg1, arg2]
+                args.reverse();
+
+                let result = func(args).map_err(|e| format!("{:?}", e))?;
+                self.stack.push(result);
+                Ok(())
+            }
+            _ => Err(format!("Calling non-function value: {:?}", func_val)),
+        }
+    }
+
+    #[inline]
+    fn op_make_list(&mut self, size: usize) -> Result<(), String> {
+        let mut items = Vec::new();
+        for _ in 0..size {
+            items.push(self.stack.pop().ok_or("Stack underflow")?);
+        }
+        items.reverse();
+        self.stack.push(Value::List(items));
+        Ok(())
+    }
+
+    #[inline]
+    fn op_make_struct(&mut self, size: usize) -> Result<(), String> {
+        let mut fields = std::collections::HashMap::new();
+        for _ in 0..size {
+            let key_val = self.stack.pop().ok_or("Stack underflow")?;
+            let val = self.stack.pop().ok_or("Stack underflow")?;
+
+            if let Value::String(key) = key_val {
+                fields.insert(key, val);
+            } else {
+                return Err(format!("Struct key must be string, got {:?}", key_val));
+            }
+        }
+        self.stack.push(Value::Struct(fields));
+        Ok(())
+    }
+
+    #[inline]
+    fn op_destructure(&mut self) -> Result<(), String> {
+        let val = self.stack.pop().ok_or("Stack underflow")?;
+        if let Value::List(items) = val {
+            // Push in reverse order so first item is on top for first Store
+            for item in items.into_iter().rev() {
+                self.stack.push(item);
+            }
+            Ok(())
+        } else {
+            Err(format!("Destructure expected List, got {:?}", val))
+        }
     }
 
     fn find_var(&self, name: &str) -> Option<Value> {
@@ -465,3 +467,65 @@ mod tests {
         assert!(node.is_none());
     }
 }
+
+    #[test]
+    fn test_vm_complex_ops() {
+        let mut chunk = Chunk::new();
+
+        // 1. Test MakeList and Destructure
+        // Stack: []
+        chunk.write(OpCode::Push(Value::Integer(10)));
+        chunk.write(OpCode::Push(Value::Integer(20)));
+        // Stack: [10, 20]
+        chunk.write(OpCode::MakeList(2));
+        // Stack: [[10, 20]]
+        chunk.write(OpCode::Destructure);
+        // Stack: [20, 10] (Top is 10)
+
+        chunk.write(OpCode::Add);
+        // Stack: [30] (20 + 10)
+
+        // 2. Test MakeStruct and GetField
+        // MakeStruct expects [Value, Key] on stack (Top is Key)
+        chunk.write(OpCode::Push(Value::Integer(100)));
+        chunk.write(OpCode::Push(Value::String("x".to_string())));
+        // Stack: [30, 100, "x"]
+        chunk.write(OpCode::MakeStruct(1));
+        // Stack: [30, {x: 100}]
+        chunk.write(OpCode::GetField("x".to_string()));
+        // Stack: [30, 100]
+        chunk.write(OpCode::Add);
+        // Stack: [130]
+
+        chunk.write(OpCode::Ret);
+
+        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+        let result = vm.run();
+        assert_eq!(result.unwrap(), Value::Integer(130));
+    }
+
+    #[test]
+    fn test_vm_function_call() {
+        // Define a function that adds 1 to its argument
+        let mut func_chunk = Chunk::new();
+        // Stack on entry: [arg]
+        // Store arg to 'n'
+        func_chunk.write(OpCode::Store("n".to_string()));
+        func_chunk.write(OpCode::Load("n".to_string()));
+        func_chunk.write(OpCode::Push(Value::Integer(1)));
+        func_chunk.write(OpCode::Add);
+        func_chunk.write(OpCode::Ret);
+
+        let mut chunk = Chunk::new();
+        chunk.write(OpCode::Push(Value::Function(Rc::new(func_chunk))));
+        chunk.write(OpCode::Store("add_one".to_string()));
+
+        chunk.write(OpCode::Load("add_one".to_string()));
+        chunk.write(OpCode::Push(Value::Integer(41)));
+        chunk.write(OpCode::Call(1));
+        // Result should be 42
+
+        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+        let result = vm.run();
+        assert_eq!(result.unwrap(), Value::Integer(42));
+    }
