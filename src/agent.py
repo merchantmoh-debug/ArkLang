@@ -458,9 +458,42 @@ class GeminiAgent:
     def reflect(self):
         """
         Review past actions to improve future performance.
+        Analyzes the recent interaction history and appends a reflection entry.
         """
         history = self.memory.get_history()
+
+        # Simple heuristic: Only reflect if there was significant activity
+        if len(history) < 2:
+            return
+
         print(f"Reflecting on {len(history)} past interactions...")
+
+        try:
+            # Extract recent interaction (last 5 messages)
+            context_messages = history[-5:]
+            context_str = self._format_context_messages(context_messages)
+
+            prompt = (
+                "You are an autonomous agent reflecting on your recent performance.\n"
+                "Review the conversation history above.\n"
+                "1. Did you successfully complete the user's request?\n"
+                "2. Identify one thing you could have done better (e.g., tool usage, reasoning, conciseness).\n"
+                "3. Provide a concise 'Lesson Learned' to help your future self.\n\n"
+                "Return ONLY the 'Lesson Learned' in one sentence."
+            )
+
+            reflection_prompt = f"{context_str}\n\n{prompt}"
+
+            # Call Gemini directly (no tools)
+            lesson = self._call_gemini(reflection_prompt)
+
+            if lesson:
+                print(f"🤔 Reflection: {lesson}")
+                self.memory.add_entry("system", f"[REFLECTION] {lesson}")
+
+        except Exception as e:
+            # Fail gracefully - reflection is a bonus, not critical
+            print(f"⚠️ Reflection failed: {e}")
 
     def run(self, task: str):
         """Main entry point for the agent."""
