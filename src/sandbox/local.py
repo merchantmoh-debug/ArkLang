@@ -102,6 +102,22 @@ class LocalSandbox(CodeSandbox):
                     duration=0.0,
                     meta={"runtime": "local", "syntax_error": True},
                 )
+            except ValueError as e:
+                return ExecutionResult(
+                    stdout="",
+                    stderr=f"Value Error: {e}",
+                    exit_code=1,
+                    duration=0.0,
+                    meta={"runtime": "local", "value_error": True},
+                )
+            except RecursionError as e:
+                return ExecutionResult(
+                    stdout="",
+                    stderr=f"Recursion Error: {e}",
+                    exit_code=1,
+                    duration=0.0,
+                    meta={"runtime": "local", "recursion_error": True},
+                )
             except Exception as e:
                 return ExecutionResult(
                     stdout="",
