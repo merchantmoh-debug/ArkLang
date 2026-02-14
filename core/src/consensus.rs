@@ -4,7 +4,6 @@ use crate::blockchain::Block;
 
 pub trait ConsensusEngine {
     fn verify_block(&self, block: &Block) -> bool;
-    // fn mine_block(&self, block: &mut Block); // Future expansion
 }
 
 pub struct PoW {
