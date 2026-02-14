@@ -93,10 +93,9 @@ class BaseAgent:
             if self.use_openai_backend:
                 # Call OpenAI-compatible API
                 # We pass the full_prompt as the user message.
-                # Alternatively, we could pass system_prompt as 'system', but BaseAgent
-                # historically concatenates everything. Sticking to historical behavior for consistency.
                 result = call_openai_chat(
                     prompt=full_prompt,
+                    system=self.system_prompt,
                     model=settings.OPENAI_MODEL
                 )
             else:
