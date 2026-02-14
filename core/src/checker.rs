@@ -17,6 +17,7 @@
  */
 
 use crate::ast::{ArkNode, Expression, FunctionDef, Statement};
+use crate::types::ArkType;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -41,6 +42,12 @@ pub struct LinearChecker {
     var_states: HashMap<String, Vec<VarState>>,
     // Stack of scopes. Each scope contains a list of variables declared in it.
     scope_stack: Vec<Vec<String>>,
+}
+
+impl Default for LinearChecker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LinearChecker {
@@ -178,117 +185,143 @@ impl LinearChecker {
 
     fn check_statement(&mut self, stmt: &Statement) -> Result<(), LinearError> {
         match stmt {
-            Statement::Let { name, ty, value } => {
-                // Heuristic: Check if RHS is a linear variable being moved
-                let mut inferred_linear = false;
-
-                // Peek linearity of RHS before consuming
-                if let Expression::Variable(v) = value {
-                    if self.is_var_linear_and_active(v) {
-                        inferred_linear = true;
-                    }
-                }
-
-                // Intrinsic check
-                if let Expression::Call { function_hash, .. } = value {
-                     let sig = Self::get_intrinsic_return_linearity(function_hash);
-                     if sig.len() == 1 && sig[0] {
-                         inferred_linear = true;
-                     }
-                }
-
-                // Process RHS (consume linear vars)
-                self.traverse_node(&ArkNode::Expression(value.clone()))?;
-
-                // Determine linearity of new var
-                let is_linear = inferred_linear || ty.as_ref().map(|t| t.is_linear()).unwrap_or(false);
-
-                self.declare_var(name.clone(), is_linear);
-                Ok(())
-            }
-            Statement::LetDestructure { names, value } => {
-                self.traverse_node(&ArkNode::Expression(value.clone()))?;
-
-                let mut call_signature = vec![];
-                if let Expression::Call { function_hash, .. } = value {
-                    call_signature = Self::get_intrinsic_return_linearity(function_hash);
-                }
-
-                for (i, name) in names.iter().enumerate() {
-                     let mut is_linear = false;
-                     // 1. Check intrinsic signature
-                     if i < call_signature.len() && call_signature[i] {
-                         is_linear = true;
-                     }
-                     // 2. Check shadowing heuristic (from original logic):
-                     // If name currently maps to a linear var, assume new one is linear?
-                     // This is tricky. Let's rely on type info or signature mostly.
-                     // But for 'unknown_func' test compatibility, we might need to assume linearity if it was linear.
-                     // But strictly speaking, shadowing shouldn't inherit type unless inferred.
-                     // The original code used `declared_linears.contains(name)`.
-                     if let Some(states) = self.var_states.get(name) {
-                         if let Some(state) = states.last() {
-                             if state.is_linear {
-                                 is_linear = true;
-                             }
-                         }
-                     }
-
-                     self.declare_var(name.clone(), is_linear);
-                }
-                Ok(())
-            }
+            Statement::Let { name, ty, value } => self.check_let(name, ty, value),
+            Statement::LetDestructure { names, value } => self.check_let_destructure(names, value),
             Statement::SetField {
-                obj_name: _,
-                field: _,
+                obj_name,
+                field,
                 value,
-            } => self.traverse_node(&ArkNode::Expression(value.clone())),
-            Statement::Return(expr) => self.traverse_node(&ArkNode::Expression(expr.clone())),
-            Statement::Block(stmts) => {
-                self.enter_scope();
-                for s in stmts {
-                    self.check_statement(s)?;
-                }
-                self.exit_scope()?;
-                Ok(())
-            }
+            } => self.check_set_field(obj_name, field, value),
+            Statement::Return(expr) => self.check_return(expr),
+            Statement::Block(stmts) => self.check_block(stmts),
             Statement::Expression(expr) => self.check_expression(expr),
             Statement::If {
                 condition,
                 then_block,
                 else_block,
-            } => {
-                self.check_expression(condition)?;
-                self.enter_scope();
-                for stmt in then_block {
-                    self.check_statement(stmt)?;
-                }
-                self.exit_scope()?;
+            } => self.check_if(condition, then_block, else_block),
+            Statement::While { condition, body } => self.check_while(condition, body),
+            Statement::Function(func_def) => self.check_nested_function(func_def),
+        }
+    }
 
-                if let Some(else_stmts) = else_block {
-                    self.enter_scope();
-                    for stmt in else_stmts {
-                        self.check_statement(stmt)?;
-                    }
-                    self.exit_scope()?;
-                }
-                Ok(())
-            }
-            Statement::While { condition, body } => {
-                self.check_expression(condition)?;
-                self.enter_scope();
-                for stmt in body {
-                    self.check_statement(stmt)?;
-                }
-                self.exit_scope()?;
-                Ok(())
-            }
-            Statement::Function(func_def) => {
-                // Check function body with new scope to ensure isolation
-                let mut function_checker = LinearChecker::new();
-                function_checker.check_function(func_def)
+    fn check_let(&mut self, name: &str, ty: &Option<ArkType>, value: &Expression) -> Result<(), LinearError> {
+        // Heuristic: Check if RHS is a linear variable being moved
+        let mut inferred_linear = false;
+
+        // Peek linearity of RHS before consuming
+        if let Expression::Variable(v) = value {
+            if self.is_var_linear_and_active(v) {
+                inferred_linear = true;
             }
         }
+
+        // Intrinsic check
+        if let Expression::Call { function_hash, .. } = value {
+            let sig = Self::get_intrinsic_return_linearity(function_hash);
+            if sig.len() == 1 && sig[0] {
+                inferred_linear = true;
+            }
+        }
+
+        // Process RHS (consume linear vars)
+        self.traverse_node(&ArkNode::Expression(value.clone()))?;
+
+        // Determine linearity of new var
+        let is_linear = inferred_linear || ty.as_ref().map(|t| t.is_linear()).unwrap_or(false);
+
+        self.declare_var(name.to_string(), is_linear);
+        Ok(())
+    }
+
+    fn check_let_destructure(&mut self, names: &[String], value: &Expression) -> Result<(), LinearError> {
+        self.traverse_node(&ArkNode::Expression(value.clone()))?;
+
+        let mut call_signature = vec![];
+        if let Expression::Call { function_hash, .. } = value {
+            call_signature = Self::get_intrinsic_return_linearity(function_hash);
+        }
+
+        for (i, name) in names.iter().enumerate() {
+            let mut is_linear = false;
+            // 1. Check intrinsic signature
+            if i < call_signature.len() && call_signature[i] {
+                is_linear = true;
+            }
+            // 2. Check shadowing heuristic (from original logic):
+            // If name currently maps to a linear var, assume new one is linear?
+            if let Some(states) = self.var_states.get(name) {
+                if let Some(state) = states.last() {
+                    if state.is_linear {
+                        is_linear = true;
+                    }
+                }
+            }
+
+            self.declare_var(name.clone(), is_linear);
+        }
+        Ok(())
+    }
+
+    fn check_set_field(
+        &mut self,
+        _obj_name: &str,
+        _field: &str,
+        value: &Expression,
+    ) -> Result<(), LinearError> {
+        self.traverse_node(&ArkNode::Expression(value.clone()))
+    }
+
+    fn check_return(&mut self, expr: &Expression) -> Result<(), LinearError> {
+        self.traverse_node(&ArkNode::Expression(expr.clone()))
+    }
+
+    fn check_block(&mut self, stmts: &[Statement]) -> Result<(), LinearError> {
+        self.enter_scope();
+        for s in stmts {
+            self.check_statement(s)?;
+        }
+        self.exit_scope()?;
+        Ok(())
+    }
+
+    fn check_if(
+        &mut self,
+        condition: &Expression,
+        then_block: &[Statement],
+        else_block: &Option<Vec<Statement>>,
+    ) -> Result<(), LinearError> {
+        self.check_expression(condition)?;
+        self.enter_scope();
+        for stmt in then_block {
+            self.check_statement(stmt)?;
+        }
+        self.exit_scope()?;
+
+        if let Some(else_stmts) = else_block {
+            self.enter_scope();
+            for stmt in else_stmts {
+                self.check_statement(stmt)?;
+            }
+            self.exit_scope()?;
+        }
+        Ok(())
+    }
+
+    fn check_while(&mut self, condition: &Expression, body: &[Statement]) -> Result<(), LinearError> {
+        self.check_expression(condition)?;
+        self.enter_scope();
+        for stmt in body {
+            self.check_statement(stmt)?;
+        }
+        self.exit_scope()?;
+        Ok(())
+    }
+
+    fn check_nested_function(&mut self, func_def: &FunctionDef) -> Result<(), LinearError> {
+        // Check function body with new scope to ensure isolation
+        let mut function_checker = LinearChecker::new();
+        function_checker.check_function(func_def)
     }
 
     fn check_expression(&mut self, expr: &Expression) -> Result<(), LinearError> {
