@@ -102,6 +102,89 @@ def check_exec_security():
 
 # --- Types ---
 
+class RopeString:
+    __slots__ = ('left', 'right', 'val', 'length', '_str_cache')
+    def __init__(self, val=None, left=None, right=None):
+        self._str_cache = None
+        if left is not None and right is not None:
+            self.left = left
+            self.right = right
+            self.val = None
+            self.length = len(left) + len(right)
+        else:
+            self.left = None
+            self.right = None
+            self.val = val if val is not None else ""
+            self.length = len(self.val)
+
+    def __str__(self):
+        if self._str_cache is not None:
+            return self._str_cache
+
+        parts = []
+        stack = [self]
+        while stack:
+            node = stack.pop()
+            if node.val is not None:
+                parts.append(node.val)
+            else:
+                if node.right: stack.append(node.right)
+                if node.left: stack.append(node.left)
+
+        self._str_cache = "".join(parts)
+        return self._str_cache
+
+    def __repr__(self):
+        return f"RopeString(len={self.length})"
+
+    def __len__(self):
+        return self.length
+
+    def __add__(self, other):
+        if not isinstance(other, (str, RopeString)):
+            other = str(other)
+        if not isinstance(other, RopeString):
+            other = RopeString(other)
+        if self.length == 0: return other
+        if other.length == 0: return self
+        return RopeString(left=self, right=other)
+
+    def __radd__(self, other):
+        if not isinstance(other, (str, RopeString)):
+            other = str(other)
+        if not isinstance(other, RopeString):
+            other = RopeString(other)
+        if self.length == 0: return other
+        if other.length == 0: return self
+        return RopeString(left=other, right=self)
+
+    def __getitem__(self, idx):
+        return str(self)[idx]
+
+    def __eq__(self, other):
+        return str(self) == str(other)
+
+    def __hash__(self):
+        return hash(str(self))
+
+    def strip(self):
+        return str(self).strip()
+
+    def encode(self, *args, **kwargs):
+        return str(self).encode(*args, **kwargs)
+
+    def __lt__(self, other):
+        return str(self) < str(other)
+
+    def __gt__(self, other):
+        return str(self) > str(other)
+
+    def __le__(self, other):
+        return str(self) <= str(other)
+
+    def __ge__(self, other):
+        return str(self) >= str(other)
+
 @dataclass(slots=True)
 class ArkValue:
     val: Any
@@ -175,11 +258,11 @@ def core_get(args: List[ArkValue]):
     index = args[1].val
     if not isinstance(index, int):
         raise Exception("Index must be an integer")
-    if not isinstance(collection, (str, list)):
+    if not isinstance(collection, (str, list, RopeString)):
         raise Exception("Collection must be a string or list")
     
     if 0 <= index < len(collection):
-        if isinstance(collection, str):
+        if isinstance(collection, (str, RopeString)):
             return ArkValue(collection[index], "String")
         elif isinstance(collection, list):
             val = collection[index]
@@ -249,9 +332,9 @@ def sys_exec(args: List[ArkValue]):
 def sys_fs_write(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "String" or args[1].type != "String":
         raise Exception("sys.fs.write expects two string arguments: path and content")
-    path = args[0].val
+    path = str(args[0].val)
     check_path_security(path, is_write=True)
-    content = args[1].val
+    content = str(args[1].val)
     try:
         with open(path, "w") as f:
             f.write(content)
@@ -262,7 +345,7 @@ def sys_fs_write(args: List[ArkValue]):
 def sys_fs_read(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.fs.read expects a string path argument")
-    path = args[0].val
+    path = str(args[0].val)
     check_path_security(path)
     try:
         with open(path, "r") as f:
@@ -274,7 +357,7 @@ def sys_fs_read(args: List[ArkValue]):
 def sys_fs_read_buffer(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.fs.read_buffer expects a string path argument")
-    path = args[0].val
+    path = str(args[0].val)
     check_path_security(path)
     try:
         with open(path, "rb") as f:
@@ -423,7 +506,7 @@ def ask_ai(args: List[ArkValue]):
 def extract_code(args: List[ArkValue]):
     if not args or args[0].type != "String":
         raise Exception("extract_code expects a string containing code")
-    text = args[0].val
+    text = str(args[0].val)
     
     # Matches ```tag\ncontent\n```
     # Capture group 1: tag (e.g. "python:file.py")
@@ -520,7 +603,7 @@ def sys_net_socket_connect(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "String" or args[1].type != "Integer":
         raise Exception("sys.net.socket.connect expects ip (String) and port (Integer)")
 
-    ip = args[0].val
+    ip = str(args[0].val)
     port = args[1].val
 
     try:
@@ -639,8 +722,8 @@ def sys_net_http_request(args: List[ArkValue]):
     # args: method, url, [body]
     if len(args) < 2:
         raise Exception("sys.net.http.request expects method, url")
-    method = args[0].val
-    url = args[1].val
+    method = str(args[0].val)
+    url = str(args[1].val)
 
     # 1. Validate initial URL
     validate_url_security(url)
@@ -1067,7 +1150,7 @@ def from_ark(val):
     elif val.type == "List":
         return [from_ark(v) for v in val.val]
     elif val.type == "String":
-        return val.val
+        return str(val.val)
     elif val.type == "Integer":
         return val.val
     elif val.type == "Boolean":
@@ -1599,7 +1682,12 @@ def eval_binop(op, left, right):
     l = left.val
     r = right.val
     if op == "add":
-        if left.type == "String" or right.type == "String": return ArkValue(str(l) + str(r), "String")
+        if left.type == "String" or right.type == "String":
+            # Optimization: Use RopeString for efficient concatenation
+            if not isinstance(l, RopeString):
+                l = RopeString(str(l))
+            # RopeString.__add__ handles str or RopeString for right operand
+            return ArkValue(l + r, "String")
         return ArkValue(l + r, "Integer")
     if op == "sub": return ArkValue(l - r, "Integer")
     if op == "mul": return ArkValue(l * r, "Integer")
@@ -1653,7 +1741,7 @@ def sys_func_apply(args: List[ArkValue]):
 def sys_vm_eval(args: List[ArkValue], scope: Scope):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.vm.eval expects a code string")
-    code = args[0].val
+    code = str(args[0].val)
     try:
         tree = ARK_PARSER.parse(code)
         return eval_node(tree, scope)
@@ -1664,7 +1752,7 @@ def sys_vm_eval(args: List[ArkValue], scope: Scope):
 def sys_vm_source(args: List[ArkValue], scope: Scope):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.vm.source expects a file path")
-    path = args[0].val
+    path = str(args[0].val)
     check_path_security(path)
     try:
         with open(path, "r") as f:
@@ -1683,7 +1771,7 @@ def sys_vm_source(args: List[ArkValue], scope: Scope):
 
 def to_python_val(val: ArkValue):
     if val.type == "Integer": return val.val
-    if val.type == "String": return val.val
+    if val.type == "String": return str(val.val)
     if val.type == "Boolean": return val.val
     if val.type == "List": return [to_python_val(x) for x in val.val]
     if val.type == "Instance":
@@ -1710,7 +1798,7 @@ def sys_json_parse(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
         raise Exception("sys.json.parse expects string")
     try:
-        data = json.loads(args[0].val)
+        data = json.loads(str(args[0].val))
         return from_python_val(data)
     except Exception as e:
         # LSP `read_header` calls `sys.json.parse(num_str)`.
