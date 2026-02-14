@@ -206,6 +206,9 @@ class TestMemoryManager(unittest.TestCase):
         self.assertEqual(manager.summary, "Plaintext Summary")
         self.assertEqual(len(manager.get_history()), 1)
         self.assertEqual(manager.get_history()[0]["content"], "Plaintext Content")
+        
+        # Verify persistence (wait for async save)
+        manager.wait_for_persistence()
 
         # Verify file is now encrypted
         with open(self.memory_file, "rb") as f:

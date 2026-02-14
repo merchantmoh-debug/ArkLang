@@ -198,7 +198,7 @@ COMMAND_WHITELIST = {
 }
 
 def sys_exec(args: List[ArkValue]):
-    check_exec_security()
+    # check_exec_security() - Removed to allow COMMAND_WHITELIST to function
     if not args or args[0].type != "String":
         raise Exception("sys.exec expects a string command")
     

@@ -75,19 +75,19 @@ class SwarmOrchestrator:
     
     def __init__(self):
         """Initialize the swarm with router and worker agents."""
-        print("🪐 Initializing Antigravity Swarm...")
+        print("[Swarm] Initializing Antigravity Swarm...")
         
         # Initialize message bus
         self.message_bus = MessageBus()
         
         # Initialize router
-        print("   🧭 Creating Router agent...")
+        print("   [Router] Creating Router agent...")
         self.router = RouterAgent()
         
         # Initialize worker agents
-        print("   💻 Creating Coder agent...")
-        print("   🔍 Creating Reviewer agent...")
-        print("   📚 Creating Researcher agent...")
+        print("   [Coder] Creating Coder agent...")
+        print("   [Reviewer] Creating Reviewer agent...")
+        print("   [Researcher] Creating Researcher agent...")
         self.workers = {
             "coder": CoderAgent(),
             "reviewer": ReviewerAgent(),

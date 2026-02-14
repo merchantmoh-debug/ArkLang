@@ -7,49 +7,44 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 # Mock dependencies for import time
-mock_config = MagicMock()
-mock_config.settings.MCP_TOOL_PREFIX = "mcp_"
-mock_config.settings.MCP_ENABLED = True
-
-mock_mcp_client_module = MagicMock()
-mock_mcp_client_module.MCPClientManager = MagicMock
+# Mock dependencies for import time
+class MockDependencies:
+    @staticmethod
+    def setup():
+        mock_config = MagicMock()
+        mock_config.settings.MCP_TOOL_PREFIX = "mcp_"
+        mock_config.settings.MCP_ENABLED = True
+        
+        mock_mcp_client_module = MagicMock()
+        mock_mcp_client_module.MCPClientManager = MagicMock
+        
+        return {
+            "src.config": mock_config,
+            "pydantic": MagicMock(),
+            "src.mcp_client": mock_mcp_client_module
+        }
 
 # We need to patch sys.modules BEFORE importing the module under test
 # And keep it patched during the tests because the function does a local import.
-
-# Create the patcher
-modules_patcher = patch.dict(sys.modules, {
-    "src.config": mock_config,
-    "pydantic": MagicMock(),
-    "src.mcp_client": mock_mcp_client_module
-})
-
-# Start the patcher
-modules_patcher.start()
-
-# Now import the module
-from src.tools import mcp_tools
-
-# We can stop the patcher here if we want to re-patch in the class,
-# but simpler to just let it persist or use a class decorator that re-applies it.
-# However, if we stop it now, 'mcp_tools' module is loaded.
-# Inside 'list_mcp_servers', 'from src.mcp_client import ...' runs.
-# If we stop the patcher, sys.modules loses 'src.mcp_client'.
-# So the function will fail.
-# We must keep the patch active during tests.
 
 class TestMCPTools(unittest.TestCase):
     """Test suite for MCP tools integration."""
 
     @classmethod
     def setUpClass(cls):
-        # Ensure patch is active if we stopped it (we didn't yet)
-        pass
+        # Setup mocks and patch sys.modules
+        cls.mocks = MockDependencies.setup()
+        cls.modules_patcher = patch.dict(sys.modules, cls.mocks)
+        cls.modules_patcher.start()
+        
+        # Import module under test NOW, after patching
+        global mcp_tools
+        from src.tools import mcp_tools
 
     @classmethod
     def tearDownClass(cls):
-        # Stop the global patcher to be clean
-        modules_patcher.stop()
+        # Stop the patcher
+        cls.modules_patcher.stop()
 
     def setUp(self):
         """Set up test fixtures."""

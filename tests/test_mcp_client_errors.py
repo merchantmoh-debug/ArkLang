@@ -1,31 +1,31 @@
 import sys
 from unittest.mock import MagicMock
 
-# --- Mocking pydantic and pydantic_settings BEFORE imports ---
-# We need to do this because the environment might not have these packages installed.
-
-class MockBaseSettings:
-    """Mock for pydantic_settings.BaseSettings"""
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-def mock_field(default=None, default_factory=None, **kwargs):
-    """Mock for pydantic.Field"""
-    if default_factory:
-        return default_factory()
-    return default
-
-mock_pydantic = MagicMock()
-mock_pydantic.Field = mock_field
-
-mock_pydantic_settings = MagicMock()
-mock_pydantic_settings.BaseSettings = MockBaseSettings
-mock_pydantic_settings.SettingsConfigDict = MagicMock()
-
-sys.modules["pydantic"] = mock_pydantic
-sys.modules["pydantic_settings"] = mock_pydantic_settings
-# -------------------------------------------------------------
+class MockDependencies:
+    @staticmethod
+    def setup():
+        class MockBaseSettings:
+            """Mock for pydantic_settings.BaseSettings"""
+            def __init__(self, **kwargs):
+                for k, v in kwargs.items():
+                    setattr(self, k, v)
+        
+        def mock_field(default=None, default_factory=None, **kwargs):
+            if default_factory:
+                return default_factory()
+            return default
+        
+        mock_pydantic = MagicMock()
+        mock_pydantic.Field = mock_field
+        
+        mock_pydantic_settings = MagicMock()
+        mock_pydantic_settings.BaseSettings = MockBaseSettings
+        mock_pydantic_settings.SettingsConfigDict = MagicMock()
+        
+        return {
+            "pydantic": mock_pydantic,
+            "pydantic_settings": mock_pydantic_settings
+        }
 
 import unittest
 import asyncio
@@ -35,6 +35,22 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from src.mcp_client import MCPClientManager, MCPServerConfig
 
 class TestMCPClientErrors(unittest.IsolatedAsyncioTestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.original_modules = {}
+        mocks = MockDependencies.setup()
+        for name, mock_module in mocks.items():
+            cls.original_modules[name] = sys.modules.get(name)
+            sys.modules[name] = mock_module
+
+    @classmethod
+    def tearDownClass(cls):
+        for name, original in cls.original_modules.items():
+            if original is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = original
+    
     def setUp(self):
         self.manager = MCPClientManager()
 

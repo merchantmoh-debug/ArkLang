@@ -8,8 +8,15 @@ from src.config import settings
 
 class TestMCPClient(unittest.TestCase):
     def setUp(self):
-        # Reset settings if needed, though usually not required for unit tests unless they modify globals
-        pass
+        # Nuclear Option: Force reload src.config to clear any mock pollution from other tests
+        if 'src.config' in sys.modules:
+            import importlib
+            import src.config
+            importlib.reload(src.config)
+            # Also reload mcp_client as it depends on config
+            if 'src.mcp_client' in sys.modules:
+                import src.mcp_client
+                importlib.reload(src.mcp_client)
 
     def test_tool_wrapper_creation(self):
         """
