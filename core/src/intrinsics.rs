@@ -13,6 +13,8 @@ use serde_json::from_str;
 use std::fs;
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
+use shell_words;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -426,11 +428,43 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
         return Err(RuntimeError::NotExecutable);
     }
-    let cmd_str = match &args[0] {
-        Value::String(s) => s,
+
+    // Support both String (legacy, parsed) and List (secure, explicit)
+    let (program, args_list) = match &args[0] {
+        Value::String(s) => {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let parts = shell_words::split(s).map_err(|_| RuntimeError::NotExecutable)?;
+                if parts.is_empty() {
+                    return Err(RuntimeError::NotExecutable);
+                }
+                (parts[0].clone(), parts[1..].to_vec())
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                (s.clone(), vec![])
+            }
+        }
+        Value::List(l) => {
+            let mut parts = Vec::new();
+            for item in l {
+                if let Value::String(s) = item {
+                    parts.push(s.clone());
+                } else {
+                    return Err(RuntimeError::TypeMismatch(
+                        "String".to_string(),
+                        item.clone(),
+                    ));
+                }
+            }
+            if parts.is_empty() {
+                return Err(RuntimeError::NotExecutable);
+            }
+            (parts[0].clone(), parts[1..].to_vec())
+        }
         _ => {
             return Err(RuntimeError::TypeMismatch(
-                "String".to_string(),
+                "String or List".to_string(),
                 args[0].clone(),
             ));
         }
@@ -438,24 +472,19 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     #[cfg(target_arch = "wasm32")]
     {
-        println!("[Ark:WASM] Security Block: sys.exec('{}') denied.", cmd_str);
+        println!(
+            "[Ark:WASM] Security Block: sys.exec('{}') denied.",
+            program
+        );
         return Err(RuntimeError::NotExecutable);
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        println!("[Ark:Exec] {}", cmd_str);
+        println!("[Ark:Exec] {} {:?}", program, args_list);
 
-        // Windows vs Unix
-        #[cfg(target_os = "windows")]
-        let mut cmd = Command::new("cmd");
-        #[cfg(target_os = "windows")]
-        cmd.args(["/C", cmd_str]);
-
-        #[cfg(not(target_os = "windows"))]
-        let mut cmd = Command::new("sh");
-        #[cfg(not(target_os = "windows"))]
-        cmd.args(["-c", cmd_str]);
+        let mut cmd = Command::new(&program);
+        cmd.args(&args_list);
 
         let output = cmd.output().map_err(|_| RuntimeError::NotExecutable)?;
 
@@ -1723,6 +1752,47 @@ mod tests {
                 assert_eq!(b[1], 42);
             }
             _ => panic!("Expected Buffer"),
+        }
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn test_exec_security() {
+        // 1. Simple Command
+        let args = vec![Value::String("echo hello".to_string())];
+        if let Ok(Value::String(s)) = intrinsic_exec(args) {
+            assert!(s.trim() == "hello");
+        } else {
+            // Might fail on some environments if "echo" is not in PATH (unlikely on Linux)
+        }
+
+        // 2. Arguments with Quotes
+        let args = vec![Value::String("echo 'hello world'".to_string())];
+        if let Ok(Value::String(s)) = intrinsic_exec(args) {
+            assert!(s.trim() == "hello world");
+        }
+
+        // 3. Injection Attempt: "echo hello; echo injected"
+        // If vulnerable (sh -c), it prints "hello\ninjected".
+        // If secure (execvp), "echo" receives "hello;", "echo", "injected" as args.
+        // It prints "hello; echo injected".
+        let args = vec![Value::String("echo hello; echo injected".to_string())];
+        if let Ok(Value::String(s)) = intrinsic_exec(args) {
+            // Verify it didn't execute as two commands
+            // If it executed as two commands, we'd see "hello\ninjected"
+            // If secure, we see "hello; echo injected" (one line)
+            assert!(s.contains("hello; echo injected"));
+        }
+
+        // 4. List Form (Explicit)
+        // [echo, secure list]
+        let list_args = vec![
+            Value::String("echo".to_string()),
+            Value::String("secure list".to_string()),
+        ];
+        let args = vec![Value::List(list_args)];
+        if let Ok(Value::String(s)) = intrinsic_exec(args) {
+            assert!(s.trim() == "secure list");
         }
     }
 }
