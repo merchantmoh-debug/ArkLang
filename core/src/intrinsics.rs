@@ -353,10 +353,7 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
             RuntimeError::NotExecutable
         })?;
 
-        let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
-            api_key
-        );
+        let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent".to_string();
 
         // Optimization: Reuse Client (Connection Pool)
         let client = AI_CLIENT.get_or_init(|| {
@@ -383,7 +380,12 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
         rt.block_on(async {
             // Simple Retry Logic
             for attempt in 0..3 {
-                match client.post(&url).json(&payload).send() {
+                match client
+                    .post(&url)
+                    .header("x-goog-api-key", &api_key)
+                    .json(&payload)
+                    .send()
+                {
                     Ok(resp) => {
                         if resp.status().is_success() {
                             let json_resp = match resp.json::<serde_json::Value>() {
