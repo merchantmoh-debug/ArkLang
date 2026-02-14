@@ -881,6 +881,21 @@ def sys_list_delete(args: List[ArkValue]):
     lst.val.pop(idx)
     return ArkValue(None, "Unit")
 
+def sys_list_set(args: List[ArkValue]):
+    if len(args) != 3: raise Exception("sys.list.set expects list, index, value")
+    lst = args[0]
+    idx_val = args[1]
+    item = args[2]
+    
+    if lst.type != "List": raise Exception("sys.list.set expects List")
+    if idx_val.type != "Integer": raise Exception("sys.list.set expects Integer index")
+    
+    idx = idx_val.val
+    if idx < 0 or idx >= len(lst.val): raise Exception(f"List index out of range: {idx}")
+    
+    lst.val[idx] = item
+    return lst
+
 def sys_len(args: List[ArkValue]):
     if len(args) != 1: raise Exception("sys.len expects 1 argument")
     val = args[0]
@@ -935,35 +950,54 @@ def intrinsic_math_pow(args: List[ArkValue]):
 
 def intrinsic_math_sqrt(args: List[ArkValue]):
     if len(args) != 1: raise Exception("math.sqrt expects 1 arg")
-    return ArkValue(int(math.sqrt(args[0].val)), "Integer")
+    # sqrt(x*S) = sqrt(x)*sqrt(S). We want sqrt(x)*S.
+    # So we used sqrt(val) * sqrt(S) = sqrt(val*S). 
+    # Current input is integer scaled by S.
+    # sqrt(val) = sqrt(real * S) = sqrt(real) * 100.
+    # We want sqrt(real) * 10000.
+    # So valid result is sqrt(val) * 100.
+    # e.g. val=10000 (1.0). sqrt(10000)=100. *100 = 10000 (1.0). Correct.
+    return ArkValue(int(math.sqrt(args[0].val) * 100), "Integer")
 
 def intrinsic_math_sin(args: List[ArkValue]):
     if len(args) != 1: raise Exception("math.sin expects 1 arg")
-    return ArkValue(int(math.sin(args[0].val)), "Integer")
+    val = args[0].val / 10000.0
+    return ArkValue(int(math.sin(val) * 10000), "Integer")
 
 def intrinsic_math_cos(args: List[ArkValue]):
     if len(args) != 1: raise Exception("math.cos expects 1 arg")
-    return ArkValue(int(math.cos(args[0].val)), "Integer")
+    val = args[0].val / 10000.0
+    return ArkValue(int(math.cos(val) * 10000), "Integer")
 
 def intrinsic_math_tan(args: List[ArkValue]):
     if len(args) != 1: raise Exception("math.tan expects 1 arg")
-    return ArkValue(int(math.tan(args[0].val)), "Integer")
+    val = args[0].val / 10000.0
+    return ArkValue(int(math.tan(val) * 10000), "Integer")
 
 def intrinsic_math_asin(args: List[ArkValue]):
     if len(args) != 1: raise Exception("math.asin expects 1 arg")
-    return ArkValue(int(math.asin(args[0].val)), "Integer")
+    val = args[0].val / 10000.0
+    # Guard domain
+    if val < -1.0 or val > 1.0: return ArkValue(0, "Integer") 
+    return ArkValue(int(math.asin(val) * 10000), "Integer")
 
 def intrinsic_math_acos(args: List[ArkValue]):
     if len(args) != 1: raise Exception("math.acos expects 1 arg")
-    return ArkValue(int(math.acos(args[0].val)), "Integer")
+    val = args[0].val / 10000.0
+    if val < -1.0 or val > 1.0: return ArkValue(0, "Integer")
+    return ArkValue(int(math.acos(val) * 10000), "Integer")
 
 def intrinsic_math_atan(args: List[ArkValue]):
     if len(args) != 1: raise Exception("math.atan expects 1 arg")
-    return ArkValue(int(math.atan(args[0].val)), "Integer")
+    val = args[0].val / 10000.0
+    return ArkValue(int(math.atan(val) * 10000), "Integer")
 
 def intrinsic_math_atan2(args: List[ArkValue]):
     if len(args) != 2: raise Exception("math.atan2 expects 2 args")
-    return ArkValue(int(math.atan2(args[0].val, args[1].val)), "Integer")
+    y = args[0].val / 10000.0
+    x = args[1].val / 10000.0
+    return ArkValue(int(math.atan2(y, x) * 10000), "Integer")
+
 
 # --- New Intrinsics for LSP ---
 
@@ -1740,6 +1774,7 @@ INTRINSICS = {
     "sys.list.append": sys_list_append,
     "sys.list.pop": sys_list_pop,
     "sys.list.delete": sys_list_delete,
+    "sys.list.set": sys_list_set,
     "sys.list.get": sys_list_get,
     "sys.mem.alloc": sys_mem_alloc,
     "sys.mem.inspect": sys_mem_inspect,
@@ -1770,6 +1805,8 @@ INTRINSICS = {
     "sys.json.stringify": sys_json_stringify,
     "sys.json.stringify": sys_json_stringify,
     "sys.log": sys_log,
+    "sys.vm.eval": sys_vm_eval,
+    "sys.vm.source": sys_vm_source,
     "sys.io.read_bytes": sys_io_read_bytes,
     "sys.io.read_line": sys_io_read_line,
     "sys.io.write": sys_io_write,

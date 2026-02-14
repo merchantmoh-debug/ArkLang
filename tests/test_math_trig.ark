@@ -1,12 +1,13 @@
 // Test Suite: Math (Trigonometry)
 // Depends on lib/std/math.ark
+import std.math
 
 func assert_range(val, min, max, msg) {
     if val >= min && val <= max {
         print("PASS: " + msg + " (" + val + ")")
     } else {
         print("FAIL: " + msg + " (" + val + " not in " + min + ".." + max + ")")
-        crash := 1 / 0
+        sys.exit(1)
     }
 }
 
@@ -15,7 +16,7 @@ func assert_eq(val, expected, msg) {
         print("PASS: " + msg + " (" + val + ")")
     } else {
         print("FAIL: " + msg + " (Expected " + expected + ", Got " + val + ")")
-        crash := 1 / 0
+        sys.exit(1)
     }
 }
 
