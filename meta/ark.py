@@ -275,10 +275,23 @@ def core_get(args: List[ArkValue]):
         raise Exception("Index out of bounds")
     return UNIT_VALUE # Should not be reached
 
-COMMAND_WHITELIST = {
-    "ls", "grep", "cat", "echo", "python", "python3",
-    "cargo", "rustc", "git", "date", "whoami", "pwd", "mkdir", "touch"
-}
+def load_whitelist():
+    default_whitelist = {
+        "ls", "grep", "cat", "echo", "python", "python3",
+        "cargo", "rustc", "git", "date", "whoami", "pwd", "mkdir", "touch"
+    }
+    # Check for security.json in CWD
+    if os.path.exists("security.json"):
+        try:
+            with open("security.json", "r") as f:
+                config = json.load(f)
+                if "whitelist" in config:
+                    return set(config["whitelist"])
+        except Exception as e:
+            print(f"Warning: Failed to load security.json: {e}", file=sys.stderr)
+    return default_whitelist
+
+COMMAND_WHITELIST = load_whitelist()
 
 def sys_exec(args: List[ArkValue]):
     # check_exec_security() - Removed to allow COMMAND_WHITELIST to function

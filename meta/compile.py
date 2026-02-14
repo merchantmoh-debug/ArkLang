@@ -1,421 +1,278 @@
-# Copyright (c) 2026 Mohamad Al-Zawahreh (dba Sovereign Systems).
-#
-# This file is part of the Ark Sovereign Compiler.
-#
-# LICENSE: DUAL-LICENSED (AGPLv3 or COMMERCIAL).
-#
-# 1. OPEN SOURCE: You may use this file under the terms of the GNU Affero
-#    General Public License v3.0. If you link to this code, your ENTIRE
-#    application must be open-sourced under AGPLv3.
-#
-# 2. COMMERCIAL: For proprietary use, you must obtain a Commercial License
-#    from Sovereign Systems.
-#
-# PATENT NOTICE: Protected by US Patent App #63/935,467.
-# NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
-
-import json
+import ast
 import sys
-from ark_parser import QiParser
+import os
+from lark import Transformer, Tree, Token
+from meta.ark import ArkValue, ArkInstance, ArkFunction, ArkClass, Scope, INTRINSICS, UNIT_VALUE, eval_binop, is_truthy
 
-# Define constants at module level
-OP_MAP = {
-    "add": "intrinsic_add", "sub": "intrinsic_sub",
-    "mul": "intrinsic_mul", "gt": "intrinsic_gt",
-    "lt": "intrinsic_lt", "eq": "intrinsic_eq",
-    "ge": "intrinsic_ge", "le": "intrinsic_le"
-}
+_FUNC_COUNTER = 0
+def gen_func_name():
+    global _FUNC_COUNTER
+    _FUNC_COUNTER += 1
+    return f"_ark_func_{_FUNC_COUNTER}"
 
-BIN_OPS = {
-    "add": "intrinsic_add", "sub": "intrinsic_sub",
-    "mul": "intrinsic_mul", "div": "intrinsic_div", "mod": "intrinsic_mod",
-    "gt": "intrinsic_gt", "lt": "intrinsic_lt",
-    "ge": "intrinsic_ge", "le": "intrinsic_le",
-    "eq": "intrinsic_eq"
-}
-
-class ArkCompiler:
+class ArkCompiler(Transformer):
     def __init__(self):
-        self.parser = QiParser("meta/ark.lark")
+        self.scope_stack = []
+        self.in_function = False
 
-    def compile(self, code):
-        ast = self.parser.parse(code)
-        # Debugging
-        # print(f"DEBUG AST: {ast}")
-        if hasattr(ast, 'data'):
-             # print(f"AST IS TREE: {ast.data}")
-             # If AST is a Tree, it means start rule wasn't transformed?
-             # But ArkTransformer has start method.
-             pass
+    def start(self, items):
+        stmts = self._ensure_statements(items)
+        return ast.Module(body=stmts, type_ignores=[])
+
+    def block(self, items):
+        return self._ensure_statements(items)
+
+    def _ensure_statements(self, items):
+        if items is None: return [] # Handle None gracefully
+        stmts = []
+        if isinstance(items, list):
+            flat_items = []
+            for i in items:
+                if isinstance(i, list): flat_items.extend(i)
+                else: flat_items.append(i)
+            items = flat_items
         
-        program_node = ast.get("program", [])
+        for item in items:
+            if isinstance(item, ast.expr):
+                stmts.append(ast.Expr(value=item))
+            elif isinstance(item, ast.stmt):
+                stmts.append(item)
+            elif isinstance(item, Tree):
+                 print(f"WARNING: Unhandled Tree node in statements: {item.data}")
+        return stmts
+
+    # Expressions
+    def number(self, items):
+        val = int(items[0].value)
+        return self._create_ark_value(ast.Constant(value=val), "Integer")
+
+    def string(self, items):
+        try:
+            s = items[0].value[1:-1]
+            s = s.encode('utf-8').decode('unicode_escape')
+        except:
+             s = items[0].value[1:-1]
+        return self._create_ark_value(ast.Constant(value=s), "String")
+
+    def var(self, items):
+        name = items[0].value
+        return ast.Call(
+            func=ast.Name(id='resolve_var', ctx=ast.Load()),
+            args=[ast.Name(id='scope', ctx=ast.Load()), ast.Constant(value=name)],
+            keywords=[]
+        )
+
+    # BinOps
+    def _handle_binop(self, op_name, items):
+        return ast.Call(
+            func=ast.Name(id='eval_binop', ctx=ast.Load()),
+            args=[ast.Constant(value=op_name), items[0], items[1]],
+            keywords=[]
+        )
+
+    def add(self, items): return self._handle_binop("add", items)
+    def sub(self, items): return self._handle_binop("sub", items)
+    def mul(self, items): return self._handle_binop("mul", items)
+    def div(self, items): return self._handle_binop("div", items)
+    def mod(self, items): return self._handle_binop("mod", items)
+    def lt(self, items): return self._handle_binop("lt", items)
+    def gt(self, items): return self._handle_binop("gt", items)
+    def le(self, items): return self._handle_binop("le", items)
+    def ge(self, items): return self._handle_binop("ge", items)
+    def eq(self, items): return self._handle_binop("eq", items)
+    def neq(self, items): return self._handle_binop("neq", items)
+
+    # Statements
+    def assign_var(self, items):
+        name = items[0].value
+        val = items[1]
+        return ast.Expr(value=ast.Call(
+            func=ast.Attribute(value=ast.Name(id='scope', ctx=ast.Load()), attr='set', ctx=ast.Load()),
+            args=[ast.Constant(value=name), val],
+            keywords=[]
+        ))
+
+    def flow_stmt(self, items):
+        return items[0]
+
+    def call_expr(self, items):
+        func = items[0]
+        args = items[1] if len(items) > 1 else []
+        arg_elts = args if isinstance(args, list) else [args]
+        return ast.Call(
+            func=ast.Name(id='call_func', ctx=ast.Load()),
+            args=[func, ast.List(elts=arg_elts, ctx=ast.Load()), ast.Name(id='scope', ctx=ast.Load())],
+            keywords=[]
+        )
+
+    def expr_list(self, items):
+        return items
+
+    def param_list(self, items):
+        return [t.value for t in items]
+
+    def function_def(self, items):
+        name = items[0].value
+        params = []
+        body_idx = 1
         
-        # Wrap everything in a Block
-        statements = []
-        for stmt in program_node:
-            # Debug
-            # print(f"Processing stmt type: {type(stmt)}")
-            if hasattr(stmt, 'data'):
-                # print(f"STMT IS TREE: {stmt.data} - {stmt}")
-                pass
-            
-            compiled_stmt = self.compile_stmt(stmt)
-            if compiled_stmt:
-                statements.append(compiled_stmt)
-
-        # Root is a Statement::Block
-        root = {
-            "Statement": {
-                "Block": statements
-            }
-        }
-        return json.dumps(root, indent=2)
-
-    def compile_stmt(self, stmt):
-        kind = stmt.data if hasattr(stmt, 'data') else stmt.get("type")
+        if len(items) > 1 and isinstance(items[1], list) and (not items[1] or isinstance(items[1][0], str)):
+             params = items[1]
+             body_idx = 2
         
-        if kind == "assign_var":
-            return self._compile_assign_var(stmt)
-        elif kind == "assign_destructure":
-            return self._compile_assign_destructure(stmt)
-        elif kind == "assign_attr":
-            return self._compile_assign_attr(stmt)
-        elif kind == "if":
-            return self._compile_if(stmt)
-        elif kind == "function_def":
-            return self._compile_function_def(stmt)
-        elif kind == "while":
-            return self._compile_while(stmt)
-        elif kind == "return_stmt":
-             return self._compile_return(stmt)
-        elif kind == "flow_stmt":
-             if hasattr(stmt, 'children'):
-                  return self.compile_stmt(stmt.children[0])
-             return None
-
-        # Fallback: Check if it's an expression (like a top-level Call)
-        if isinstance(stmt, dict) and stmt.get("type") in ["call", "binary_op", "unary_op"]:
-             expr = self.compile_expr(stmt)
-             if expr:
-                 return {"Expression": expr}
-
-        return None
-
-    def _compile_assign_var(self, stmt):
-        name_token = stmt.children[0]
-        name = name_token.value
-        value_node = stmt.children[1]
-        return {
-            "Let": {
-                "name": name,
-                "ty": None,
-                "value": self.compile_expr(value_node)
-            }
-        }
-
-    def _compile_assign_destructure(self, stmt):
-        # Rule: "[" IDENTIFIER ("," IDENTIFIER)* "]" ":=" expr
-        # Filter for IDENTIFIER tokens.
-        targets = [c.value for c in stmt.children[:-1] if hasattr(c, 'type') and c.type == "IDENTIFIER"]
-        value_node = stmt.children[-1]
-
-        return {
-            "LetDestructure": {
-                "names": targets,
-                "value": self.compile_expr(value_node)
-            }
-        }
-
-    def _compile_assign_attr(self, stmt):
-        # assign_attr: atom "." IDENTIFIER ":=" expression
-        # children: [atom_dict, IDENTIFIER_token, expr_dict]
-        atom = stmt.children[0]
-        field_token = stmt.children[1]
-        value_node = stmt.children[2]
-
-        obj_name = ""
-        if isinstance(atom, dict) and atom.get("type") == "var":
-            obj_name = atom["name"]
-        elif hasattr(atom, 'data') and atom.data == "var":
-             obj_name = atom.children[0].value
+        if body_idx < len(items):
+            body_stmts = self._ensure_statements(items[body_idx])
         else:
-             # Fallback: maybe atom is a Token(NAME)?
-             if hasattr(atom, 'type') and atom.type == "NAME":
-                 obj_name = atom.value
-             else:
-                 print(f"Error: Field assignment only supported on simple variables. Got {atom}")
-                 return None
+            body_stmts = []
 
-        return {
-            "SetField": {
-                "obj_name": obj_name,
-                "field": field_token.value,
-                "value": self.compile_expr(value_node)
-            }
-        }
+        func_name = gen_func_name()
 
-    def _compile_if(self, stmt):
-        condition = stmt["condition"]
-        then_block = stmt["then_block"]
-        else_block = stmt["else_block"]
-        
-        then_stmts = [self.compile_stmt(s) for s in then_block]
-        then_stmts = [s for s in then_stmts if s]
-        
-        else_stmts = None
-        if else_block:
-            # Check if else_block is a list (Block) or a single node (If)
-            if isinstance(else_block, list):
-                 else_stmts_raw = [self.compile_stmt(s) for s in else_block]
-                 else_stmts = [s for s in else_stmts_raw if s]
-            else:
-                 # Single stmt (If)
-                 compiled = self.compile_stmt(else_block)
-                 if compiled:
-                     else_stmts = [compiled]
+        if not body_stmts or not isinstance(body_stmts[-1], ast.Return):
+            body_stmts.append(ast.Return(value=ast.Name(id='UNIT_VALUE', ctx=ast.Load())))
 
-        return {
-            "If": {
-                "condition": self.compile_expr(condition),
-                "then_block": then_stmts,
-                "else_block": else_stmts
-            }
-        }
+        inner_func = ast.FunctionDef(
+            name=func_name,
+            args=ast.arguments(
+                posonlyargs=[],
+                args=[ast.arg(arg='scope')],
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[]
+            ),
+            body=body_stmts,
+            decorator_list=[]
+        )
 
-    def _compile_function_def(self, stmt):
-        name = stmt["name"]
-        inputs_raw = stmt.get("inputs", []) or []
-        body_block = stmt["body"]
+        params_ast = ast.List(
+            elts=[ast.Constant(value=p) for p in params],
+            ctx=ast.Load()
+        )
+
+        assign_stmt = ast.Expr(value=ast.Call(
+            func=ast.Attribute(value=ast.Name(id='scope', ctx=ast.Load()), attr='set', ctx=ast.Load()),
+            args=[
+                ast.Constant(value=name),
+                self._create_ark_value(
+                    ast.Call(
+                        func=ast.Name(id='ArkFunction', ctx=ast.Load()),
+                        args=[
+                            ast.Constant(value=name),
+                            params_ast,
+                            ast.Name(id=func_name, ctx=ast.Load()),
+                            ast.Name(id='scope', ctx=ast.Load())
+                        ],
+                        keywords=[]
+                    ),
+                    "Function"
+                )
+            ],
+            keywords=[]
+        ))
         
-        body_stmts = [self.compile_stmt(s) for s in body_block]
-        body_stmts = [s for s in body_stmts if s]
+        return [inner_func, assign_stmt]
+
+    def return_stmt(self, items):
+        val = items[0] if items else ast.Name(id='UNIT_VALUE', ctx=ast.Load())
+        return ast.Return(value=val)
+
+    def if_stmt(self, items):
+        cond = items[0]
+        body = self._ensure_statements(items[1])
         
-        inputs = []
-        for item in inputs_raw:
-            # Fallback for complex type or just a string
-            # If item is a list/tuple but len != 2, what then?
-            # Assume it's [name, type] or just name.
-            if isinstance(item, (list, tuple)):
-                if len(item) == 2:
-                    arg_name, arg_ty = item
-                    ark_type = {"Linear": "Integer"} # Default
-                    if isinstance(arg_ty, dict):
-                        if arg_ty.get("type_name") == "Linear":
-                                inner = arg_ty.get("inner", "Integer")
-                                ark_type = {"Linear": inner}
-                        else:
-                                ark_type = {"Shared": arg_ty.get("type_name", "Any")}
-                    inputs.append([arg_name, ark_type])
+        top_if = ast.If(test=self._make_truthy_check(cond), body=body, orelse=[])
+        current_if = top_if
+
+        idx = 2
+        while idx < len(items):
+            # Skip if None
+            if items[idx] is None:
+                idx += 1
+                continue
+
+            if idx + 1 < len(items) and items[idx+1] is not None:
+                # Need to distinguish between "else if" and "else".
+                # Lark structure will have `expr` then `block` for `else if`.
+                # For `else`, it will just be `block`.
+                # But how do we know if items[idx] is expr or block?
+                # AST nodes: expr is ast.Call, block is list.
+                # If items[idx] is list, it's an else block.
+                # If items[idx] is ast.Call, it's a condition.
+
+                item = items[idx]
+                if isinstance(item, list):
+                    # Else block
+                    else_body = self._ensure_statements(item)
+                    current_if.orelse = else_body
+                    idx += 1
                 else:
-                        # Fallback for weird list
-                        inputs.append([str(item[0]), {"Linear": "Integer"}])
+                    # Elif condition
+                    elif_cond = item
+                    elif_body = self._ensure_statements(items[idx+1])
+                    new_if = ast.If(test=self._make_truthy_check(elif_cond), body=elif_body, orelse=[])
+                    current_if.orelse = [new_if]
+                    current_if = new_if
+                    idx += 2
             else:
-                # It is a string (Token or str)
-                inputs.append([str(item), {"Linear": "Integer"}]) 
-        
-        # 1. Construct Content First
-        content = {
-            "Statement": {
-                "Block": body_stmts
-            }
-        }
+                # Last item must be else block
+                if isinstance(items[idx], list):
+                    else_body = self._ensure_statements(items[idx])
+                    current_if.orelse = else_body
+                idx += 1
 
-        # 2. Compute Deterministic Hash (Merkle Node)
-        # We use Canonical JSON (sorted keys, no whitespace) to match the Rust Loader.
-        import hashlib
-        canonical_json = json.dumps(content, sort_keys=True, separators=(',', ':'))
-        content_hash = hashlib.sha256(canonical_json.encode('utf-8')).hexdigest()
+        return top_if
 
-        return {
-            "Function": {
-                "name": name,
-                "inputs": inputs,
-                "output": {"Linear": "Integer"},
-                "body": {
-                    "hash": content_hash, 
-                    "content": content
-                }
-            }
-        }
+    def while_stmt(self, items):
+        cond = items[0]
+        body = self._ensure_statements(items[1])
+        return ast.While(test=self._make_truthy_check(cond), body=body, orelse=[])
 
-    def _compile_while(self, stmt):
-        condition = stmt["condition"]
-        body_block = stmt["body"]
-        
-        body_stmts = [self.compile_stmt(s) for s in body_block]
-        body_stmts = [s for s in body_stmts if s]
+    def _create_ark_value(self, val_node, type_str):
+        return ast.Call(
+            func=ast.Name(id='ArkValue', ctx=ast.Load()),
+            args=[val_node, ast.Constant(value=type_str)],
+            keywords=[]
+        )
 
-        return {
-            "While": {
-                "condition": self.compile_expr(condition),
-                "body": body_stmts
-            }
-        }
-    
-    def _compile_return(self, stmt):
-        expr = stmt.children[0]
-        return {
-            "Return": self.compile_expr(expr)
-        }
+    def _make_truthy_check(self, node):
+        return ast.Call(
+            func=ast.Name(id='is_truthy', ctx=ast.Load()),
+            args=[node],
+            keywords=[]
+        )
 
-    def compile_expr(self, expr):
-        # Handle Primitives
-        if isinstance(expr, int):
-            return {"Literal": str(expr)}
-        if isinstance(expr, str): # Should not happen if parser works but safe fallback
-             return {"Literal": expr}
-             
-        # Handle Dict (Transformed Nodes)
-        if isinstance(expr, dict):
-            # Check for specific types/ops
-            kind = expr.get("type")
-            op = expr.get("op")
-            
-            if kind == "string":
-                return {"Literal": expr["val"]}
-            if kind == "var":
-                 name = expr["name"]
-                 if name == "true": return {"Literal": "true"}
-                 if name == "false": return {"Literal": "false"}
-                 return {"Variable": name}
-            
-            if kind == "get_attr":
-                # {type: get_attr, object: ..., attr: ...}
-                obj = self.compile_expr(expr["object"])
-                attr = expr["attr"]
-                # MAST for field access is likely intrinsics OR specific node?
-                # Does MAST have GetField? 
-                # Let's check eval.rs or assume intrinsic_get_field?
-                # Actually, eval.rs handles it via Eval::GetField?
-                # Wait, earlier logs showed "StructGet" or similar?
-                # Let's use a "StructGet" node if supported, or intrinsic.
-                # Looking at eval.rs might be needed, but let's try "GetField".
-                pass 
-                # Wait, I need to know the MAST node name.
-                # Let's assume "GetField" for now or use intrinsic.
-                # Actually, in Ark, x.y is syntax sugar for what?
-                # In eval.rs, we likely implemented dot access.
-                # Checking eval.rs is safer. but for now let's use a placeholder pattern.
-                # Re-reading task.md check: "AST nodes for Struct Init/Access".
-                # If I look at `eval.rs` logic...
-                return {
-                    "GetField": {
-                        "obj": obj,
-                        "field": attr
-                    }
-                }
-            if kind == "call":
-                args = expr.get("args", [])
-                if args is None: args = []
-                return {
-                    "Call": {
-                        "function_hash": expr["function"],
-                        "args": [self.compile_expr(arg) for arg in args]
-                    }
-                }
-            if kind == "list":
-                items = expr.get("value", [])
-                if items is None: items = []
-                return {
-                    "List": [self.compile_expr(item) for item in items]
-                }
-            
-            if op:
-                left = self.compile_expr(expr["left"])
-                right = self.compile_expr(expr["right"])
-                if op in OP_MAP:
-                     return {
-                        "Call": {
-                            "function_hash": OP_MAP[op],
-                            "args": [left, right]
-                        }
-                    }
-        
-        # Fallback for Token/Tree (Untransformed)
-        if hasattr(expr, 'type'): # Token
-            if expr.type == "NUMBER":
-                return {"Literal": str(expr.value)}
-            if expr.type == "STRING":
-                 return {"Literal": expr.value[1:-1]}
-            if expr.type == "NAME":
-                 return {"Variable": expr.value}
+def resolve_var(scope, name):
+    from meta.ark import INTRINSICS
+    val = scope.get(name)
+    if val: return val
+    if name in INTRINSICS:
+        return ArkValue(name, "Intrinsic")
+    raise Exception(f"Undefined variable: {name}")
 
-        if hasattr(expr, 'data'):
-            kind = expr.data
-            if kind == "number":
-                return {"Literal": str(expr.children[0].value)}
-            if kind == "string":
-                 return {"Literal": expr.children[0].value[1:-1]}
-            if kind == "var":
-                 return {"Variable": expr.children[0].value}
-            if kind == "struct_init":
-                 # rule: struct_init: "{" [field_list] "}"
-                 # field_list: field_init ("," field_init)*
-                 # field_init: IDENTIFIER ":" expression
-                 fields = []
-                 if expr.children:
-                      field_list = expr.children[0]
-                      if field_list and hasattr(field_list, "children"):
-                           for field_init in field_list.children:
-                                # field_init children: [Token(IDENTIFIER), Tree(expression)]
-                                name = field_init.children[0].value
-                                val_node = field_init.children[1]
-                                fields.append([name, self.compile_expr(val_node)])
-                 return {
-                     "StructInit": {
-                         "fields": fields
-                     }
-                 }
-            if kind == "get_attr":
-                 # rule: atom "." IDENTIFIER
-                 obj = expr.children[0]
-                 attr = expr.children[1].value
-                 return {
-                     "GetField": {
-                         "obj": self.compile_expr(obj),
-                         "field": attr
-                     }
-                 }
-            if kind == "logical_or":
-                 return self.compile_binop("intrinsic_or", expr.children[0], expr.children[2])
-            if kind == "logical_and":
-                 return self.compile_binop("intrinsic_and", expr.children[0], expr.children[2])
-            
-            # Binary Ops that slipped through Transformer
-            if kind in BIN_OPS:
-                 return self.compile_binop(BIN_OPS[kind], expr.children[0], expr.children[1])
+def call_func(func_val, args, scope):
+    from meta.ark import call_user_func, INTRINSICS
+    if func_val.type == "Function":
+        func = func_val.val
+        if callable(func.body):
+            func_scope = Scope(func.closure)
+            for i, param in enumerate(func.params):
+                if i < len(args):
+                    func_scope.set(param, args[i])
+            return func.body(func_scope)
+        else:
+            return call_user_func(func, args)
+    elif func_val.type == "Intrinsic":
+        if func_val.val in INTRINSICS:
+            return INTRINSICS[func_val.val](args)
+    raise Exception(f"Not callable: {func_val.type}")
 
-        # Absolute Fallback
-        return {"Literal": str(expr)}
-
-    def compile_binop(self, intrinsic, left, right):
-        return {
-            "Call": {
-                "function_hash": intrinsic,
-                "args": [
-                    self.compile_expr(left),
-                    self.compile_expr(right)
-                ]
-            }
-        }
-
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        with open(sys.argv[1], 'r') as f:
-            code = f.read()
-    else:
-        # Default test
-        code = """
-        x := 10
-        y := 20
-        z := x + y
-        """
-    
+def compile_to_python(code):
+    from meta.ark import ARK_PARSER
+    tree = ARK_PARSER.parse(code)
     compiler = ArkCompiler()
-    output = compiler.compile(code)
+    py_ast = compiler.transform(tree)
+    ast.fix_missing_locations(py_ast)
     
-    if len(sys.argv) > 2:
-        with open(sys.argv[2], 'w', encoding='utf-8') as f:
-            f.write(output)
-    else:
-        print(output)
+    code_obj = compile(py_ast, filename="<ark_jit>", mode="exec")
+    return code_obj
+
+if __name__ == "__main__": pass
