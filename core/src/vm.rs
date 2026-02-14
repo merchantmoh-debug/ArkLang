@@ -520,8 +520,8 @@ mod tests {
         chunk.write(OpCode::Push(Value::Function(Rc::new(func_chunk))));
         chunk.write(OpCode::Store("add_one".to_string()));
 
-        chunk.write(OpCode::Load("add_one".to_string()));
         chunk.write(OpCode::Push(Value::Integer(41)));
+        chunk.write(OpCode::Load("add_one".to_string()));
         chunk.write(OpCode::Call(1));
         // Result should be 42
 
