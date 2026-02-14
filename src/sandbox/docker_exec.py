@@ -5,6 +5,15 @@ from typing import Optional
 
 from .base import CodeSandbox, ExecutionResult, truncate_output
 
+# Security: Whitelist of allowed Docker images
+ALLOWED_DOCKER_IMAGES = {
+    "python:3.11-slim",
+    "python:3.12-slim",
+    "python:3.10-slim",
+    "python:3.9-slim",
+}
+DEFAULT_DOCKER_IMAGE = "python:3.11-slim"
+
 
 class DockerSandbox(CodeSandbox):
     """Docker-based sandbox (opt-in).
@@ -56,7 +65,13 @@ class DockerSandbox(CodeSandbox):
         # Lazy imports only after availability confirmed
         import docker  # type: ignore
 
-        image = os.getenv("DOCKER_IMAGE", "python:3.11-slim")
+        # Security: Validate Docker image against a whitelist
+        image = os.getenv("DOCKER_IMAGE", DEFAULT_DOCKER_IMAGE)
+
+        if image not in ALLOWED_DOCKER_IMAGES:
+            # Fallback to default if image is not whitelisted
+            image = DEFAULT_DOCKER_IMAGE
+
         network_enabled = os.getenv("DOCKER_NETWORK_ENABLED", "false").lower() == "true"
         cpu_limit = os.getenv("DOCKER_CPU_LIMIT", "0.5")
         mem_limit = os.getenv("DOCKER_MEMORY_LIMIT", "256m")

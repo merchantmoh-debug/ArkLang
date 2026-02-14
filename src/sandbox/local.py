@@ -4,20 +4,10 @@ import time
 import tempfile
 import subprocess
 import ast
-from typing import List, Set
+from typing import List, Set, Tuple
 
 from src.config import settings
-from .base import CodeSandbox, ExecutionResult
-
-
-def _truncate_output(text: str, max_bytes: int) -> Tuple[str, bool]:
-    if max_bytes <= 0:
-        return text, False
-    encoded = text.encode("utf-8", errors="ignore")
-    if len(encoded) <= max_bytes:
-        return text, False
-    truncated = encoded[: max_bytes - 32].decode("utf-8", errors="ignore")
-    return truncated + "\n... (output truncated)", True
+from .base import CodeSandbox, ExecutionResult, truncate_output
 
 
 class SecurityVisitor(ast.NodeVisitor):
