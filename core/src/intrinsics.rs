@@ -9,11 +9,11 @@
 use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::OnceLock;
-use serde_json::json;
+use serde_json::from_str;
 use std::fs;
 use std::process::Command;
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -68,7 +68,9 @@ impl IntrinsicRegistry {
             "intrinsic_io_cls" | "io.cls" => Some(intrinsic_io_cls),
             "intrinsic_list_set" | "sys.list.set" => Some(intrinsic_list_set),
             "intrinsic_chain_height" | "sys.chain.height" => Some(intrinsic_chain_height),
-            "intrinsic_chain_get_balance" | "sys.chain.get_balance" => Some(intrinsic_chain_get_balance),
+            "intrinsic_chain_get_balance" | "sys.chain.get_balance" => {
+                Some(intrinsic_chain_get_balance)
+            }
             "intrinsic_chain_submit_tx" | "sys.chain.submit_tx" => Some(intrinsic_chain_submit_tx),
             "intrinsic_chain_verify_tx" | "sys.chain.verify_tx" => Some(intrinsic_chain_verify_tx),
             "sys.fs.write_buffer" => Some(intrinsic_fs_write_buffer),
@@ -322,7 +324,6 @@ impl IntrinsicRegistry {
     }
 }
 
-
 pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
         return Err(RuntimeError::NotExecutable);
@@ -365,7 +366,7 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
                 .unwrap_or_else(|_| Client::new())
         });
 
-        let payload = json!({
+        let payload = serde_json::json!({
             "contents": [{
                 "parts": [{"text": prompt}]
             }]
@@ -377,13 +378,15 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
         // SAFETY: This blocks the current thread. Do not call this from within an existing
         // Tokio runtime context (e.g., inside an async function running on a runtime)
         // or it will panic. The VM is designed to run in a dedicated thread or process.
-        runtime.block_on(async {
+        // Create a new runtime for this blocking operation
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
             // Simple Retry Logic
             for attempt in 0..3 {
-                match client.post(&url).json(&payload).send().await {
+                match client.post(&url).json(&payload).send() {
                     Ok(resp) => {
                         if resp.status().is_success() {
-                            let json_resp = match resp.json::<serde_json::Value>().await {
+                            let json_resp = match resp.json::<serde_json::Value>() {
                                 Ok(v) => v,
                                 Err(e) => {
                                     println!("[Ark:AI] JSON Error: {}", e);
@@ -852,7 +855,7 @@ pub fn intrinsic_crypto_verify(args: Vec<Value>) -> Result<Value, RuntimeError> 
             return Err(RuntimeError::TypeMismatch(
                 "String or Buffer for msg".to_string(),
                 args[0].clone(),
-            ))
+            ));
         }
     };
 
@@ -1273,7 +1276,9 @@ pub fn intrinsic_math_asin(args: Vec<Value>) -> Result<Value, RuntimeError> {
         Value::Integer(n) => {
             let val = (*n as f64) / 10000.0;
             if val < -1.0 || val > 1.0 {
-                return Err(RuntimeError::InvalidOperation("asin out of domain".to_string()));
+                return Err(RuntimeError::InvalidOperation(
+                    "asin out of domain".to_string(),
+                ));
             }
             let res = val.asin();
             Ok(Value::Integer((res * 10000.0) as i64))
@@ -1293,7 +1298,9 @@ pub fn intrinsic_math_acos(args: Vec<Value>) -> Result<Value, RuntimeError> {
         Value::Integer(n) => {
             let val = (*n as f64) / 10000.0;
             if val < -1.0 || val > 1.0 {
-                return Err(RuntimeError::InvalidOperation("acos out of domain".to_string()));
+                return Err(RuntimeError::InvalidOperation(
+                    "acos out of domain".to_string(),
+                ));
             }
             let res = val.acos();
             Ok(Value::Integer((res * 10000.0) as i64))
@@ -1394,14 +1401,23 @@ pub fn intrinsic_fs_write_buffer(args: Vec<Value>) -> Result<Value, RuntimeError
     }
     let path_str = match &args[0] {
         Value::String(s) => s,
-        _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                args[0].clone(),
+            ));
+        }
     };
 
     match &args[1] {
         Value::Buffer(buf) => {
             #[cfg(target_arch = "wasm32")]
             {
-                println!("[Ark:VFS] Write Buffer to '{}': [Size: {}]", path_str, buf.len());
+                println!(
+                    "[Ark:VFS] Write Buffer to '{}': [Size: {}]",
+                    path_str,
+                    buf.len()
+                );
                 Ok(Value::Unit)
             }
             #[cfg(not(target_arch = "wasm32"))]
@@ -1416,8 +1432,11 @@ pub fn intrinsic_fs_write_buffer(args: Vec<Value>) -> Result<Value, RuntimeError
                 fs::write(path_str, buf).map_err(|_| RuntimeError::NotExecutable)?;
                 Ok(Value::Unit)
             }
-        },
-        _ => Err(RuntimeError::TypeMismatch("Buffer".to_string(), args[1].clone())),
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Buffer".to_string(),
+            args[1].clone(),
+        )),
     }
 }
 
@@ -1427,7 +1446,12 @@ pub fn intrinsic_fs_read_buffer(args: Vec<Value>) -> Result<Value, RuntimeError>
     }
     let path_str = match &args[0] {
         Value::String(s) => s,
-        _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                args[0].clone(),
+            ));
+        }
     };
 
     #[cfg(target_arch = "wasm32")]
@@ -1444,44 +1468,122 @@ pub fn intrinsic_fs_read_buffer(args: Vec<Value>) -> Result<Value, RuntimeError>
 }
 
 pub fn intrinsic_math_sin_scaled(args: Vec<Value>) -> Result<Value, RuntimeError> {
-    if args.len() != 3 { return Err(RuntimeError::NotExecutable); }
-    let angle = match &args[0] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())) };
-    let scale_in = match &args[1] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[1].clone())) };
-    let scale_out = match &args[2] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[2].clone())) };
+    if args.len() != 3 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let angle = match &args[0] {
+        Value::Integer(i) => *i as f64,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[0].clone(),
+            ));
+        }
+    };
+    let scale_in = match &args[1] {
+        Value::Integer(i) => *i as f64,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[1].clone(),
+            ));
+        }
+    };
+    let scale_out = match &args[2] {
+        Value::Integer(i) => *i as f64,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[2].clone(),
+            ));
+        }
+    };
 
-    if scale_in == 0.0 { return Err(RuntimeError::InvalidOperation("Scale In is 0".to_string())); }
+    if scale_in == 0.0 {
+        return Err(RuntimeError::InvalidOperation("Scale In is 0".to_string()));
+    }
 
     let res = (angle / scale_in).sin() * scale_out;
     Ok(Value::Integer(res.round() as i64))
 }
 
 pub fn intrinsic_math_cos_scaled(args: Vec<Value>) -> Result<Value, RuntimeError> {
-    if args.len() != 3 { return Err(RuntimeError::NotExecutable); }
-    let angle = match &args[0] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())) };
-    let scale_in = match &args[1] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[1].clone())) };
-    let scale_out = match &args[2] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[2].clone())) };
+    if args.len() != 3 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let angle = match &args[0] {
+        Value::Integer(i) => *i as f64,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[0].clone(),
+            ));
+        }
+    };
+    let scale_in = match &args[1] {
+        Value::Integer(i) => *i as f64,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[1].clone(),
+            ));
+        }
+    };
+    let scale_out = match &args[2] {
+        Value::Integer(i) => *i as f64,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[2].clone(),
+            ));
+        }
+    };
 
-    if scale_in == 0.0 { return Err(RuntimeError::InvalidOperation("Scale In is 0".to_string())); }
+    if scale_in == 0.0 {
+        return Err(RuntimeError::InvalidOperation("Scale In is 0".to_string()));
+    }
 
     let res = (angle / scale_in).cos() * scale_out;
     Ok(Value::Integer(res.round() as i64))
 }
 
 pub fn intrinsic_math_pi_scaled(args: Vec<Value>) -> Result<Value, RuntimeError> {
-    if args.len() != 1 { return Err(RuntimeError::NotExecutable); }
-    let scale = match &args[0] { Value::Integer(i) => *i as f64, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())) };
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let scale = match &args[0] {
+        Value::Integer(i) => *i as f64,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[0].clone(),
+            ));
+        }
+    };
 
     let res = std::f64::consts::PI * scale;
     Ok(Value::Integer(res.round() as i64))
 }
 
 pub fn intrinsic_str_from_code(args: Vec<Value>) -> Result<Value, RuntimeError> {
-    if args.len() != 1 { return Err(RuntimeError::NotExecutable); }
-    let code = match &args[0] { Value::Integer(i) => *i as u32, _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())) };
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let code = match &args[0] {
+        Value::Integer(i) => *i as u32,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[0].clone(),
+            ));
+        }
+    };
     if let Some(c) = std::char::from_u32(code) {
         Ok(Value::String(c.to_string()))
     } else {
-        Err(RuntimeError::InvalidOperation("Invalid Char Code".to_string()))
+        Err(RuntimeError::InvalidOperation(
+            "Invalid Char Code".to_string(),
+        ))
     }
 }
 
@@ -1489,6 +1591,7 @@ pub fn intrinsic_str_from_code(args: Vec<Value>) -> Result<Value, RuntimeError> 
 mod tests {
     use super::*;
     use crate::runtime::Value;
+    use serde::Serialize;
 
     #[test]
     fn test_time_now() {
@@ -1561,7 +1664,7 @@ mod tests {
         let args = vec![Value::Integer(7854)];
         let res = intrinsic_math_tan(args).unwrap();
         if let Value::Integer(v) = res {
-             assert!(v >= 9990 && v <= 10010);
+            assert!(v >= 9990 && v <= 10010);
         } else {
             panic!("Expected Integer");
         }
@@ -1622,4 +1725,4 @@ mod tests {
             _ => panic!("Expected Buffer"),
         }
     }
-    }
+}
