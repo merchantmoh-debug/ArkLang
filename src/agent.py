@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import sys
 import inspect
@@ -281,7 +282,12 @@ class GeminiAgent:
 
         Supports two patterns:
         1) JSON object: {"action": "tool_name", "args": {...}}
-        2) Plain text line starting with 'Action: <tool_name>'
+        2) Plain text patterns like:
+           - Action: tool_name
+           - **Action:** tool_name
+           - *Action:* tool_name
+           - > Action: tool_name
+           - - Action: tool_name
         """
         cleaned = response_text.strip()
 
@@ -295,11 +301,26 @@ class GeminiAgent:
         except json.JSONDecodeError:
             pass
 
-        for line in cleaned.splitlines():
-            if line.lower().startswith("action:"):
-                action = line.split(":", 1)[1].strip()
-                if action:
-                    return action, {}
+        # Robust regex for text-based action extraction
+        # Matches:
+        # ^ : Start of line (with MULTILINE)
+        # [\s*>\-]* : Optional whitespace, asterisks (*), bullets (-), or quotes (>)
+        # Action : The keyword (case insensitive)
+        # (?:\s*:\s*(?:[\*_]+)?|(?:[\*_]+)?\s*:) : Colon preceded/followed by optional markers/space
+        # \s* : Whitespace
+        # (.+) : The tool name (captured)
+        match = re.search(
+            r"^[\s*>\-]*Action(?:\s*:\s*(?:[\*_]+)?|(?:[\*_]+)?\s*:)\s*(.+)$",
+            cleaned,
+            re.IGNORECASE | re.MULTILINE
+        )
+
+        if match:
+            action = match.group(1).strip()
+            # Clean up potential markdown wrapping the tool name (e.g. **tool**)
+            action = action.strip("*_`")
+            if action:
+                return action, {}
 
         return None, {}
 
