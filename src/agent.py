@@ -18,6 +18,9 @@ from src.memory import MemoryManager
 from src.utils.dummy_client import DummyClient
 from src.tools.openai_proxy import call_openai_chat
 
+# Global cache for loaded tools to avoid repetitive filesystem scanning
+_TOOLS_CACHE: Optional[Dict[str, Callable[..., Any]]] = None
+
 
 class GeminiAgent:
     """
@@ -141,6 +144,10 @@ class GeminiAgent:
         Returns:
             Dictionary mapping tool names to callable functions.
         """
+        global _TOOLS_CACHE
+        if _TOOLS_CACHE is not None:
+            return _TOOLS_CACHE.copy()
+
         tools = {}
 
         # Get the src/tools directory path relative to this file
@@ -180,7 +187,8 @@ class GeminiAgent:
             except Exception as e:
                 print(f"   ⚠️ Failed to load tools from {tool_file.name}: {e}")
 
-        return tools
+        _TOOLS_CACHE = tools
+        return tools.copy()
 
     def _load_context(self) -> str:
         """
