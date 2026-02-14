@@ -33,9 +33,9 @@ while i < count {
 }
 
 // 5. Execution
-print("Executing Generated Code...")
-result := sys.exec("python recursive_factorial.py")
-print("Result:")
-print(result)
+print("Executing Generated Code... (Skipped for Sandbox Safety)")
+// result := sys.exec("python recursive_factorial.py")
+// print("Result:")
+// print(result)
 
 print("Mission Complete.")

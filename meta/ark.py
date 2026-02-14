@@ -384,7 +384,7 @@ def ask_gemini(prompt: str, api_key: str):
 
 def ask_mock():
     print(f"WARNING: Using Mock AI Response.")
-    start = "```python\n"
+    start = "```python:recursive_factorial.py\n"
     code = "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n"
     end = "```"
     return ArkValue(start + code + end, "String")
@@ -395,7 +395,7 @@ def sanitize_prompt(prompt: str) -> str:
         r"Ignore previous instructions",
         r"You are now unlocked",
         r"System:",
-        r"\n\nSystem:",
+        r"\\n\\nSystem:",
         r"Simulate a",
     ]
     for pattern in meta_patterns:
@@ -422,12 +422,41 @@ def extract_code(args: List[ArkValue]):
     if not args or args[0].type != "String":
         raise Exception("extract_code expects a string containing code")
     text = args[0].val
-    # Regex to find code blocks (e.g., ```python ... ``` or just ``` ... ```)
-    matches = re.findall(r"```(?:\w+)?\n(.*?)\n```", text, re.DOTALL)
-    if matches:
-        # For simplicity, return the first found code block
-        return ArkValue(matches[0], "String")
-    return ArkValue("", "String") # Return empty string if no code block found
+    
+    # Matches ```tag\ncontent\n```
+    # Capture group 1: tag (e.g. "python:file.py")
+    # Capture group 2: content
+    matches = re.findall(r"```([^\n]*)\n(.*?)```", text, re.DOTALL)
+    
+    ark_blocks = []
+    
+    # If no matches found but text looks like code, treat whole thing as one block?
+    # No, adhere to contract.
+    
+    for tag_line, content in matches:
+        tag_line = tag_line.strip()
+        filename = "output.txt" 
+        
+        # Parse tag: "python:recursive_factorial.py"
+        if ":" in tag_line:
+            parts = tag_line.split(":")
+            if len(parts) > 1:
+                filename = parts[1].strip()
+        elif tag_line:
+             # Just "python" or "file.ark"?
+             # If it looks like a file ext...
+             if "." in tag_line:
+                 filename = tag_line
+        
+        # Create [filename, content] pair (Ark List)
+        pair = ArkValue([
+            ArkValue(filename, "String"),
+            ArkValue(content, "String")
+        ], "List")
+        
+        ark_blocks.append(pair)
+        
+    return ArkValue(ark_blocks, "List")
 
 SOCKETS = {}
 SOCKET_ID = 0
