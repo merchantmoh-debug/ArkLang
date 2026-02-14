@@ -103,10 +103,8 @@ mod tests {
         let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
         let result_str = result_cstr.to_str().unwrap();
 
-        // FIXME: VM currently returns Unit for top-level returns. Investigate VM/Compiler stack logic.
-        // Expected: String("Hello FFI")
-        // Actual: Unit
-        assert_eq!(result_str, "Unit");
+        // VM returns the top-level return value correctly.
+        assert_eq!(result_str, "String(\"Hello FFI\")");
 
         ark_free_string(result_ptr);
     }
