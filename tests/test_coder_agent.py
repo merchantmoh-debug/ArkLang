@@ -29,30 +29,26 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 # Set environment variable for BaseAgent dummy client
 os.environ["PYTEST_CURRENT_TEST"] = "true"
 
-from src.agents.base_agent import BaseAgent
+from src.agents.coder_agent import CoderAgent
 
-class TestResearcherAgent(unittest.TestCase):
+class TestCoderAgent(unittest.TestCase):
     def setUp(self):
-        # Force reload of the module to get the real class
-        if "src.agents.researcher_agent" in sys.modules:
-            del sys.modules["src.agents.researcher_agent"]
-
-        from src.agents.researcher_agent import ResearcherAgent
-        self.agent = ResearcherAgent()
+        self.agent = CoderAgent()
 
     def test_initialization(self):
         """Test that the agent initializes with correct role and system prompt."""
-        self.assertEqual(self.agent.role, "researcher")
-        self.assertIn("You are the Researcher Agent", self.agent.system_prompt)
-        self.assertIn("expertise", self.agent.system_prompt)
-        self.assertIn("Best Practices", self.agent.system_prompt)
+        self.assertEqual(self.agent.role, "coder")
+        self.assertIn("You are the Coder Agent", self.agent.system_prompt)
+        self.assertIn("software development", self.agent.system_prompt)
+        self.assertIn("Python best practices", self.agent.system_prompt)
+        self.assertIn("Google style", self.agent.system_prompt)
 
     def test_execute_basic(self):
         """Test basic execution using the dummy client."""
-        task = "Research the benefits of unit testing"
+        task = "Write a function to calculate Fibonacci numbers."
         response = self.agent.execute(task)
 
-        self.assertEqual(response, "[researcher] Task completed")
+        self.assertEqual(response, "[coder] Task completed")
         self.assertEqual(len(self.agent.conversation_history), 2)
         self.assertEqual(self.agent.conversation_history[0]["role"], "user")
         self.assertEqual(self.agent.conversation_history[0]["content"], task)
@@ -60,7 +56,8 @@ class TestResearcherAgent(unittest.TestCase):
         self.assertEqual(self.agent.conversation_history[1]["content"], response)
 
     def test_inheritance(self):
-        """Test that ResearcherAgent correctly inherits from BaseAgent."""
+        """Test that CoderAgent correctly inherits from BaseAgent."""
+        from src.agents.base_agent import BaseAgent
         self.assertIsInstance(self.agent, BaseAgent)
 
 if __name__ == "__main__":

@@ -31,28 +31,31 @@ os.environ["PYTEST_CURRENT_TEST"] = "true"
 
 from src.agents.base_agent import BaseAgent
 
-class TestResearcherAgent(unittest.TestCase):
+class TestReviewerAgent(unittest.TestCase):
     def setUp(self):
-        # Force reload of the module to get the real class
-        if "src.agents.researcher_agent" in sys.modules:
-            del sys.modules["src.agents.researcher_agent"]
+        # Force reload of the module to get the real class, not the mock from test_swarm.py
+        if "src.agents.reviewer_agent" in sys.modules:
+            del sys.modules["src.agents.reviewer_agent"]
 
-        from src.agents.researcher_agent import ResearcherAgent
-        self.agent = ResearcherAgent()
+        from src.agents.reviewer_agent import ReviewerAgent
+        self.agent = ReviewerAgent()
 
     def test_initialization(self):
         """Test that the agent initializes with correct role and system prompt."""
-        self.assertEqual(self.agent.role, "researcher")
-        self.assertIn("You are the Researcher Agent", self.agent.system_prompt)
-        self.assertIn("expertise", self.agent.system_prompt)
+        self.assertEqual(self.agent.role, "reviewer")
+        self.assertIn("You are the Reviewer Agent", self.agent.system_prompt)
+        self.assertIn("Security", self.agent.system_prompt)
+        self.assertIn("Code quality", self.agent.system_prompt)
         self.assertIn("Best Practices", self.agent.system_prompt)
+        self.assertIn("Performance", self.agent.system_prompt)
+        self.assertIn("Error Handling", self.agent.system_prompt)
 
     def test_execute_basic(self):
         """Test basic execution using the dummy client."""
-        task = "Research the benefits of unit testing"
+        task = "Review this code for security vulnerabilities."
         response = self.agent.execute(task)
 
-        self.assertEqual(response, "[researcher] Task completed")
+        self.assertEqual(response, "[reviewer] Task completed")
         self.assertEqual(len(self.agent.conversation_history), 2)
         self.assertEqual(self.agent.conversation_history[0]["role"], "user")
         self.assertEqual(self.agent.conversation_history[0]["content"], task)
@@ -60,7 +63,7 @@ class TestResearcherAgent(unittest.TestCase):
         self.assertEqual(self.agent.conversation_history[1]["content"], response)
 
     def test_inheritance(self):
-        """Test that ResearcherAgent correctly inherits from BaseAgent."""
+        """Test that ReviewerAgent correctly inherits from BaseAgent."""
         self.assertIsInstance(self.agent, BaseAgent)
 
 if __name__ == "__main__":

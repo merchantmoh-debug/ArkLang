@@ -133,12 +133,15 @@ func net_connect(ip, port) {
 
 func net_broadcast(msg) {
     i := 0
-    len_peers := len(_net_state.peers)
-    while i < len_peers {
+    while i < len(_net_state.peers) {
         p := _net_state.peers[i]
-        // TODO: Handle disconnected peers
-        sys.net.socket.send(p.socket, msg)
-        i := i + 1
+        if sys.net.socket.send(p.socket, msg) == false {
+            print("[Net] Peer disconnected during broadcast: " + p.ip)
+            sys.net.socket.close(p.socket)
+            sys.list.delete(_net_state.peers, i)
+        } else {
+            i := i + 1
+        }
     }
 }
 

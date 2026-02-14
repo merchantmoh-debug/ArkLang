@@ -18,6 +18,22 @@ import json
 import sys
 from ark_parser import QiParser
 
+# Define constants at module level
+OP_MAP = {
+    "add": "intrinsic_add", "sub": "intrinsic_sub",
+    "mul": "intrinsic_mul", "gt": "intrinsic_gt",
+    "lt": "intrinsic_lt", "eq": "intrinsic_eq",
+    "ge": "intrinsic_ge", "le": "intrinsic_le"
+}
+
+BIN_OPS = {
+    "add": "intrinsic_add", "sub": "intrinsic_sub",
+    "mul": "intrinsic_mul", "div": "intrinsic_div", "mod": "intrinsic_mod",
+    "gt": "intrinsic_gt", "lt": "intrinsic_lt",
+    "ge": "intrinsic_ge", "le": "intrinsic_le",
+    "eq": "intrinsic_eq"
+}
+
 class ArkCompiler:
     def __init__(self):
         self.parser = QiParser("meta/ark.lark")
@@ -307,16 +323,10 @@ class ArkCompiler:
             if op:
                 left = self.compile_expr(expr["left"])
                 right = self.compile_expr(expr["right"])
-                op_map = {
-                    "add": "intrinsic_add", "sub": "intrinsic_sub", 
-                    "mul": "intrinsic_mul", "gt": "intrinsic_gt", 
-                    "lt": "intrinsic_lt", "eq": "intrinsic_eq",
-                    "ge": "intrinsic_ge", "le": "intrinsic_le"
-                }
-                if op in op_map:
+                if op in OP_MAP:
                      return {
                         "Call": {
-                            "function_hash": op_map[op],
+                            "function_hash": OP_MAP[op],
                             "args": [left, right]
                         }
                     }
@@ -372,15 +382,8 @@ class ArkCompiler:
                  return self.compile_binop("intrinsic_and", expr.children[0], expr.children[2])
             
             # Binary Ops that slipped through Transformer
-            bin_ops = {
-                "add": "intrinsic_add", "sub": "intrinsic_sub",
-                "mul": "intrinsic_mul", "div": "intrinsic_div", "mod": "intrinsic_mod",
-                "gt": "intrinsic_gt", "lt": "intrinsic_lt",
-                "ge": "intrinsic_ge", "le": "intrinsic_le",
-                "eq": "intrinsic_eq"
-            }
-            if kind in bin_ops:
-                 return self.compile_binop(bin_ops[kind], expr.children[0], expr.children[1])
+            if kind in BIN_OPS:
+                 return self.compile_binop(BIN_OPS[kind], expr.children[0], expr.children[1])
 
         # Absolute Fallback
         return {"Literal": str(expr)}
