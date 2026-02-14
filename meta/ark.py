@@ -107,6 +107,8 @@ class ArkValue:
     val: Any
     type: str
 
+UNIT_VALUE = ArkValue(None, "Unit")
+
 class ReturnException(Exception):
     def __init__(self, value):
         self.value = value
@@ -159,7 +161,7 @@ class Scope:
 
 def core_print(args: List[ArkValue]):
     print(*(arg.val for arg in args))
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def core_len(args: List[ArkValue]):
     if not args or args[0].type not in ["String", "List"]:
@@ -186,7 +188,7 @@ def core_get(args: List[ArkValue]):
             return ArkValue(val, "Any")
     else:
         raise Exception("Index out of bounds")
-    return ArkValue(None, "Unit") # Should not be reached
+    return UNIT_VALUE # Should not be reached
 
 COMMAND_WHITELIST = {
     "ls", "grep", "cat", "echo", "python", "python3",
@@ -253,7 +255,7 @@ def sys_fs_write(args: List[ArkValue]):
     try:
         with open(path, "w") as f:
             f.write(content)
-        return ArkValue(None, "Unit")
+        return UNIT_VALUE
     except Exception as e:
         raise Exception(f"Error writing to file {path}: {e}")
 
@@ -579,7 +581,7 @@ def sys_net_socket_close(args: List[ArkValue]):
             except:
                 pass
             del SOCKETS[handle.val]
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def sys_net_socket_set_timeout(args: List[ArkValue]):
     if len(args) != 2 or args[0].type != "Integer":
@@ -591,7 +593,7 @@ def sys_net_socket_set_timeout(args: List[ArkValue]):
 
     s = get_socket(handle)
     s.settimeout(timeout)
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def validate_url_security(url):
     try:
@@ -670,7 +672,7 @@ def sys_time_sleep(args: List[ArkValue]):
     if len(args) != 1 or args[0].type not in ["Integer", "Float"]:
         raise Exception("sys.time.sleep expects a number (seconds)")
     time.sleep(args[0].val)
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def sys_time_now(args: List[ArkValue]):
     if len(args) != 0:
@@ -866,7 +868,7 @@ def sys_list_pop(args: List[ArkValue]):
     lst = args[0]
     idx = args[1].val
     if lst.type != "List": raise Exception("sys.list.pop expects List")
-    if idx < 0 or idx >= len(lst.val): return ArkValue(None, "Unit")
+    if idx < 0 or idx >= len(lst.val): return UNIT_VALUE
 
     val = lst.val.pop(idx)
     return val # Return popped value
@@ -876,10 +878,10 @@ def sys_list_delete(args: List[ArkValue]):
     lst = args[0]
     idx = args[1].val
     if lst.type != "List": raise Exception("sys.list.delete expects List")
-    if idx < 0 or idx >= len(lst.val): return ArkValue(None, "Unit")
+    if idx < 0 or idx >= len(lst.val): return UNIT_VALUE
 
     lst.val.pop(idx)
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def sys_list_set(args: List[ArkValue]):
     if len(args) != 3: raise Exception("sys.list.set expects list, index, value")
@@ -1020,14 +1022,14 @@ def sys_io_write(args: List[ArkValue]):
     s = args[0].val
     sys.stdout.buffer.write(s.encode('utf-8'))
     sys.stdout.buffer.flush()
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def sys_log(args: List[ArkValue]):
     if len(args) != 1:
         raise Exception("sys.log expects 1 argument")
     s = args[0].val
     sys.stderr.write(str(s) + "\n")
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def to_ark(val):
     if isinstance(val, dict):
@@ -1044,8 +1046,8 @@ def to_ark(val):
     elif isinstance(val, float):
         return ArkValue(int(val), "Integer")
     elif val is None:
-        return ArkValue(None, "Unit")
-    return ArkValue(None, "Unit")
+        return UNIT_VALUE
+    return UNIT_VALUE
 
 def sys_json_parse(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "String":
@@ -1136,7 +1138,7 @@ def sys_net_http_serve(args: List[ArkValue]):
     except KeyboardInterrupt:
         pass
     httpd.server_close()
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def sys_struct_has(args: List[ArkValue]):
     if len(args) != 2: raise Exception("sys.struct.has expects obj, field")
@@ -1159,13 +1161,13 @@ def sys_io_read_file_async(args: List[ArkValue]):
             EVENT_QUEUE.put((callback, [val]))
         except Exception as e:
             print(f"Async Read Error: {e}", file=sys.stderr)
-            val = ArkValue(None, "Unit")
+            val = UNIT_VALUE
             EVENT_QUEUE.put((callback, [val]))
 
     t = threading.Thread(target=task)
     t.daemon = True
     t.start()
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def sys_net_request_async(args: List[ArkValue]):
     check_exec_security()
@@ -1188,14 +1190,14 @@ def sys_net_request_async(args: List[ArkValue]):
     t = threading.Thread(target=task)
     t.daemon = True
     t.start()
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def sys_event_poll(args: List[ArkValue]):
     try:
         cb, cb_args = EVENT_QUEUE.get_nowait()
         return ArkValue([cb, ArkValue(cb_args, "List")], "List")
     except queue.Empty:
-        return ArkValue(None, "Unit")
+        return UNIT_VALUE
 
 
 def sys_z3_verify(args: List[ArkValue]):
@@ -1296,7 +1298,7 @@ def handle_struct_init(node, scope):
     return ArkValue(ArkInstance(None, fields), "Instance")
 
 def handle_return_stmt(node, scope):
-    val = eval_node(node.children[0], scope) if node.children else ArkValue(None, "Unit")
+    val = eval_node(node.children[0], scope) if node.children else UNIT_VALUE
     raise ReturnException(val)
 
 def handle_if_stmt(node, scope):
@@ -1309,14 +1311,14 @@ def handle_if_stmt(node, scope):
         i += 2
     if i < num_children and node.children[i]:
         return eval_node(node.children[i], scope)
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def handle_while_stmt(node, scope):
     cond_node = node.children[0]
     body_node = node.children[1]
     while is_truthy(eval_node(cond_node, scope)):
         eval_node(body_node, scope)
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def handle_logical_or(node, scope):
     left = eval_node(node.children[0], scope)
@@ -1547,12 +1549,12 @@ NODE_HANDLERS = {
 }
 
 def eval_node(node, scope):
-    if node is None: return ArkValue(None, "Unit")
+    if node is None: return UNIT_VALUE
     if hasattr(node, "data"):
         handler = NODE_HANDLERS.get(node.data)
         if handler:
             return handler(node, scope)
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 def call_user_func(func: ArkFunction, args: List[ArkValue], instance: Optional[ArkValue] = None):
     # 1. Create Scope
@@ -1569,7 +1571,7 @@ def call_user_func(func: ArkFunction, args: List[ArkValue], instance: Optional[A
     # 4. Exec Body
     try:
         eval_node(func.body, func_scope)
-        return ArkValue(None, "Unit")
+        return UNIT_VALUE
     except ReturnException as ret:
         return ret.value
 
@@ -1578,7 +1580,7 @@ def instantiate_class(klass: ArkClass, args: List[ArkValue]):
     return ArkValue(instance, "Instance")
 
 def eval_block(nodes, scope):
-    last = ArkValue(None, "Unit")
+    last = UNIT_VALUE
     try:
         for n in nodes:
             last = eval_node(n, scope)
@@ -1609,7 +1611,7 @@ def eval_binop(op, left, right):
     if op == "ge": return ArkValue(l >= r, "Boolean")
     if op == "eq": return ArkValue(l == r, "Boolean")
     if op == "neq": return ArkValue(l != r, "Boolean")
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 # --- Main ---
 
@@ -1632,7 +1634,7 @@ def sys_thread_spawn(args: List[ArkValue]):
     t = threading.Thread(target=thread_target)
     t.daemon = True
     t.start()
-    return ArkValue(None, "Unit")
+    return UNIT_VALUE
 
 
 def sys_func_apply(args: List[ArkValue]):
