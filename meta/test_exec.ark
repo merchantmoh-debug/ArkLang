@@ -1,0 +1,8 @@
+print("Testing sys.exec...")
+// Injection attempt
+// Should print: "hello; echo injected" (safe)
+// NOT:
+// hello
+// injected
+res := sys.exec("echo hello; echo injected")
+print("Result: " + res)
