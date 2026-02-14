@@ -70,14 +70,16 @@ class Settings(BaseSettings):
         default={
             "open", "exec", "eval", "compile", "__import__", "input",
             "exit", "quit", "help", "dir", "vars", "globals", "locals",
-            "breakpoint", "memoryview"
+            "breakpoint", "memoryview", "getattr", "setattr", "delattr",
+            "__builtins__"
         },
         description="Set of banned built-in functions for local sandbox execution"
     )
     BANNED_ATTRIBUTES: Set[str] = Field(
         default={
             "__subclasses__", "__bases__", "__globals__", "__code__",
-            "__closure__", "__func__", "__self__", "__module__", "__dict__"
+            "__closure__", "__func__", "__self__", "__module__", "__dict__",
+            "__builtins__"
         },
         description="Set of banned attributes for local sandbox execution"
     )
