@@ -26,10 +26,19 @@ use sha2::{Digest, Sha256};
 
 #[derive(Error, Debug)]
 pub enum AstError {
-    #[error("Serialization error: {0}")]
-    Serialization(#[from] bincode::Error),
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+}
+
+pub fn calculate_hash<T: Serialize>(content: &T) -> Result<String, AstError> {
+    // Serialize content to Canonical JSON (Sorted keys, no spaces)
+    let val = to_value(content)?;
+    let canonical = to_string(&val)?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.as_bytes());
+    let result = hasher.finalize();
+    Ok(hex::encode(result))
 }
 
 /// Merkle-ized Abstract Syntax Tree Node
@@ -42,14 +51,7 @@ pub struct MastNode {
 
 impl MastNode {
     pub fn new(content: ArkNode) -> Result<Self, AstError> {
-        // Serialize content to Canonical JSON (Matches verification in loader.rs)
-        let val = to_value(&content).map_err(|e| bincode::Error::new(bincode::ErrorKind::Custom(e.to_string())))?;
-        let canonical = to_string(&val).map_err(|e| bincode::Error::new(bincode::ErrorKind::Custom(e.to_string())))?;
-
-        let mut hasher = Sha256::new();
-        hasher.update(canonical.as_bytes());
-        let result = hasher.finalize();
-        let hash = hex::encode(result);
+        let hash = calculate_hash(&content)?;
         Ok(MastNode { hash, content })
     }
 }

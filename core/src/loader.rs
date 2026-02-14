@@ -17,8 +17,7 @@
  */
 
 use crate::ast::{ArkNode, AstError, MastNode};
-use serde_json::{from_str, to_string, to_value};
-use sha2::{Digest, Sha256};
+use serde_json::from_str;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -42,20 +41,9 @@ pub fn load_ark_program(json: &str) -> Result<MastNode, LoadError> {
 }
 
 fn verify_mast_integrity(mast: &MastNode) -> Result<(), LoadError> {
-    // 1. Serialize content using JSON (to match Python compiler)
-    // canonical? serde_json::to_string isn't strictly canonical (whitespace etc).
-    // But duplicate key handling etc?
-    // Ideally we'd use serde_jcs but for now let's reliance on standard to_string execution parity.
-    // Python uses separators=(',', ':')
-    // We need to ensure we don't have spaces.
-    // serde_json::to_string produces tight JSON.
-    let serialized = serde_json::to_string(&mast.content).map_err(|e| LoadError::ParseError(e))?;
-
-    // 2. Compute Hash
-    let mut hasher = Sha256::new();
-    hasher.update(&serialized);
-    let result = hasher.finalize();
-    let computed_hash = hex::encode(result);
+    // Compute Hash using canonical JSON (matches Python compiler and MastNode::new)
+    let computed_hash = crate::ast::calculate_hash(&mast.content)
+        .map_err(LoadError::AstError)?;
 
     // 3. Compare
     if computed_hash != mast.hash {
