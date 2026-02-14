@@ -10,12 +10,16 @@ print("AI Response Received.")
 
 // 3. Extraction
 print("Extracting payload...")
-code := intrinsic_extract_code(response)
+blocks := intrinsic_extract_code(response)
+// Assuming we want the first block's content
+block := core.get(blocks, 0)
+// block is [filename, content]
+payload := core.get(block, 1)
 
 // 4. Enforcement (Write to Disk)
 filename := "apps/sovereign_script.py"
 print("Writing payload to " + filename)
-sys.fs.write(filename, code)
+sys.fs.write(filename, payload)
 
 // 5. Execution
 print("Executing generated payload...")

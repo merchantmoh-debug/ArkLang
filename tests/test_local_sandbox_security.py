@@ -10,7 +10,21 @@ from src.sandbox.local import LocalSandbox
 
 class TestLocalSandboxSecurity(unittest.TestCase):
     def setUp(self):
+        # Nuclear Option: Force reload src.config to clear mock pollution
+        if 'src.config' in sys.modules:
+            import importlib
+            import src.config
+            importlib.reload(src.config)
+        
+        # Reload LocalSandbox to pick up fresh settings
+        if 'src.sandbox.local' in sys.modules:
+            import src.sandbox.local
+            importlib.reload(src.sandbox.local)
+            
+        # Re-import LocalSandbox class after reload
+        from src.sandbox.local import LocalSandbox
         self.sandbox = LocalSandbox()
+
         # Ensure we start with secure default
         self.env_patcher = patch.dict(os.environ, {"ALLOW_DANGEROUS_LOCAL_EXECUTION": "false"})
         self.env_patcher.start()

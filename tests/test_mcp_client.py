@@ -68,6 +68,9 @@ class TestMCPClientManager(unittest.IsolatedAsyncioTestCase):
                 sys.modules.pop(name, None)
             else:
                 sys.modules[name] = module
+        
+        # Also clean up src.mcp_client specifically as it was re-imported during tests
+        sys.modules.pop("src.mcp_client", None)
 
     async def test_call_tool_execution_error(self):
         """Test that call_tool handles exceptions raised by the tool execution."""
