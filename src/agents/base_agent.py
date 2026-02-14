@@ -21,6 +21,9 @@ class BaseAgent:
     All agents share common execution logic but differ in their prompts and tools.
     """
     
+    # Shared client instance to prevent redundant initialization
+    _client_instance = None
+
     def __init__(self, role: str, system_prompt: str):
         """
         Initialize a base agent.
@@ -53,7 +56,10 @@ class BaseAgent:
         else:
             try:
                 if settings.GOOGLE_API_KEY:
-                    self.client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+                    # Use singleton pattern for GenAI client
+                    if BaseAgent._client_instance is None:
+                        BaseAgent._client_instance = genai.Client(api_key=settings.GOOGLE_API_KEY)
+                    self.client = BaseAgent._client_instance
                 elif settings.OPENAI_BASE_URL:
                     self.use_openai_backend = True
                     self.client = None # Not used for OpenAI backend
