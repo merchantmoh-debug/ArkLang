@@ -24,7 +24,6 @@ impl Compiler {
             ArkNode::Statement(s) => self.visit_stmt(s),
             ArkNode::Expression(e) => {
                 self.visit_expr(e);
-                self.chunk.write(OpCode::Pop);
             }
             _ => {
                 // println!("Compiler Warning: Unhandled Top Level Node {:?}", node);
