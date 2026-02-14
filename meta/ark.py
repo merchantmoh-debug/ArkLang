@@ -35,6 +35,17 @@ with open(grammar_path, "r") as f:
 
 ARK_PARSER = Lark(ARK_GRAMMAR, start="start", parser="lalr")
 
+class Colors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+
 # --- Security ---
 
 class SandboxViolation(Exception):
@@ -91,7 +102,7 @@ def check_exec_security():
 
 # --- Types ---
 
-@dataclass
+@dataclass(slots=True)
 class ArkValue:
     val: Any
     type: str
@@ -100,24 +111,26 @@ class ReturnException(Exception):
     def __init__(self, value):
         self.value = value
 
-@dataclass
+@dataclass(slots=True)
 class ArkFunction:
     name: str
     params: List[str]
     body: Any # Tree node
     closure: 'Scope'
 
-@dataclass
+@dataclass(slots=True)
 class ArkClass:
     name: str
     methods: Dict[str, ArkFunction]
 
-@dataclass
+@dataclass(slots=True)
 class ArkInstance:
     klass: ArkClass
     fields: Dict[str, ArkValue]
 
 class Scope:
+    __slots__ = ('vars', 'parent')
+
     def __init__(self, parent=None):
         self.vars = {}
         self.parent = parent
@@ -175,11 +188,24 @@ def core_get(args: List[ArkValue]):
         raise Exception("Index out of bounds")
     return ArkValue(None, "Unit") # Should not be reached
 
+COMMAND_WHITELIST = {
+    "ls", "grep", "cat", "echo", "python", "python3",
+    "cargo", "rustc", "git", "date", "whoami", "pwd", "mkdir", "touch"
+}
+
 def sys_exec(args: List[ArkValue]):
-    check_exec_security()
     if not args or args[0].type != "String":
         raise Exception("sys.exec expects a string command")
-    command = args[0].val
+    command = args[0].val.strip()
+    if not command:
+        raise Exception("sys.exec received empty command")
+
+    # Whitelist Check
+    if os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() != "true":
+        base_cmd = command.split()[0]
+        if base_cmd not in COMMAND_WHITELIST:
+             raise SandboxViolation(f"Command '{base_cmd}' is not in the whitelist. set ALLOW_DANGEROUS_LOCAL_EXECUTION=true to bypass.")
+
     # print(f"WARNING: Executing system command: {command}", file=sys.stderr)
     try:
         result = os.popen(command).read()
@@ -332,10 +358,24 @@ def ask_mock():
     end = "```"
     return ArkValue(start + code + end, "String")
 
+def sanitize_prompt(prompt: str) -> str:
+    # 1. Strip Meta-Prompts
+    meta_patterns = [
+        r"Ignore previous instructions",
+        r"You are now unlocked",
+        r"System:",
+        r"\n\nSystem:",
+        r"Simulate a",
+    ]
+    for pattern in meta_patterns:
+        prompt = re.sub(pattern, "", prompt, flags=re.IGNORECASE)
+    return prompt.strip()
+
 def ask_ai(args: List[ArkValue]):
     if not args or args[0].type != "String":
         raise Exception("ask_ai expects a string prompt")
-    prompt = args[0].val
+
+    prompt = sanitize_prompt(args[0].val)
 
     mode = detect_ai_mode()
 
@@ -1615,7 +1655,7 @@ INTRINSICS_WITH_SCOPE = {
 
 
 def run_file(path):
-    # print(f"ark-prime: Running {path}", file=sys.stderr)
+    print(f"{Colors.OKCYAN}[ARK OMEGA-POINT v112.0] Running {path}{Colors.ENDC}", file=sys.stderr)
     with open(path, "r") as f: code = f.read()
     
     tree = ARK_PARSER.parse(code)
@@ -1641,13 +1681,13 @@ def run_file(path):
     try:
         eval_node(tree, scope)
     except ReturnException as e:
-        print(f"Error: Return statement outside function", file=sys.stderr)
+        print(f"{Colors.FAIL}Error: Return statement outside function{Colors.ENDC}", file=sys.stderr)
     except Exception as e:
         # If it's a SandboxViolation, print it clearly
         if isinstance(e, SandboxViolation):
-            print(f"SandboxViolation: {e}", file=sys.stderr)
+            print(f"{Colors.FAIL}SandboxViolation: {e}{Colors.ENDC}", file=sys.stderr)
         else:
-            print(f"Runtime Error: {e}", file=sys.stderr)
+            print(f"{Colors.FAIL}Runtime Error: {e}{Colors.ENDC}", file=sys.stderr)
         # print(f"DEBUG: Scope vars: {scope.vars.keys()}")
         import traceback
         # traceback.print_exc() 
