@@ -9,7 +9,6 @@
 use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
-use serde_json::from_str;
 use std::fs;
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
@@ -324,6 +323,50 @@ impl IntrinsicRegistry {
     }
 }
 
+fn check_path_security(path: &str) -> Result<(), RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Ok(());
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::path::Path;
+        use std::env;
+
+        let cwd = env::current_dir().map_err(|_| RuntimeError::NotExecutable)?;
+        let path_obj = Path::new(path);
+
+        // Construct absolute path
+        let abs_path = if path_obj.is_absolute() {
+             path_obj.to_path_buf()
+        } else {
+             cwd.join(path_obj)
+        };
+
+        // To handle both read and write (where file might not exist),
+        // we check if the path or its parent exists and is within CWD.
+        // If neither exists, we can't write anyway (fs::write doesn't mkdir -p).
+
+        let path_to_check = if abs_path.exists() {
+             abs_path
+        } else {
+             match abs_path.parent() {
+                 Some(p) => p.to_path_buf(),
+                 None => return Err(RuntimeError::NotExecutable),
+             }
+        };
+
+        // If parent doesn't exist, canonicalize fails.
+        let canonical_path = std::fs::canonicalize(&path_to_check).map_err(|_| RuntimeError::NotExecutable)?;
+
+        if !canonical_path.starts_with(&cwd) {
+            println!("[Ark:Sandbox] Access Denied: Path '{}' resolves outside CWD.", path);
+            return Err(RuntimeError::NotExecutable);
+        }
+
+        Ok(())
+    }
+}
+
 pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
         return Err(RuntimeError::NotExecutable);
@@ -486,6 +529,8 @@ pub fn intrinsic_fs_write(args: Vec<Value>) -> Result<Value, RuntimeError> {
             ));
         }
     };
+
+    check_path_security(path_str)?;
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -796,6 +841,8 @@ pub fn intrinsic_fs_read(args: Vec<Value>) -> Result<Value, RuntimeError> {
             ));
         }
     };
+
+    check_path_security(path_str)?;
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -1409,6 +1456,8 @@ pub fn intrinsic_fs_write_buffer(args: Vec<Value>) -> Result<Value, RuntimeError
         }
     };
 
+    check_path_security(path_str)?;
+
     match &args[1] {
         Value::Buffer(buf) => {
             #[cfg(target_arch = "wasm32")]
@@ -1453,6 +1502,8 @@ pub fn intrinsic_fs_read_buffer(args: Vec<Value>) -> Result<Value, RuntimeError>
             ));
         }
     };
+
+    check_path_security(path_str)?;
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -1591,7 +1642,6 @@ pub fn intrinsic_str_from_code(args: Vec<Value>) -> Result<Value, RuntimeError> 
 mod tests {
     use super::*;
     use crate::runtime::Value;
-    use serde::Serialize;
 
     #[test]
     fn test_time_now() {
@@ -1724,5 +1774,73 @@ mod tests {
             }
             _ => panic!("Expected Buffer"),
         }
+    }
+
+    #[test]
+    fn test_security_fs_write_traversal() {
+        // [MODE: KINETIC_EXECUTION]
+        // Rationale: Attempt to write outside the sandbox.
+        // We expect this to FAIL now that the fix is applied.
+
+        let file_name = "../intrinsics_test_exploit.txt";
+
+        // Clean up before test just in case
+        let _ = std::fs::remove_file(file_name);
+
+        let args = vec![
+            Value::String(file_name.to_string()),
+            Value::String("pwned".to_string()),
+        ];
+
+        // At this stage (after fix), we expect this to FAIL.
+        let res = intrinsic_fs_write(args);
+
+        // Assert Error
+        match res {
+            Err(RuntimeError::NotExecutable) => {}
+            _ => panic!("Expected RuntimeError::NotExecutable, got {:?}", res),
+        }
+
+        // Verify file was NOT written
+        if std::path::Path::new(file_name).exists() {
+             // Cleanup if it somehow wrote
+             std::fs::remove_file(file_name).unwrap();
+             panic!("File was written despite error!");
+        }
+    }
+
+    #[test]
+    fn test_security_fs_write_valid() {
+        let file_name = "intrinsics_test_safe.txt";
+        let _ = std::fs::remove_file(file_name);
+
+        let args = vec![
+            Value::String(file_name.to_string()),
+            Value::String("safe".to_string()),
+        ];
+
+        let res = intrinsic_fs_write(args);
+        assert!(res.is_ok());
+
+        assert!(std::path::Path::new(file_name).exists());
+        std::fs::remove_file(file_name).unwrap();
+    }
+
+    #[test]
+    fn test_security_fs_read_traversal() {
+         let file_name = "../Cargo.toml";
+         // This file exists in repo root, but is outside core/ CWD.
+         // So it should be blocked.
+
+         if std::path::Path::new(file_name).exists() {
+             let args = vec![Value::String(file_name.to_string())];
+             let res = intrinsic_fs_read(args);
+             match res {
+                Err(RuntimeError::NotExecutable) => {}
+                _ => panic!("Expected RuntimeError::NotExecutable, got {:?}", res),
+            }
+         } else {
+             println!("Skipping read traversal test because ../Cargo.toml not found");
+         }
     }
 }
