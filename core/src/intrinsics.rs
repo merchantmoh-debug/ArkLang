@@ -10,7 +10,9 @@ use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
 use serde_json::from_str;
+use std::env;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
@@ -783,6 +785,30 @@ fn print_value(v: &Value) {
         Value::Return(val) => print_value(val),
     }
 }
+#[cfg(not(target_arch = "wasm32"))]
+fn validate_safe_path(path_str: &str) -> Result<PathBuf, RuntimeError> {
+    let path = Path::new(path_str);
+
+    // 1. Canonicalize the requested path (resolves symlinks and ..)
+    // If the file does not exist, canonicalize fails. For read, this is fine (file must exist).
+    let canonical_path = fs::canonicalize(path).map_err(|_| RuntimeError::NotExecutable)?;
+
+    // 2. Canonicalize the current working directory (sandbox root)
+    let current_dir = env::current_dir().map_err(|_| RuntimeError::NotExecutable)?;
+    let canonical_cwd = fs::canonicalize(current_dir).map_err(|_| RuntimeError::NotExecutable)?;
+
+    // 3. Verify that the requested path starts with the sandbox root
+    if canonical_path.starts_with(&canonical_cwd) {
+        Ok(canonical_path)
+    } else {
+        println!(
+            "[Ark:FS] Security Violation: Path traversal attempt to '{}'",
+            path_str
+        );
+        Err(RuntimeError::NotExecutable)
+    }
+}
+
 pub fn intrinsic_fs_read(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
         return Err(RuntimeError::NotExecutable);
@@ -806,7 +832,9 @@ pub fn intrinsic_fs_read(args: Vec<Value>) -> Result<Value, RuntimeError> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         println!("[Ark:FS] Reading from {}", path_str);
-        let content = fs::read_to_string(path_str).map_err(|_| RuntimeError::NotExecutable)?;
+        // Security: Path Traversal Check
+        let safe_path = validate_safe_path(path_str)?;
+        let content = fs::read_to_string(safe_path).map_err(|_| RuntimeError::NotExecutable)?;
         Ok(Value::String(content))
     }
 }
@@ -1462,7 +1490,9 @@ pub fn intrinsic_fs_read_buffer(args: Vec<Value>) -> Result<Value, RuntimeError>
     #[cfg(not(target_arch = "wasm32"))]
     {
         println!("[Ark:FS] Reading buffer from {}", path_str);
-        let content = fs::read(path_str).map_err(|_| RuntimeError::NotExecutable)?;
+        // Security: Path Traversal Check
+        let safe_path = validate_safe_path(path_str)?;
+        let content = fs::read(safe_path).map_err(|_| RuntimeError::NotExecutable)?;
         Ok(Value::Buffer(content))
     }
 }
@@ -1723,6 +1753,24 @@ mod tests {
                 assert_eq!(b[1], 42);
             }
             _ => panic!("Expected Buffer"),
+        }
+    }
+
+    #[test]
+    fn test_fs_traversal() {
+        // Attempt to read a file outside the sandbox (core)
+        // ../README.md exists in the repo root
+        // This test confirms that path traversal is blocked (vulnerability fixed)
+        // We expect this to FAIL after the fix.
+        let args = vec![Value::String("../README.md".to_string())];
+        let res = intrinsic_fs_read(args);
+
+        // Assert failure (vulnerability blocked)
+        assert!(res.is_err(), "Path traversal should fail (security fix)");
+
+        match res {
+            Err(RuntimeError::NotExecutable) => (), // Expected security error
+            _ => panic!("Expected NotExecutable error, got {:?}", res),
         }
     }
 }
