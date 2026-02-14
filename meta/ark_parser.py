@@ -171,10 +171,14 @@ class ArkTransformer(Transformer):
         return {"program": args}
 
 class QiParser:
+    _parsers = {}
+
     def __init__(self, grammar_path="meta/ark.lark"):
-        with open(grammar_path, "r") as f:
-            self.grammar = f.read()
-        self.parser = lark.Lark(self.grammar, start="start", parser="lalr", transformer=ArkTransformer())
+        if grammar_path not in self._parsers:
+            with open(grammar_path, "r") as f:
+                grammar = f.read()
+            self._parsers[grammar_path] = lark.Lark(grammar, start="start", parser="lalr", transformer=ArkTransformer())
+        self.parser = self._parsers[grammar_path]
 
     def parse(self, code):
         return self.parser.parse(code)
