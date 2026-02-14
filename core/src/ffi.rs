@@ -103,10 +103,8 @@ mod tests {
         let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
         let result_str = result_cstr.to_str().unwrap();
 
-        // FIXME: VM currently returns Unit for top-level returns. Investigate VM/Compiler stack logic.
-        // Expected: String("Hello FFI")
-        // Actual: Unit
-        assert_eq!(result_str, "Unit");
+        // VM correctly returns the value for top-level returns.
+        assert_eq!(result_str, "String(\"Hello FFI\")");
 
         ark_free_string(result_ptr);
     }
@@ -138,6 +136,25 @@ mod tests {
         let result_str = result_cstr.to_str().unwrap();
 
         assert!(result_str.starts_with("Error:"));
+
+        ark_free_string(result_ptr);
+    }
+
+    #[test]
+    fn test_ark_eval_implicit_return() {
+        // Implicit return of a literal
+        // JSON: {"Expression": {"Literal": "Implicit FFI"}}
+        let json = r#"{"Expression": {"Literal": "Implicit FFI"}}"#;
+        let c_json = CString::new(json).unwrap();
+
+        let result_ptr = ark_eval_string(c_json.as_ptr());
+        assert!(!result_ptr.is_null());
+
+        let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
+        let result_str = result_cstr.to_str().unwrap();
+
+        // Should return the string value, not Unit
+        assert_eq!(result_str, "String(\"Implicit FFI\")");
 
         ark_free_string(result_ptr);
     }

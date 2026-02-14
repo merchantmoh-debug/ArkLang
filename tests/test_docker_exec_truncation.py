@@ -3,6 +3,13 @@ import unittest
 from unittest.mock import patch, MagicMock
 import os
 
+# Mock pydantic and settings before imports to handle missing packages in restricted environments
+sys.modules["pydantic"] = MagicMock()
+sys.modules["pydantic_settings"] = MagicMock()
+mock_config = MagicMock()
+mock_config.settings.SANDBOX_MAX_OUTPUT_KB = 10
+sys.modules["src.config"] = mock_config
+
 # Add src to path
 sys.path.append(os.path.abspath("src"))
 
@@ -10,6 +17,9 @@ from sandbox.docker_exec import DockerSandbox
 
 class TestDockerSandboxTruncation(unittest.TestCase):
     def setUp(self):
+        # Reset the cached client to ensure clean state for each test
+        DockerSandbox._client = None
+
         self.sandbox = DockerSandbox()
         # Set max output to 1KB for testing
         self.env_patcher = patch.dict(os.environ, {"SANDBOX_MAX_OUTPUT_KB": "1"})

@@ -11,6 +11,7 @@ from google import genai
 from google.genai import types
 from src.config import settings
 from src.tools.openai_proxy import call_openai_chat
+from src.utils.dummy_client import DummyClient
 
 
 class BaseAgent:
@@ -21,6 +22,9 @@ class BaseAgent:
     All agents share common execution logic but differ in their prompts and tools.
     """
     
+    # Shared client instance to prevent redundant initialization
+    _client_instance = None
+
     def __init__(self, role: str, system_prompt: str):
         """
         Initialize a base agent.
@@ -37,23 +41,16 @@ class BaseAgent:
         # Initialize Client
         running_under_pytest = "PYTEST_CURRENT_TEST" in os.environ
 
-        # Define Dummy Client for fallbacks
-        class _DummyClient:
-            class _Models:
-                def generate_content(self, model, contents):
-                    class _R:
-                        text = f"[{role}] Task completed"
-                    return _R()
-            def __init__(self):
-                self.models = self._Models()
-
         if running_under_pytest:
             # Dummy client for testing
-            self.client = _DummyClient()
+            self.client = DummyClient(response_text=f"[{role}] Task completed")
         else:
             try:
                 if settings.GOOGLE_API_KEY:
-                    self.client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+                    # Use singleton pattern for GenAI client
+                    if BaseAgent._client_instance is None:
+                        BaseAgent._client_instance = genai.Client(api_key=settings.GOOGLE_API_KEY)
+                    self.client = BaseAgent._client_instance
                 elif settings.OPENAI_BASE_URL:
                     self.use_openai_backend = True
                     self.client = None # Not used for OpenAI backend
@@ -64,7 +61,7 @@ class BaseAgent:
             except Exception as e:
                 print(f"⚠️ {role} agent: client not initialized: {e}")
                 # Fallback to dummy client
-                self.client = _DummyClient()
+                self.client = DummyClient(response_text=f"[{role}] Task completed")
     
     def execute(self, task: str, context: Optional[List[Dict[str, str]]] = None) -> str:
         """
@@ -93,10 +90,9 @@ class BaseAgent:
             if self.use_openai_backend:
                 # Call OpenAI-compatible API
                 # We pass the full_prompt as the user message.
-                # Alternatively, we could pass system_prompt as 'system', but BaseAgent
-                # historically concatenates everything. Sticking to historical behavior for consistency.
                 result = call_openai_chat(
                     prompt=full_prompt,
+                    system=self.system_prompt,
                     model=settings.OPENAI_MODEL
                 )
             else:

@@ -22,20 +22,49 @@ class DockerSandbox(CodeSandbox):
     environments without Docker SDK or daemon do not crash the application. It
     returns a structured error via ExecutionResult when unavailable.
     """
+    _client = None
+
+    def _get_client(self):
+        """Lazy initialization of the Docker client."""
+        if DockerSandbox._client is not None:
+            return DockerSandbox._client
+
+        try:
+            import docker  # type: ignore
+            # Initialize client and store it
+            DockerSandbox._client = docker.from_env()
+            return DockerSandbox._client
+        except Exception:
+            # If initialization fails, return None (caller should handle)
+            return None
 
     def _docker_available(self) -> tuple[bool, Optional[str]]:
         try:
-            import docker  # type: ignore
+            client = self._get_client()
 
+            if client is None:
+                # Diagnosis: why did _get_client fail?
+                try:
+                    import docker  # type: ignore
+                    try:
+                        docker.from_env()
+                    except Exception as e:
+                         return False, f"Docker daemon not available: {e}"
+                except ImportError as e:
+                    return False, f"Docker SDK not installed: {e}"
+                return False, "Docker unavailable"
+
+            # Verify connectivity
             try:
-                client = docker.from_env()
-                # ping the daemon to verify connectivity
                 client.ping()
                 return True, None
-            except Exception as exc:  # daemon not reachable
+            except Exception as exc:
+                # Connection lost or daemon down. Reset client to force re-init next time.
+                DockerSandbox._client = None
                 return False, f"Docker daemon not available: {exc}"
-        except Exception as exc:  # SDK not installed
-            return False, f"Docker SDK not installed: {exc}"
+
+        except Exception as exc:
+            return False, f"Docker check error: {exc}"
 
     def execute(self, code: str, language: str = "python", timeout: int = 30) -> ExecutionResult:
         ok, reason = self._docker_available()
@@ -63,7 +92,7 @@ class DockerSandbox(CodeSandbox):
             )
 
         # Lazy imports only after availability confirmed
-        import docker  # type: ignore
+        # import docker # Not strictly needed here as _docker_available ensured it
 
         # Security: Validate Docker image against a whitelist
         image = os.getenv("DOCKER_IMAGE", DEFAULT_DOCKER_IMAGE)
@@ -76,7 +105,19 @@ class DockerSandbox(CodeSandbox):
         cpu_limit = os.getenv("DOCKER_CPU_LIMIT", "0.5")
         mem_limit = os.getenv("DOCKER_MEMORY_LIMIT", "256m")
 
-        client = docker.from_env()
+        # Reuse the client verified in _docker_available
+        client = self._get_client()
+        # Note: In a race condition (threaded), client could become None or invalid between
+        # _docker_available and here. But for this sandbox, we assume single-threaded or robust enough.
+        # If client is None here (which shouldn't happen if _docker_available is True), we'll crash or need checks.
+        if client is None:
+             return ExecutionResult(
+                stdout="",
+                stderr="Docker client lost during execution",
+                exit_code=1,
+                duration=time.time() - start,
+                meta={"runtime": "docker", "timed_out": False, "truncated": False},
+            )
 
         # Prepare a temp script file, then mount/run inside container
         with tempfile.TemporaryDirectory(prefix="ag_sbx_dk_") as tmpdir:
@@ -110,9 +151,6 @@ class DockerSandbox(CodeSandbox):
                     try:
                         container.kill()
                     except Exception:
-                        # Best-effort cleanup: ignore errors if the container is already
-                        # stopped, missing, or cannot be killed. The timeout result below
-                        # is returned to the caller regardless of kill() success.
                         pass
                     return ExecutionResult(
                         stdout="",
@@ -128,7 +166,6 @@ class DockerSandbox(CodeSandbox):
 
                 logs = container.logs(stdout=True, stderr=True)
                 out = logs.decode("utf-8", errors="ignore")
-                # Split rough stdout/stderr is non-trivial; return all in stdout for now
 
                 # Apply truncation
                 max_output_kb = int(os.getenv("SANDBOX_MAX_OUTPUT_KB", "10"))

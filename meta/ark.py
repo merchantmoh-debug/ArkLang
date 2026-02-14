@@ -4,6 +4,8 @@ import re
 import time
 import math
 import json
+import shlex
+import subprocess
 import ast
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
@@ -64,7 +66,7 @@ def check_path_security(path, is_write=False):
     cwd = os.getcwd()
 
     # Check if path is within CWD (or is CWD itself)
-    if not abs_path.startswith(cwd):
+    if os.path.commonpath([cwd, abs_path]) != cwd:
         raise SandboxViolation(f"Access outside working directory is forbidden: {path} (Resolved to: {abs_path})")
 
     if is_write:

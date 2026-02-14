@@ -102,6 +102,22 @@ class LocalSandbox(CodeSandbox):
                     duration=0.0,
                     meta={"runtime": "local", "syntax_error": True},
                 )
+            except ValueError as e:
+                return ExecutionResult(
+                    stdout="",
+                    stderr=f"Value Error: {e}",
+                    exit_code=1,
+                    duration=0.0,
+                    meta={"runtime": "local", "value_error": True},
+                )
+            except RecursionError as e:
+                return ExecutionResult(
+                    stdout="",
+                    stderr=f"Recursion Error: {e}",
+                    exit_code=1,
+                    duration=0.0,
+                    meta={"runtime": "local", "recursion_error": True},
+                )
             except Exception as e:
                 return ExecutionResult(
                     stdout="",
@@ -133,8 +149,63 @@ class LocalSandbox(CodeSandbox):
                 if sys.platform == 'win32' and 'SystemRoot' in os.environ:
                     env['SystemRoot'] = os.environ['SystemRoot']
 
+                # Create a launcher script to enforce resource limits
+                launcher_code = """
+import sys
+import runpy
+
+# Resource limits (Unix only)
+try:
+    import resource
+    # CPU time limit in seconds
+    timeout = int(sys.argv[2])
+    # Add small grace period for startup
+    cpu_limit = timeout + 2
+    resource.setrlimit(resource.RLIMIT_CPU, (cpu_limit, cpu_limit))
+
+    # Memory limit (address space) - 512MB
+    mem_limit_mb = 512
+    mem_limit_bytes = mem_limit_mb * 1024 * 1024
+    resource.setrlimit(resource.RLIMIT_AS, (mem_limit_bytes, mem_limit_bytes))
+
+    # File Descriptor limit - Restrict to prevent FD exhaustion
+    # But allow enough for imports and stdio
+    resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
+except ImportError:
+    pass
+except Exception:
+    # Ignore errors setting limits (e.g. if already restricted)
+    pass
+
+# Execute user script
+script_path = sys.argv[1]
+try:
+    runpy.run_path(script_path, run_name="__main__")
+except SystemExit as e:
+    sys.exit(e.code)
+except Exception as e:
+    # Print exception to stderr so it's captured
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+"""
+                launcher_path = os.path.join(tmpdir, "launcher.py")
+                with open(launcher_path, "w", encoding="utf-8") as f:
+                    f.write(launcher_code)
+
+                # Use -I for isolated mode (no user site-packages, no env vars)
+                # Use -S to disable site module import, preventing access to system site-packages
+                cmd = [
+                    sys.executable,
+                    "-I",
+                    "-S",
+                    launcher_path,
+                    script_path,
+                    str(timeout)
+                ]
+
                 proc = subprocess.run(
-                    [sys.executable, script_path],
+                    cmd,
                     cwd=tmpdir,
                     capture_output=True,
                     text=True,

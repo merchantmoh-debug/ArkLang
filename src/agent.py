@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import sys
 import inspect
@@ -17,6 +18,9 @@ from src.config import settings
 from src.memory import MemoryManager
 from src.utils.dummy_client import DummyClient
 from src.tools.openai_proxy import call_openai_chat
+
+# Global cache for loaded tools to avoid repetitive filesystem scanning
+_TOOLS_CACHE: Optional[Dict[str, Callable[..., Any]]] = None
 
 
 class GeminiAgent:
@@ -37,6 +41,7 @@ class GeminiAgent:
         self.memory = MemoryManager()
         self.mcp_manager = None  # Will be initialized if MCP is enabled
         self.use_openai_backend = False  # Use OpenAI-compatible backend when configured
+        self._context_cache: Optional[str] = None  # Cache for loaded context files
 
         # Dynamically load all tools from src/tools/ directory
         self.available_tools: Dict[str, Callable[..., Any]] = self._load_tools()
@@ -141,6 +146,10 @@ class GeminiAgent:
         Returns:
             Dictionary mapping tool names to callable functions.
         """
+        global _TOOLS_CACHE
+        if _TOOLS_CACHE is not None:
+            return _TOOLS_CACHE.copy()
+
         tools = {}
 
         # Get the src/tools directory path relative to this file
@@ -180,7 +189,8 @@ class GeminiAgent:
             except Exception as e:
                 print(f"   ⚠️ Failed to load tools from {tool_file.name}: {e}")
 
-        return tools
+        _TOOLS_CACHE = tools
+        return tools.copy()
 
     def _load_context(self) -> str:
         """
@@ -193,6 +203,9 @@ class GeminiAgent:
         Returns:
             Concatenated content of all .md files in .context/ directory.
         """
+        if self._context_cache is not None:
+            return self._context_cache
+
         context_parts = []
 
         # Get the .context directory path relative to project root
@@ -200,6 +213,7 @@ class GeminiAgent:
         context_dir = Path(__file__).parent.parent / ".context"
 
         if not context_dir.exists():
+            self._context_cache = ""
             return ""
 
         # Load all markdown files
@@ -217,7 +231,8 @@ class GeminiAgent:
         if context_parts:
             print(f"   📚 Loaded context from {len(context_parts)} file(s)")
 
-        return "\n".join(context_parts)
+        self._context_cache = "\n".join(context_parts)
+        return self._context_cache
 
     def _get_tool_descriptions(self) -> str:
         """
@@ -281,7 +296,12 @@ class GeminiAgent:
 
         Supports two patterns:
         1) JSON object: {"action": "tool_name", "args": {...}}
-        2) Plain text line starting with 'Action: <tool_name>'
+        2) Plain text patterns like:
+           - Action: tool_name
+           - **Action:** tool_name
+           - *Action:* tool_name
+           - > Action: tool_name
+           - - Action: tool_name
         """
         cleaned = response_text.strip()
 
@@ -295,11 +315,26 @@ class GeminiAgent:
         except json.JSONDecodeError:
             pass
 
-        for line in cleaned.splitlines():
-            if line.lower().startswith("action:"):
-                action = line.split(":", 1)[1].strip()
-                if action:
-                    return action, {}
+        # Robust regex for text-based action extraction
+        # Matches:
+        # ^ : Start of line (with MULTILINE)
+        # [\s*>\-]* : Optional whitespace, asterisks (*), bullets (-), or quotes (>)
+        # Action : The keyword (case insensitive)
+        # (?:\s*:\s*(?:[\*_]+)?|(?:[\*_]+)?\s*:) : Colon preceded/followed by optional markers/space
+        # \s* : Whitespace
+        # (.+) : The tool name (captured)
+        match = re.search(
+            r"^[\s*>\-]*Action(?:\s*:\s*(?:[\*_]+)?|(?:[\*_]+)?\s*:)\s*(.+)$",
+            cleaned,
+            re.IGNORECASE | re.MULTILINE
+        )
+
+        if match:
+            action = match.group(1).strip()
+            # Clean up potential markdown wrapping the tool name (e.g. **tool**)
+            action = action.strip("*_`")
+            if action:
+                return action, {}
 
         return None, {}
 
@@ -444,9 +479,42 @@ class GeminiAgent:
     def reflect(self):
         """
         Review past actions to improve future performance.
+        Analyzes the recent interaction history and appends a reflection entry.
         """
         history = self.memory.get_history()
+
+        # Simple heuristic: Only reflect if there was significant activity
+        if len(history) < 2:
+            return
+
         print(f"Reflecting on {len(history)} past interactions...")
+
+        try:
+            # Extract recent interaction (last 5 messages)
+            context_messages = history[-5:]
+            context_str = self._format_context_messages(context_messages)
+
+            prompt = (
+                "You are an autonomous agent reflecting on your recent performance.\n"
+                "Review the conversation history above.\n"
+                "1. Did you successfully complete the user's request?\n"
+                "2. Identify one thing you could have done better (e.g., tool usage, reasoning, conciseness).\n"
+                "3. Provide a concise 'Lesson Learned' to help your future self.\n\n"
+                "Return ONLY the 'Lesson Learned' in one sentence."
+            )
+
+            reflection_prompt = f"{context_str}\n\n{prompt}"
+
+            # Call Gemini directly (no tools)
+            lesson = self._call_gemini(reflection_prompt)
+
+            if lesson:
+                print(f"🤔 Reflection: {lesson}")
+                self.memory.add_entry("system", f"[REFLECTION] {lesson}")
+
+        except Exception as e:
+            # Fail gracefully - reflection is a bonus, not critical
+            print(f"⚠️ Reflection failed: {e}")
 
     def run(self, task: str):
         """Main entry point for the agent."""

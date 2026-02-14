@@ -1,9 +1,9 @@
 import importlib.util
 import inspect
 from pathlib import Path
-from typing import Dict, Callable, Any, List
+from typing import Dict, Callable, Any, List, Optional
 
-def load_skills(agent_tools: Dict[str, Callable[..., Any]]) -> str:
+def load_skills(agent_tools: Dict[str, Callable[..., Any]], skills_dir: Optional[Path] = None) -> str:
     """
     Scans src/skills/ directory for skill packages.
     
@@ -13,11 +13,13 @@ def load_skills(agent_tools: Dict[str, Callable[..., Any]]) -> str:
     
     Args:
         agent_tools: The dictionary of tools to update with new skill-based tools.
+        skills_dir: Optional path to the skills directory. Defaults to the directory of this file.
         
     Returns:
         A combined string of all SKILL.md contents to be injected into context.
     """
-    skills_dir = Path(__file__).parent
+    if skills_dir is None:
+        skills_dir = Path(__file__).parent
     skill_docs: List[str] = []
     
     if not skills_dir.exists():

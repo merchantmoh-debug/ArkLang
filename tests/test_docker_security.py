@@ -20,6 +20,8 @@ from src.sandbox.docker_exec import DockerSandbox, DEFAULT_DOCKER_IMAGE, ALLOWED
 
 class TestDockerSecurity(unittest.TestCase):
     def setUp(self):
+        # Reset the cached client to ensure clean state for each test
+        DockerSandbox._client = None
         self.sandbox = DockerSandbox()
 
     def test_invalid_image_fallback(self):

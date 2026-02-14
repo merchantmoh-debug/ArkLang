@@ -77,7 +77,8 @@ def test_openai_backend_flow():
             # Check args
             args, kwargs = src.agents.base_agent.call_openai_chat.call_args
             prompt_arg = kwargs.get("prompt")
-            assert "System Prompt" in prompt_arg
+            system_arg = kwargs.get("system")
+            assert "System Prompt" in system_arg
             assert "Task: Test Task" in prompt_arg
 
             print("[PASS] Execution check.")

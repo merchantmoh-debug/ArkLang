@@ -2,7 +2,7 @@ import json
 import os
 import concurrent.futures
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from cryptography.fernet import Fernet
 from src.config import settings
 
@@ -125,8 +125,12 @@ class MemoryManager:
                         data = json.loads(file_content.decode('utf-8'))
                         print("Warning: Memory file was plaintext. Saving as encrypted now.")
                         # We must process data immediately to save it correctly
-                        self._process_loaded_data(data)
-                        self.save_memory()
+                        summary, history = self._extract_memory_data(data)
+                        self._last_save_future = self._executor.submit(
+                            self._save_memory_task,
+                            summary,
+                            history
+                        )
                         return data
                     except json.JSONDecodeError:
                         print(f"Error: Could not decrypt or decode memory file {self.memory_file}.")
@@ -140,18 +144,32 @@ class MemoryManager:
             print(f"Warning: Failed to load memory from {self.memory_file}: {e}")
             return None
 
-    def _process_loaded_data(self, data):
-        """Helper to process the raw loaded data structure."""
+    @staticmethod
+    def _extract_memory_data(data: Any) -> Tuple[str, List[Dict[str, Any]]]:
+        """Extracts summary and history from loaded data without side effects."""
+        summary = ""
+        memory = []
+
         if isinstance(data, dict):
-            self.summary = data.get("summary", "") or ""
+            summary = data.get("summary", "") or ""
             history = data.get("history", [])
-            self._memory = history if isinstance(history, list) else []
+            memory = history if isinstance(history, list) else []
         elif isinstance(data, list):
             # Backward compatibility for legacy memory files
-            self._memory = data
-        else:
+            memory = data
+
+        return summary, memory
+
+    def _process_loaded_data(self, data):
+        """Helper to process the raw loaded data structure."""
+        summary, memory = self._extract_memory_data(data)
+
+        if not isinstance(data, (dict, list)):
             print(f"Warning: Unexpected memory format. Starting fresh.")
             self._memory = []
+        else:
+            self.summary = summary
+            self._memory = memory
 
     def _save_memory_task(self, summary: str, history: List[Dict[str, Any]]):
         """
