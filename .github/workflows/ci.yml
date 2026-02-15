@@ -48,23 +48,23 @@ jobs:
         timeout-minutes: 1
 
       - name: "Tier 3: Security — Path Traversal"
-        run: python meta/ark.py run tests/security/path_traversal.ark
+        run: python meta/verify_security.py tests/security/path_traversal.ark
         timeout-minutes: 1
 
       - name: "Tier 3: Security — Exec Violation"
-        run: python meta/ark.py run tests/security/exec_violation.ark
+        run: python meta/verify_security.py tests/security/exec_violation.ark
         timeout-minutes: 1
 
       - name: "Tier 3: Security — Git Overwrite"
-        run: python meta/ark.py run tests/security/git_overwrite.ark
+        run: python meta/verify_security.py tests/security/git_overwrite.ark
         timeout-minutes: 1
 
       - name: "Tier 3: Security — Root File Overwrite"
-        run: python meta/ark.py run tests/security/root_file_overwrite.ark
+        run: python meta/verify_security.py tests/security/root_file_overwrite.ark
         timeout-minutes: 1
 
       - name: "Tier 3: Jailbreak Attempt"
-        run: python meta/ark.py run tests/jailbreak_attempt.ark
+        run: python meta/verify_security.py tests/jailbreak_attempt.ark
         timeout-minutes: 1
 
   # ─── Rust Core ────────────────────────────────────────────────────────
