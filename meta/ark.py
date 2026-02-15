@@ -22,8 +22,11 @@ import urllib.error
 import urllib.parse
 import ipaddress
 import queue
+import secrets
+import hmac
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 # --- Global Event Queue ---
 EVENT_QUEUE = queue.Queue()
@@ -784,6 +787,109 @@ def sys_crypto_hash(args: List[ArkValue]):
     data = args[0].val.encode('utf-8')
     digest = hashlib.sha256(data).hexdigest()
     return ArkValue(digest, "String")
+
+def sys_crypto_sha512(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "String":
+        raise Exception("sys.crypto.sha512 expects a string (hex)")
+
+    try:
+        data = bytes.fromhex(str(args[0].val))
+        digest = hashlib.sha512(data).hexdigest()
+        return ArkValue(digest, "String")
+    except Exception as e:
+        raise Exception(f"SHA512 Error: {e}")
+
+def sys_crypto_hmac_sha512(args: List[ArkValue]):
+    if len(args) != 2 or args[0].type != "String" or args[1].type != "String":
+        raise Exception("sys.crypto.hmac_sha512 expects key(hex) and data(hex)")
+
+    try:
+        key = bytes.fromhex(str(args[0].val))
+        data = bytes.fromhex(str(args[1].val))
+        digest = hmac.new(key, data, hashlib.sha512).hexdigest()
+        return ArkValue(digest, "String")
+    except Exception as e:
+        raise Exception(f"HMAC-SHA512 Error: {e}")
+
+def sys_crypto_pbkdf2_hmac_sha512(args: List[ArkValue]):
+    if len(args) != 4:
+        raise Exception("sys.crypto.pbkdf2_hmac_sha512 expects password, salt, iterations, dklen")
+
+    password = str(args[0].val).encode('utf-8')
+    salt = str(args[1].val).encode('utf-8') # Usually "mnemonic"+passphrase
+    iterations = args[2].val
+    dklen = args[3].val # length in bytes
+
+    try:
+        # pbkdf2_hmac arguments: hash_name, password, salt, iterations, dklen=None
+        key = hashlib.pbkdf2_hmac('sha512', password, salt, iterations, dklen)
+        return ArkValue(key.hex(), "String")
+    except Exception as e:
+        raise Exception(f"PBKDF2 Error: {e}")
+
+def sys_crypto_aes_gcm_encrypt(args: List[ArkValue]):
+    if len(args) != 4:
+        raise Exception("sys.crypto.aes_gcm_encrypt expects key(hex), nonce(hex), plaintext(utf8), aad(utf8)")
+
+    try:
+        key = bytes.fromhex(str(args[0].val))
+        nonce = bytes.fromhex(str(args[1].val))
+        plaintext = str(args[2].val).encode('utf-8')
+        aad = str(args[3].val).encode('utf-8')
+
+        aesgcm = AESGCM(key)
+        # encrypt returns ciphertext + tag
+        ciphertext_with_tag = aesgcm.encrypt(nonce, plaintext, aad)
+
+        tag = ciphertext_with_tag[-16:]
+        ciphertext = ciphertext_with_tag[:-16]
+
+        return ArkValue([
+            ArkValue(ciphertext.hex(), "String"),
+            ArkValue(tag.hex(), "String")
+        ], "List")
+    except Exception as e:
+        raise Exception(f"AES-GCM Encrypt Error: {e}")
+
+def sys_crypto_aes_gcm_decrypt(args: List[ArkValue]):
+    if len(args) != 5:
+        raise Exception("sys.crypto.aes_gcm_decrypt expects key(hex), nonce(hex), ciphertext(hex), tag(hex), aad(utf8)")
+
+    try:
+        key = bytes.fromhex(str(args[0].val))
+        nonce = bytes.fromhex(str(args[1].val))
+        ciphertext = bytes.fromhex(str(args[2].val))
+        tag = bytes.fromhex(str(args[3].val))
+        aad = str(args[4].val).encode('utf-8')
+
+        aesgcm = AESGCM(key)
+        plaintext = aesgcm.decrypt(nonce, ciphertext + tag, aad)
+        return ArkValue(plaintext.decode('utf-8'), "String")
+    except Exception as e:
+        raise Exception(f"AES-GCM Decrypt Error: {e}")
+
+def sys_crypto_random_bytes(args: List[ArkValue]):
+    if len(args) != 1 or args[0].type != "Integer":
+        raise Exception("sys.crypto.random_bytes expects length(int)")
+
+    n = args[0].val
+    rand_bytes = secrets.token_bytes(n)
+    return ArkValue(rand_bytes.hex(), "String")
+
+def sys_math_pow_mod(args: List[ArkValue]):
+    if len(args) != 3:
+        raise Exception("sys.math.pow_mod expects base, exp, mod")
+
+    base = args[0].val
+    exp = args[1].val
+    mod = args[2].val
+
+    try:
+        # Python 3.8+ pow(base, -1, mod) computes modular inverse
+        res = pow(base, exp, mod)
+        return ArkValue(res, "Integer")
+    except Exception as e:
+        raise Exception(f"PowMod Error: {e}")
 
 def sys_crypto_merkle_root(args: List[ArkValue]):
     if len(args) != 1 or args[0].type != "List":
@@ -1866,6 +1972,13 @@ INTRINSICS = {
 
     # System
     "sys.crypto.hash": sys_crypto_hash,
+    "sys.crypto.sha512": sys_crypto_sha512,
+    "sys.crypto.hmac_sha512": sys_crypto_hmac_sha512,
+    "sys.crypto.pbkdf2_hmac_sha512": sys_crypto_pbkdf2_hmac_sha512,
+    "sys.crypto.aes_gcm_encrypt": sys_crypto_aes_gcm_encrypt,
+    "sys.crypto.aes_gcm_decrypt": sys_crypto_aes_gcm_decrypt,
+    "sys.crypto.random_bytes": sys_crypto_random_bytes,
+    "sys.math.pow_mod": sys_math_pow_mod,
     "sys.crypto.merkle_root": sys_crypto_merkle_root,
     "sys.crypto.ed25519.gen": sys_crypto_ed25519_gen,
     "sys.crypto.ed25519.sign": sys_crypto_ed25519_sign,

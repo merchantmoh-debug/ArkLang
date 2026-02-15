@@ -1,0 +1,46 @@
+import lib.wallet_lib
+
+func assert_eq(a, b, msg) {
+    if (a != b) {
+        print("FAIL: " + msg)
+        print("  Expected: " + b)
+        print("  Got:      " + a)
+        sys.exit(1)
+    } else {
+        print("PASS: " + msg)
+    }
+}
+
+// --- BIP39 Vector 1 ---
+mnemonic := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+passphrase := "TREZOR"
+expected_seed := "c55257c360c07c72029aebc1b53c05ed0362ada38ead3e3e9efa3708e53495531f09a6987599d18264c1e1c92f2cf141630c7a3c4ab7c81b2f001698e7463b04"
+
+seed := mnemonic_to_seed(mnemonic, passphrase)
+assert_eq(seed, expected_seed, "BIP39 Vector 1 Seed")
+
+// --- BIP32 Vector 1 ---
+seed_hex := "000102030405060708090a0b0c0d0e0f"
+
+// m/0'
+child1 := derive_path(seed_hex, "m/0'")
+// m/0' private key: edb2e14f9ee77d26dd93b4ecede8d16ed408ce149b6cd80b0715a2d911a0afea
+expected_priv := "edb2e14f9ee77d26dd93b4ecede8d16ed408ce149b6cd80b0715a2d911a0afea"
+priv := get(child1, 0)
+assert_eq(priv, expected_priv, "BIP32 Vector 1 m/0'")
+
+// m/0'/1
+child2 := derive_path(seed_hex, "m/0'/1")
+// m/0'/1 private key: 3c6cb8d0f6a264c91ea8b5030fadaa8e538b020f0a387421a12de9319dc93368
+expected_priv_2 := "3c6cb8d0f6a264c91ea8b5030fadaa8e538b020f0a387421a12de9319dc93368"
+priv_2 := get(child2, 0)
+assert_eq(priv_2, expected_priv_2, "BIP32 Vector 1 m/0'/1")
+
+// m/0'/1/2'
+child3 := derive_path(seed_hex, "m/0'/1/2'")
+// m/0'/1/2' private key: cbce0d719ecf7431d88e6a89fa1483e02e35092af60c042b1df2ff59fa424dca
+expected_priv_3 := "cbce0d719ecf7431d88e6a89fa1483e02e35092af60c042b1df2ff59fa424dca"
+priv_3 := get(child3, 0)
+assert_eq(priv_3, expected_priv_3, "BIP32 Vector 1 m/0'/1/2'")
+
+print("ALL TESTS PASSED")
