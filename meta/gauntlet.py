@@ -58,7 +58,8 @@ def run_test_task(file_path, fuzz=False, iterations=1):
                 input=input_data,
                 capture_output=True,
                 text=False, # Use bytes mode for input/output
-                timeout=10
+                timeout=10,
+                env=os.environ # Propagate ALLOW_DANGEROUS_LOCAL_EXECUTION
             )
             duration = time.time() - start
 
@@ -129,11 +130,17 @@ def main():
     parser.add_argument("--fuzz", action="store_true", help="Enable Fuzzing Mode (random byte-noise inputs)")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 4, help="Number of parallel workers")
     parser.add_argument("--iterations", type=int, default=1, help="Runs per test (to detect flakiness)")
+    parser.add_argument("--privileged", action="store_true", help="Enable ALLOW_DANGEROUS_LOCAL_EXECUTION (for net/thread tests)")
     args = parser.parse_args()
+
+    # Set Environment Variable if Privileged
+    if args.privileged:
+        os.environ["ALLOW_DANGEROUS_LOCAL_EXECUTION"] = "true"
 
     print(f"{YELLOW}=========================================={RESET}")
     print(f"{YELLOW}   THE GAUNTLET: ARK REGRESSION SUITE     {RESET}")
     print(f"{YELLOW}   Mode: {'FUZZING (BYTES)' if args.fuzz else 'STANDARD'}{RESET}")
+    print(f"{YELLOW}   Privileged: {'YES' if args.privileged else 'NO'}{RESET}")
     print(f"{YELLOW}   Workers: {args.workers}{RESET}")
     print(f"{YELLOW}   Iterations: {args.iterations}{RESET}")
     print(f"{YELLOW}=========================================={RESET}")

@@ -1,3 +1,6 @@
+import lib.std.io
+import lib.std.event
+
 // tests/test_async.ark
 
 print("Starting async test...\n")

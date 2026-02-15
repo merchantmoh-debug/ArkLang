@@ -1,3 +1,4 @@
+import lib.std.audio
 // tests/test_audio.ark
 
 func assert(cond, msg) {

@@ -1,4 +1,5 @@
 // Test Chain Module
+import lib.std.chain
 true := 1 == 1
 false := 1 == 0
 

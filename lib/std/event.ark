@@ -27,6 +27,18 @@ func _event_sleep(s) {
     sys.time.sleep(s)
 }
 
+func loop() {
+    _event_loop()
+}
+
+func poll() {
+    return _event_poll()
+}
+
+func sleep(s) {
+    _event_sleep(s)
+}
+
 event := {
     poll: _event_poll,
     loop: _event_loop,
