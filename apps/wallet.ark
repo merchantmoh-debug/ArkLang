@@ -1,79 +1,91 @@
-// Ark Wallet CLI
+import lib.wallet_lib
 
-// Mock Chain Logic
-func chain_get_balance(addr) {
-    return 1000
-}
+// --- CLI ---
 
-chain := {
-    get_balance: chain_get_balance
-}
+args := sys_args
+len_args_struct := sys.len(args)
+len_args := get(len_args_struct, 0)
 
-// Helper to safely get arguments
-func get_arg(i) {
-    len_args := len(sys_args)
-    if (i >= len_args) {
-        return ""
-    }
-    return get(sys_args, i)
-}
-
-// Main Logic
-cmd := get_arg(1)
-
-if (cmd == "gen") {
-    keys := sys.crypto.ed25519.gen()
-    priv := get(keys, 0)
-    pub := get(keys, 1)
-    print("Generated Ed25519 Keypair:")
-    print("Private Key: " + priv)
-    print("Public Key:  " + pub)
-}
-if (cmd == "sign") {
-    msg := get_arg(2)
-    priv := get_arg(3)
-    if (msg == "" or priv == "") {
-        print("Usage: wallet sign <msg> <priv>")
-    } else {
-        sig := sys.crypto.ed25519.sign(msg, priv)
-        print("Signature: " + sig)
-    }
-}
-if (cmd == "verify") {
-    msg := get_arg(2)
-    sig := get_arg(3)
-    pub := get_arg(4)
-    if (msg == "" or sig == "" or pub == "") {
-        print("Usage: wallet verify <msg> <sig> <pub>")
-    } else {
-        valid := sys.crypto.ed25519.verify(msg, sig, pub)
-        if (valid) {
-            print("Signature Valid: true")
-        } else {
-            print("Signature Valid: false")
-        }
-    }
-}
-if (cmd == "balance") {
-    addr := get_arg(2)
-    if (addr == "") {
-        print("Usage: wallet balance <addr>")
-    } else {
-        // We use the struct method style call?
-        // chain.get_balance(addr) -> parsed as call_expr(get_attr(chain, get_balance), [addr])
-        // get_attr returns the function. call_expr calls it.
-        bal := chain.get_balance(addr)
-        print("Address: " + addr)
-        print("Balance: " + bal)
-    }
-}
-if (cmd == "") {
-    print("Ark Wallet CLI v1.0")
+if (len_args < 2) {
+    print("Ark Wallet CLI")
     print("Usage: ark run apps/wallet.ark <command> [args]")
     print("")
     print("Commands:")
-    print("  gen                        Generate a new Ed25519 keypair")
-    print("  sign <msg> <priv>          Sign a message with private key")
-    print("  verify <msg> <sig> <pub>   Verify a signature")
-    print("  balance <addr>             Check wallet balance")
+    print("  gen                        Generate 12-word mnemonic")
+    print("  derive <mnemonic> <path>   Derive private key from mnemonic and path")
+    print("  encrypt <priv> <pass>      Encrypt private key to JSON")
+    print("  decrypt <json> <pass>      Decrypt private key from JSON")
+    print("  master <mnemonic>          Show master key (hex)")
+    sys.exit(0)
+}
+
+cmd_struct := sys.list.get(args, 1)
+cmd := get(cmd_struct, 0)
+
+if (cmd == "gen") {
+    mnemonic := generate_mnemonic()
+    print("Mnemonic: " + mnemonic)
+}
+
+if (cmd == "derive") {
+    if (len_args < 4) {
+        print("Usage: derive <mnemonic> <path>")
+        sys.exit(1)
+    }
+
+    mnemonic_struct := sys.list.get(args, 2)
+    mnemonic := get(mnemonic_struct, 0)
+
+    path_struct := sys.list.get(args, 3)
+    path := get(path_struct, 0)
+
+    seed := mnemonic_to_seed(mnemonic, "")
+    key := derive_path(seed, path)
+
+    priv := get(key, 0)
+    print("Private Key: " + priv)
+}
+
+if (cmd == "master") {
+     if (len_args < 3) {
+        print("Usage: master <mnemonic>")
+        sys.exit(1)
+    }
+    mnemonic_struct := sys.list.get(args, 2)
+    mnemonic := get(mnemonic_struct, 0)
+
+    seed := mnemonic_to_seed(mnemonic, "")
+    key := master_key_from_seed(seed)
+    priv := get(key, 0)
+    print("Master Private Key: " + priv)
+}
+
+if (cmd == "encrypt") {
+    if (len_args < 4) {
+        print("Usage: encrypt <priv> <pass>")
+        sys.exit(1)
+    }
+    priv_struct := sys.list.get(args, 2)
+    priv := get(priv_struct, 0)
+
+    pass_struct := sys.list.get(args, 3)
+    pass := get(pass_struct, 0)
+
+    json := encrypt_keystore(priv, pass)
+    print("Keystore JSON: " + json)
+}
+
+if (cmd == "decrypt") {
+    if (len_args < 4) {
+        print("Usage: decrypt <json> <pass>")
+        sys.exit(1)
+    }
+    json_struct := sys.list.get(args, 2)
+    json := get(json_struct, 0)
+
+    pass_struct := sys.list.get(args, 3)
+    pass := get(pass_struct, 0)
+
+    priv := decrypt_keystore(json, pass)
+    print("Private Key: " + priv)
 }
