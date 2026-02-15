@@ -1,0 +1,28 @@
+import lib.wallet_lib
+
+// G
+gx := 55066263022277343669578718895168534326250603453777594175500187360389116729240
+gy := 32670510020758816978083085130507043184471273380659243275938904335757337482424
+G := [gx, gy]
+
+// Test 1*G
+P1 := point_mul(G, 1)
+if (get(P1, 0) != gx) {
+    print("FAIL: 1*G != G")
+} else {
+    print("PASS: 1*G == G")
+}
+
+// Test 2*G
+// Expected 2G from standard tools
+expected_x := 89565891926547004231252920420967050283743554074723986138434964949113107996389
+// expected_y is not needed if x matches usually (unless y symmetry issue)
+
+P2 := point_mul(G, 2)
+if (get(P2, 0) != expected_x) {
+    print("FAIL: 2*G x mismatch")
+    print("Got: " + get(P2, 0))
+    print("Exp: " + expected_x)
+} else {
+    print("PASS: 2*G x match")
+}

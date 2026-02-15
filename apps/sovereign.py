@@ -134,6 +134,7 @@ def main():
     parser_run = subparsers.add_parser("run", help="Run an Ark script")
     parser_run.add_argument("file", help="Path to Ark file")
     parser_run.add_argument("--jit", action="store_true", help="Enable JIT Compiler (Experimental)")
+    parser_run.add_argument("script_args", nargs=argparse.REMAINDER, help="Arguments for the script")
     parser_run.set_defaults(func=cmd_run)
 
     # Audit

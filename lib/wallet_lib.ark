@@ -1,0 +1,406 @@
+import lib.bip39_words
+
+// --- Constants ---
+P_CURVE := 115792089237316195423570985008687907853269984665640564039457584007908834671663
+N_CURVE := 115792089237316195423570985008687907852837564279074904382605163141518161494337
+GX := 55066263022277343669578718895168534326250603453777594175500187360389116729240
+GY := 32670510020758816978083085130507043184471273380659243275938904335757337482424
+
+// --- String Utils ---
+
+func string_split(s, delim) {
+    res := []
+    current := ""
+    i := 0
+    l_struct := sys.len(s)
+    len_val := get(l_struct, 0)
+
+    while (i < len_val) {
+        c_list := sys.str.get(s, i)
+        c := get(c_list, 0)
+
+        if (c == delim) {
+            res := sys.list.append(res, current)
+            current := ""
+        } else {
+            current := current + c
+        }
+        i := i + 1
+    }
+    res := sys.list.append(res, current)
+    return res
+}
+
+func slice_string(s, start, end) {
+    res := ""
+    i := start
+    while (i < end) {
+        c_list := sys.str.get(s, i)
+        c := get(c_list, 0)
+        res := res + c
+        i := i + 1
+    }
+    return res
+}
+
+// --- Hex / Int ---
+
+func hex_char_to_int(c) {
+    if (c == "0") { return 0 }
+    if (c == "1") { return 1 }
+    if (c == "2") { return 2 }
+    if (c == "3") { return 3 }
+    if (c == "4") { return 4 }
+    if (c == "5") { return 5 }
+    if (c == "6") { return 6 }
+    if (c == "7") { return 7 }
+    if (c == "8") { return 8 }
+    if (c == "9") { return 9 }
+    if (c == "a") { return 10 }
+    if (c == "b") { return 11 }
+    if (c == "c") { return 12 }
+    if (c == "d") { return 13 }
+    if (c == "e") { return 14 }
+    if (c == "f") { return 15 }
+    if (c == "A") { return 10 }
+    if (c == "B") { return 11 }
+    if (c == "C") { return 12 }
+    if (c == "D") { return 13 }
+    if (c == "E") { return 14 }
+    if (c == "F") { return 15 }
+    return 0
+}
+
+func hex_to_int(s) {
+    res := 0
+    i := 0
+    l_struct := sys.len(s)
+    len_val := get(l_struct, 0)
+    while (i < len_val) {
+        c_list := sys.str.get(s, i)
+        char := get(c_list, 0)
+        val := hex_char_to_int(char)
+        res := (res * 16) + val
+        i := i + 1
+    }
+    return res
+}
+
+func int_to_hex_digit(n) {
+    if (n == 0) { return "0" }
+    if (n == 1) { return "1" }
+    if (n == 2) { return "2" }
+    if (n == 3) { return "3" }
+    if (n == 4) { return "4" }
+    if (n == 5) { return "5" }
+    if (n == 6) { return "6" }
+    if (n == 7) { return "7" }
+    if (n == 8) { return "8" }
+    if (n == 9) { return "9" }
+    if (n == 10) { return "a" }
+    if (n == 11) { return "b" }
+    if (n == 12) { return "c" }
+    if (n == 13) { return "d" }
+    if (n == 14) { return "e" }
+    if (n == 15) { return "f" }
+    return "0"
+}
+
+func int_to_hex(n) {
+    if (n == 0) { return "00" }
+    res := ""
+    val := n
+    while (val > 0) {
+        rem := val % 16
+        digit := int_to_hex_digit(rem)
+        res := digit + res
+        val := val / 16
+    }
+
+    len_struct := sys.len(res)
+    len_val := get(len_struct, 0)
+    if (len_val % 2 != 0) {
+        res := "0" + res
+    }
+    return res
+}
+
+func int_to_hex_padded(n, bytes_len) {
+    hex_str := int_to_hex(n)
+    target_len := bytes_len * 2
+
+    len_struct := sys.len(hex_str)
+    curr_len := get(len_struct, 0)
+
+    while (curr_len < target_len) {
+        hex_str := "0" + hex_str
+        curr_len := curr_len + 1
+    }
+    return hex_str
+}
+
+func int_from_string(s) {
+    res := 0
+    i := 0
+    l_struct := sys.len(s)
+    l := get(l_struct, 0)
+
+    while (i < l) {
+        c_list := sys.str.get(s, i)
+        c := get(c_list, 0)
+        digit := hex_char_to_int(c)
+        res := (res * 10) + digit
+        i := i + 1
+    }
+    return res
+}
+
+// --- Secp256k1 ---
+
+func point_add(p1, p2) {
+    x1 := get(p1, 0)
+    y1 := get(p1, 1)
+    x2 := get(p2, 0)
+    y2 := get(p2, 1)
+
+    if (x1 == 0 and y1 == 0) { return p2 }
+    if (x2 == 0 and y2 == 0) { return p1 }
+
+    if (x1 == x2) {
+        if (y1 != y2) { return [0, 0] }
+        return point_double(p1)
+    }
+
+    dy := (y2 - y1) % P_CURVE
+    dx := (x2 - x1) % P_CURVE
+
+    inv_dx := sys.math.pow_mod(dx, -1, P_CURVE)
+    m := (dy * inv_dx) % P_CURVE
+
+    x3 := (m * m - x1 - x2) % P_CURVE
+    y3 := (m * (x1 - x3) - y1) % P_CURVE
+
+    return [x3, y3]
+}
+
+func point_double(p) {
+    x := get(p, 0)
+    y := get(p, 1)
+    if (y == 0) { return [0, 0] }
+
+    num := (3 * x * x) % P_CURVE
+    den := (2 * y) % P_CURVE
+    inv_den := sys.math.pow_mod(den, -1, P_CURVE)
+
+    m := (num * inv_den) % P_CURVE
+    x3 := (m * m - 2 * x) % P_CURVE
+    y3 := (m * (x - x3) - y) % P_CURVE
+    return [x3, y3]
+}
+
+func point_mul(p, scalar) {
+    res := [0, 0]
+    curr := p
+    s := scalar
+    while (s > 0) {
+        if (s % 2 == 1) {
+            res := point_add(res, curr)
+        }
+        curr := point_double(curr)
+        s := s / 2
+    }
+    return res
+}
+
+func get_pubkey(priv_int) {
+    G := [GX, GY]
+    return point_mul(G, priv_int)
+}
+
+func serialize_pubkey_compressed(p) {
+    x := get(p, 0)
+    y := get(p, 1)
+    prefix := "02"
+    if (y % 2 != 0) { prefix := "03" }
+    x_hex := int_to_hex_padded(x, 32)
+    return prefix + x_hex
+}
+
+// --- BIP39 ---
+
+func pow_big(base, exp) {
+    res := 1
+    b := base
+    e := exp
+    while (e > 0) {
+        if (e % 2 == 1) { res := res * b }
+        b := b * b
+        e := e / 2
+    }
+    return res
+}
+
+func generate_mnemonic() {
+    hex_entropy := sys.crypto.random_bytes(16)
+    entropy_int := hex_to_int(hex_entropy)
+
+    hash := sys.crypto.hash(hex_entropy)
+
+    first_byte_h0 := get(sys.str.get(hash, 0), 0)
+    first_byte_h1 := get(sys.str.get(hash, 1), 0)
+
+    first_byte_hex := first_byte_h0 + first_byte_h1
+    first_byte_val := hex_to_int(first_byte_hex)
+    checksum := first_byte_val / 16
+
+    total := (entropy_int * 16) + checksum
+
+    word_indices := []
+    i := 0
+    while (i < 12) {
+        shift := 132 - (11 * (i + 1))
+
+        div_val := pow_big(2, shift)
+        val := (total / div_val) % 2048
+        word_indices := sys.list.append(word_indices, val)
+        i := i + 1
+    }
+
+    wordlist := get_wordlist()
+    mnemonic := ""
+    j := 0
+    while (j < 12) {
+        idx_val_struct := sys.list.get(word_indices, j)
+        idx := get(idx_val_struct, 0)
+
+        word_struct := sys.list.get(wordlist, idx)
+        word := get(word_struct, 0)
+
+        if (j > 0) { mnemonic := mnemonic + " " }
+        mnemonic := mnemonic + word
+        j := j + 1
+    }
+    return mnemonic
+}
+
+func mnemonic_to_seed(mnemonic, passphrase) {
+    salt := "mnemonic" + passphrase
+    return sys.crypto.pbkdf2_hmac_sha512(mnemonic, salt, 2048, 64)
+}
+
+// --- BIP32 ---
+
+func master_key_from_seed(seed_hex) {
+    bitcoin_seed_hex := "426974636f696e2073656564"
+    I_hex := sys.crypto.hmac_sha512(bitcoin_seed_hex, seed_hex)
+
+    IL_hex := slice_string(I_hex, 0, 64)
+    IR_hex := slice_string(I_hex, 64, 128)
+
+    return [IL_hex, IR_hex, 0, "00000000", 0]
+}
+
+func ckd_priv(parent_key, index) {
+    parent_priv_hex := get(parent_key, 0)
+    parent_chain_hex := get(parent_key, 1)
+    depth := get(parent_key, 2)
+
+    parent_priv_int := hex_to_int(parent_priv_hex)
+    data_hex := ""
+
+    if (index >= 2147483648) {
+        data_hex := "00" + int_to_hex_padded(parent_priv_int, 32) + int_to_hex_padded(index, 4)
+    } else {
+        pub := get_pubkey(parent_priv_int)
+        pub_ser := serialize_pubkey_compressed(pub)
+        data_hex := pub_ser + int_to_hex_padded(index, 4)
+    }
+
+    I_hex := sys.crypto.hmac_sha512(parent_chain_hex, data_hex)
+    IL_hex := slice_string(I_hex, 0, 64)
+    IR_hex := slice_string(I_hex, 64, 128)
+
+    IL_int := hex_to_int(IL_hex)
+    child_priv_int := (IL_int + parent_priv_int) % N_CURVE
+    child_priv_hex := int_to_hex_padded(child_priv_int, 32)
+
+    return [child_priv_hex, IR_hex, depth + 1, "00000000", index]
+}
+
+func derive_path(seed_hex, path) {
+    curr := master_key_from_seed(seed_hex)
+    segments := string_split(path, "/")
+
+    // segments[0] is "m", skip it.
+    i := 1
+    l_struct := sys.len(segments)
+    l := get(l_struct, 0)
+
+    while (i < l) {
+        seg_struct := sys.list.get(segments, i)
+        seg := get(seg_struct, 0)
+
+        // Check hardened
+        is_hardened := false
+        num_str := ""
+
+        j := 0
+        sl_struct := sys.len(seg)
+        sl := get(sl_struct, 0)
+        while (j < sl) {
+            c_struct := sys.str.get(seg, j)
+            c := get(c_struct, 0)
+            if (c == "'") { is_hardened := true }
+            else { num_str := num_str + c }
+            j := j + 1
+        }
+
+        if (num_str != "") {
+             val := int_from_string(num_str)
+             if (is_hardened) { val := val + 2147483648 }
+             curr := ckd_priv(curr, val)
+        }
+        i := i + 1
+    }
+    return curr
+}
+
+// --- Keystore ---
+
+func encrypt_keystore(priv_key, password) {
+    salt_hex := sys.crypto.random_bytes(16)
+    key_hex := sys.crypto.pbkdf2_hmac_sha512(password, salt_hex, 10000, 32)
+    nonce_hex := sys.crypto.random_bytes(12)
+
+    res := sys.crypto.aes_gcm_encrypt(key_hex, nonce_hex, priv_key, "")
+    ciphertext := get(res, 0)
+    tag := get(res, 1)
+
+    return "{" +
+        "\"salt\":\"" + salt_hex + "\"," +
+        "\"nonce\":\"" + nonce_hex + "\"," +
+        "\"ciphertext\":\"" + ciphertext + "\"," +
+        "\"tag\":\"" + tag + "\"" +
+    "}"
+}
+
+func decrypt_keystore(json_str, password) {
+    obj_val := sys.json.parse(json_str)
+
+    salt_res := sys.struct.get(obj_val, "salt")
+    salt_hex := get(salt_res, 0)
+
+    nonce_res := sys.struct.get(obj_val, "nonce")
+    nonce_hex := get(nonce_res, 0)
+
+    cipher_res := sys.struct.get(obj_val, "ciphertext")
+    cipher_hex := get(cipher_res, 0)
+
+    tag_res := sys.struct.get(obj_val, "tag")
+    tag_hex := get(tag_res, 0)
+
+    key_hex := sys.crypto.pbkdf2_hmac_sha512(password, salt_hex, 10000, 32)
+
+    plain := sys.crypto.aes_gcm_decrypt(key_hex, nonce_hex, cipher_hex, tag_hex, "")
+    return plain
+}
