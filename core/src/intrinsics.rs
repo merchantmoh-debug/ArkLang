@@ -9,12 +9,12 @@
 use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
+#[cfg(not(target_arch = "wasm32"))]
+use shell_words;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-#[cfg(not(target_arch = "wasm32"))]
-use shell_words;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -338,17 +338,17 @@ fn check_path_security(path: &str) -> Result<(), RuntimeError> {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        use std::path::Path;
         use std::env;
+        use std::path::Path;
 
         let cwd = env::current_dir().map_err(|_| RuntimeError::NotExecutable)?;
         let path_obj = Path::new(path);
 
         // Construct absolute path
         let abs_path = if path_obj.is_absolute() {
-             path_obj.to_path_buf()
+            path_obj.to_path_buf()
         } else {
-             cwd.join(path_obj)
+            cwd.join(path_obj)
         };
 
         // To handle both read and write (where file might not exist),
@@ -356,19 +356,23 @@ fn check_path_security(path: &str) -> Result<(), RuntimeError> {
         // If neither exists, we can't write anyway (fs::write doesn't mkdir -p).
 
         let path_to_check = if abs_path.exists() {
-             abs_path
+            abs_path
         } else {
-             match abs_path.parent() {
-                 Some(p) => p.to_path_buf(),
-                 None => return Err(RuntimeError::NotExecutable),
-             }
+            match abs_path.parent() {
+                Some(p) => p.to_path_buf(),
+                None => return Err(RuntimeError::NotExecutable),
+            }
         };
 
         // If parent doesn't exist, canonicalize fails.
-        let canonical_path = std::fs::canonicalize(&path_to_check).map_err(|_| RuntimeError::NotExecutable)?;
+        let canonical_path =
+            std::fs::canonicalize(&path_to_check).map_err(|_| RuntimeError::NotExecutable)?;
 
         if !canonical_path.starts_with(&cwd) {
-            println!("[Ark:Sandbox] Access Denied: Path '{}' resolves outside CWD.", path);
+            println!(
+                "[Ark:Sandbox] Access Denied: Path '{}' resolves outside CWD.",
+                path
+            );
             return Err(RuntimeError::NotExecutable);
         }
 
@@ -484,7 +488,9 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
     // Support both String (legacy, parsed) and List (secure, explicit)
     let (program, args_list) = match &args[0] {
         Value::String(s) => {
-            println!("[Ark:Exec] WARNING: usage of sys.exec(String) is deprecated for security. Use sys.exec([cmd, arg1, ...]).");
+            eprintln!(
+                "[Ark:Exec] WARNING: usage of sys.exec(String) is deprecated for security. Use sys.exec([cmd, arg1, ...])"
+            );
             #[cfg(not(target_arch = "wasm32"))]
             {
                 let parts = shell_words::split(s).map_err(|_| RuntimeError::NotExecutable)?;
@@ -525,10 +531,7 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     #[cfg(target_arch = "wasm32")]
     {
-        println!(
-            "[Ark:WASM] Security Block: sys.exec('{}') denied.",
-            program
-        );
+        println!("[Ark:WASM] Security Block: sys.exec('{}') denied.", program);
         return Err(RuntimeError::NotExecutable);
     }
 
@@ -1897,9 +1900,9 @@ mod tests {
 
         // Verify file was NOT written
         if std::path::Path::new(file_name).exists() {
-             // Cleanup if it somehow wrote
-             std::fs::remove_file(file_name).unwrap();
-             panic!("File was written despite error!");
+            // Cleanup if it somehow wrote
+            std::fs::remove_file(file_name).unwrap();
+            panic!("File was written despite error!");
         }
     }
 
@@ -1922,20 +1925,20 @@ mod tests {
 
     #[test]
     fn test_security_fs_read_traversal() {
-         let file_name = "../Cargo.toml";
-         // This file exists in repo root, but is outside core/ CWD.
-         // So it should be blocked.
+        let file_name = "../Cargo.toml";
+        // This file exists in repo root, but is outside core/ CWD.
+        // So it should be blocked.
 
-         if std::path::Path::new(file_name).exists() {
-             let args = vec![Value::String(file_name.to_string())];
-             let res = intrinsic_fs_read(args);
-             match res {
+        if std::path::Path::new(file_name).exists() {
+            let args = vec![Value::String(file_name.to_string())];
+            let res = intrinsic_fs_read(args);
+            match res {
                 Err(RuntimeError::NotExecutable) => {}
                 _ => panic!("Expected RuntimeError::NotExecutable, got {:?}", res),
             }
-         } else {
-             println!("Skipping read traversal test because ../Cargo.toml not found");
-         }
+        } else {
+            println!("Skipping read traversal test because ../Cargo.toml not found");
+        }
     }
 
     #[test]
@@ -1958,10 +1961,10 @@ mod tests {
                         assert_eq!(l.len(), 2);
                         assert_eq!(l[0], Value::Integer(1));
                         assert_eq!(l[1], Value::Integer(3));
-                    },
+                    }
                     _ => panic!("Expected List as second item"),
                 }
-            },
+            }
             _ => panic!("Expected List result"),
         }
     }

@@ -33,7 +33,7 @@ try:
         eval_node, call_user_func, instantiate_class, eval_block,
         is_truthy, eval_binop, ARK_PARSER, NODE_HANDLERS
     )
-except ImportError:
+except ModuleNotFoundError:
     from ark_types import (
         RopeString, ArkValue, UNIT_VALUE, ReturnException,
         ArkFunction, ArkClass, ArkInstance, Scope

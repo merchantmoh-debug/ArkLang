@@ -198,7 +198,8 @@ func net_listen(port, handler) {
                     // EOF / Closed
                     print("[Net] Peer " + p.ip + " disconnected")
                     sys.net.socket.close(p.socket)
-                    sys.list.pop(_net_state.peers, i)
+                    let (_, _popped_rest) := sys.list.pop(_net_state.peers, i)
+                    _net_state.peers := _popped_rest
                     // Don't increment i, next item shifted to i
                 } else {
                     p.last_seen := sys.time.now()

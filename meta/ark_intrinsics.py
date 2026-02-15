@@ -37,7 +37,7 @@ try:
         SandboxViolation, check_path_security, check_exec_security,
         validate_url_security, SafeRedirectHandler, check_capability, has_capability
     )
-except ImportError:
+except ModuleNotFoundError:
     from ark_types import (
         ArkValue, UNIT_VALUE, ArkFunction, ArkClass, ArkInstance, Scope,
         ReturnException, RopeString

@@ -16,7 +16,7 @@ try:
         ReturnException, RopeString
     )
     from meta.ark_intrinsics import INTRINSICS, LINEAR_SPECS, INTRINSICS_WITH_SCOPE
-except ImportError:
+except ModuleNotFoundError:
     from ark_types import (
         ArkValue, UNIT_VALUE, ArkFunction, ArkClass, ArkInstance, Scope,
         ReturnException, RopeString
