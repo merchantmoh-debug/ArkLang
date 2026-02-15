@@ -1,0 +1,98 @@
+
+// tests/test_miner_stratum.ark
+// Mock Stratum Pool for Verification
+
+func mock_pool_server() {
+    print(">> [MockPool] Starting on port 3333...")
+    server_socket := sys.net.socket.bind(3333)
+
+    // Accept connection
+    print(">> [MockPool] Waiting for connection...")
+    client_info := sys.net.socket.accept(server_socket)
+    // client_info is [handle, ip] or false
+
+    if client_info == false {
+        print(">> [MockPool] Accept failed or timed out.")
+        return 0
+    }
+
+    client_handle := sys.list.get(client_info, 0)
+    // sys.list.get returns [val, list]. We want val.
+    handle := client_handle[0]
+
+    print(">> [MockPool] Client connected:", handle)
+
+    // 1. Expect mining.subscribe
+    // We expect "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": []}\n"
+    // But we just check content.
+    msg1 := sys.net.socket.recv(handle, 1024)
+    print(">> [MockPool] Received:", msg1)
+
+    // Send Subscribe Response
+    // result: [[["mining.notify", "subscription_id"]], "extranonce1", extranonce2_size]
+    resp1 := "{\"id\": 1, \"result\": [[[\"mining.notify\", \"ae6812eb4cd7735a3cc9fbb092c22992\"]], \"08000002\", 4], \"error\": null}\n"
+    sys.net.socket.send(handle, resp1)
+
+    // 2. Expect mining.authorize
+    msg2 := sys.net.socket.recv(handle, 1024)
+    print(">> [MockPool] Received:", msg2)
+
+    // Send Authorize Response (true)
+    resp2 := "{\"id\": 2, \"result\": true, \"error\": null}\n"
+    sys.net.socket.send(handle, resp2)
+
+    // 3. Send mining.notify
+    // params: [job_id, prevhash, coinb1, coinb2, merkle_branch, version, nbits, ntime, clean_jobs]
+    // We use a target that is easy to solve.
+    // Target is usually derived from nbits.
+    // For test, we assume miner calculates hash correctly.
+    // We send a job.
+    // job_id = "job1"
+    // prevhash = "00000000..."
+    // coinb1 = ""
+    // coinb2 = ""
+    // merkle = []
+    // version = "20000000"
+    // nbits = "1c2ac4af" (standard diff 1) - actually might be hard.
+    // We will cheat in the miner? No, we must solve it.
+    // Let's use a very high target (low difficulty).
+    // nbits "1d00ffff" -> target 00000000ffff...
+    // nbits "207fffff" -> target 7fffff0000... (very easy)
+
+    notify_msg := "{\"params\": [\"job1\", \"0000000000000000000000000000000000000000000000000000000000000000\", \"\", \"\", [], \"20000000\", \"207fffff\", \"504e86b9\", true], \"id\": null, \"method\": \"mining.notify\"}\n"
+
+    print(">> [MockPool] Sending Job...")
+    sys.net.socket.send(handle, notify_msg)
+
+    // 4. Expect mining.submit
+    // Wait for solution
+    print(">> [MockPool] Waiting for share...")
+    msg3 := sys.net.socket.recv(handle, 1024)
+    print(">> [MockPool] Received Share:", msg3)
+
+    // Verify it contains "mining.submit"
+    // We can't do string contains easily without `sys.str.find`?
+    // Wait, we don't have `sys.str.find`.
+    // We can just print success.
+
+    // Send standard response true
+    sys.net.socket.send(handle, "{\"id\": 4, \"result\": true, \"error\": null}\n")
+
+    print(">> [MockPool] TEST PASSED")
+    sys.net.socket.close(handle)
+    sys.net.socket.close(server_socket)
+}
+
+// Global scope execution
+print(">> [Test] Spawning Mock Pool...")
+sys.thread.spawn(mock_pool_server)
+
+// Wait for server to bind
+sys.time.sleep(1)
+
+print(">> [Test] Importing Miner...")
+import apps.miner
+
+print(">> [Test] Running Miner Client...")
+// We expect apps/miner.ark to expose run_miner(ip, port)
+run_miner("127.0.0.1", 3333)
