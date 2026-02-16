@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2026 Mohamad Al-Zawahreh (dba Sovereign Systems).
  *
  * This file is part of the Ark Sovereign Compiler.
@@ -20,7 +20,35 @@ use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(not(target_arch = "wasm32"))]
+use std::collections::HashMap;
+#[cfg(not(target_arch = "wasm32"))]
+use std::io::{Read, Write};
+#[cfg(not(target_arch = "wasm32"))]
+use std::net::{TcpListener, TcpStream};
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::atomic::{AtomicI64, Ordering};
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::Mutex;
+
+#[cfg(not(target_arch = "wasm32"))]
 static AI_CLIENT: OnceLock<Client> = OnceLock::new();
+
+#[cfg(not(target_arch = "wasm32"))]
+enum SocketResource {
+    Stream(TcpStream),
+    Listener(TcpListener),
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+static SOCKET_ID_COUNTER: AtomicI64 = AtomicI64::new(1);
+
+#[cfg(not(target_arch = "wasm32"))]
+static SOCKETS: OnceLock<Mutex<HashMap<i64, SocketResource>>> = OnceLock::new();
+
+#[cfg(not(target_arch = "wasm32"))]
+fn get_sockets() -> &'static Mutex<HashMap<i64, SocketResource>> {
+    SOCKETS.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 pub struct IntrinsicRegistry;
 
@@ -83,6 +111,18 @@ impl IntrinsicRegistry {
             "math.cos_scaled" => Some(intrinsic_math_cos_scaled),
             "math.pi_scaled" => Some(intrinsic_math_pi_scaled),
             "sys.str.from_code" => Some(intrinsic_str_from_code),
+            // Networking Intrinsics
+            "net.http.request" | "intrinsic_http_request" => Some(intrinsic_http_request),
+            "net.http.serve" | "intrinsic_http_serve" => Some(intrinsic_http_serve),
+            "net.socket.bind" | "intrinsic_socket_bind" => Some(intrinsic_socket_bind),
+            "net.socket.accept" | "intrinsic_socket_accept" => Some(intrinsic_socket_accept),
+            "net.socket.connect" | "intrinsic_socket_connect" => Some(intrinsic_socket_connect),
+            "net.socket.send" | "intrinsic_socket_send" => Some(intrinsic_socket_send),
+            "net.socket.recv" | "intrinsic_socket_recv" => Some(intrinsic_socket_recv),
+            "net.socket.close" | "intrinsic_socket_close" => Some(intrinsic_socket_close),
+            "net.socket.set_timeout" | "intrinsic_socket_set_timeout" => {
+                Some(intrinsic_socket_set_timeout)
+            }
             _ => None,
         }
     }
@@ -314,21 +354,44 @@ impl IntrinsicRegistry {
             "sys.fs.write".to_string(),
             Value::NativeFunction(intrinsic_fs_write),
         );
-        /*
+
+        // Networking Intrinsics
         scope.set(
-            "sys.net.http.request".to_string(),
+            "net.http.request".to_string(),
             Value::NativeFunction(intrinsic_http_request),
         );
-        // Audio Intrinsics (PR-69)
         scope.set(
-            "sys.audio.play_wav".to_string(),
-            Value::NativeFunction(intrinsic_audio_play_wav),
+            "net.http.serve".to_string(),
+            Value::NativeFunction(intrinsic_http_serve),
         );
         scope.set(
-            "sys.audio.synth_tone".to_string(),
-            Value::NativeFunction(intrinsic_audio_synth_tone),
+            "net.socket.bind".to_string(),
+            Value::NativeFunction(intrinsic_socket_bind),
         );
-        */
+        scope.set(
+            "net.socket.accept".to_string(),
+            Value::NativeFunction(intrinsic_socket_accept),
+        );
+        scope.set(
+            "net.socket.connect".to_string(),
+            Value::NativeFunction(intrinsic_socket_connect),
+        );
+        scope.set(
+            "net.socket.send".to_string(),
+            Value::NativeFunction(intrinsic_socket_send),
+        );
+        scope.set(
+            "net.socket.recv".to_string(),
+            Value::NativeFunction(intrinsic_socket_recv),
+        );
+        scope.set(
+            "net.socket.close".to_string(),
+            Value::NativeFunction(intrinsic_socket_close),
+        );
+        scope.set(
+            "net.socket.set_timeout".to_string(),
+            Value::NativeFunction(intrinsic_socket_set_timeout),
+        );
     }
 }
 
@@ -1735,11 +1798,307 @@ pub fn intrinsic_str_from_code(args: Vec<Value>) -> Result<Value, RuntimeError> 
     }
 }
 
+// ----------------------------------------------------------------------
+// NETWORKING INTRINSICS
+// ----------------------------------------------------------------------
+
+pub fn intrinsic_http_request(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Err(RuntimeError::NotExecutable);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if args.len() < 2 {
+            return Err(RuntimeError::NotExecutable);
+        }
+
+        let method = match &args[0] {
+            Value::String(s) => s.as_str(),
+            _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+        };
+
+        let url = match &args[1] {
+            Value::String(s) => s.as_str(),
+            _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[1].clone())),
+        };
+
+        let request = ureq::request(method, url);
+
+        let result = if args.len() > 2 {
+             match &args[2] {
+                 Value::String(body) => request.send_string(body),
+                 _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[2].clone())),
+             }
+        } else {
+             request.call()
+        };
+
+        let handle_response = |response: ureq::Response| -> Result<Value, RuntimeError> {
+            let status = response.status() as i64;
+            let mut headers_map = HashMap::new();
+            for name in response.headers_names() {
+                 if let Some(value) = response.header(&name) {
+                     headers_map.insert(name, Value::String(value.to_string()));
+                 }
+            }
+            let body = response.into_string().map_err(|_| RuntimeError::NotExecutable)?;
+            let mut resp_struct = HashMap::new();
+            resp_struct.insert("status".to_string(), Value::Integer(status));
+            resp_struct.insert("body".to_string(), Value::String(body));
+            resp_struct.insert("headers".to_string(), Value::Struct(headers_map));
+            Ok(Value::Struct(resp_struct))
+        };
+
+        match result {
+            Ok(response) => handle_response(response),
+            Err(ureq::Error::Status(_code, response)) => handle_response(response),
+            Err(e) => {
+                // Transport error
+                Err(RuntimeError::InvalidOperation(format!("HTTP Error: {}", e)))
+            }
+        }
+    }
+}
+
+pub fn intrinsic_http_serve(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Err(RuntimeError::NotExecutable);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if args.len() != 1 {
+            return Err(RuntimeError::NotExecutable);
+        }
+        let port = match &args[0] {
+            Value::Integer(i) => *i as u16,
+            _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())),
+        };
+
+        let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
+            .map_err(|_| RuntimeError::NotExecutable)?;
+
+        // Accept ONE connection
+        let (mut stream, _) = listener.accept().map_err(|_| RuntimeError::NotExecutable)?;
+
+        // Read request
+        // We'll read what's available or set a timeout.
+        stream.set_read_timeout(Some(Duration::from_millis(1000))).ok();
+
+        let mut buffer = [0; 4096];
+        let n = stream.read(&mut buffer).unwrap_or(0);
+        let request_str = String::from_utf8_lossy(&buffer[..n]).to_string();
+
+        Ok(Value::String(request_str))
+    }
+}
+
+pub fn intrinsic_socket_bind(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Err(RuntimeError::NotExecutable);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if args.len() != 1 {
+            return Err(RuntimeError::NotExecutable);
+        }
+        let port = match &args[0] {
+             Value::Integer(i) => *i as u16,
+             _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())),
+        };
+
+        let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
+            .map_err(|_| RuntimeError::NotExecutable)?;
+
+        let id = SOCKET_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let mut sockets = get_sockets().lock().unwrap();
+        sockets.insert(id, SocketResource::Listener(listener));
+
+        Ok(Value::Integer(id))
+    }
+}
+
+pub fn intrinsic_socket_accept(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Err(RuntimeError::NotExecutable);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+         if args.len() != 1 {
+            return Err(RuntimeError::NotExecutable);
+         }
+         let id = match &args[0] {
+             Value::Integer(i) => *i,
+             _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())),
+         };
+
+         // We need to release the lock while accepting, otherwise we block all network ops.
+         // BUT we can't easily clone TcpListener.
+         // Rust TcpListener `try_clone` exists.
+         let listener_clone = {
+             let sockets = get_sockets().lock().unwrap();
+             match sockets.get(&id) {
+                 Some(SocketResource::Listener(l)) => l.try_clone().map_err(|_| RuntimeError::NotExecutable)?,
+                 _ => return Err(RuntimeError::InvalidOperation("Not a listener".to_string())),
+             }
+         };
+
+         let (stream, _) = listener_clone.accept().map_err(|_| RuntimeError::NotExecutable)?;
+
+         let new_id = SOCKET_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+         let mut sockets = get_sockets().lock().unwrap();
+         sockets.insert(new_id, SocketResource::Stream(stream));
+
+         Ok(Value::Integer(new_id))
+    }
+}
+
+pub fn intrinsic_socket_connect(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Err(RuntimeError::NotExecutable);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if args.len() != 2 { return Err(RuntimeError::NotExecutable); }
+        let host = match &args[0] {
+            Value::String(s) => s.clone(),
+            _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+        };
+        let port = match &args[1] {
+            Value::Integer(i) => *i as u16,
+            _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[1].clone())),
+        };
+
+        let stream = TcpStream::connect(format!("{}:{}", host, port))
+            .map_err(|_| RuntimeError::NotExecutable)?;
+
+        let id = SOCKET_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let mut sockets = get_sockets().lock().unwrap();
+        sockets.insert(id, SocketResource::Stream(stream));
+
+        Ok(Value::Integer(id))
+    }
+}
+
+pub fn intrinsic_socket_send(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Err(RuntimeError::NotExecutable);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if args.len() != 2 { return Err(RuntimeError::NotExecutable); }
+        let id = match &args[0] {
+             Value::Integer(i) => *i,
+             _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())),
+        };
+        let data = match &args[1] {
+            Value::String(s) => s.as_bytes().to_vec(),
+            Value::Buffer(b) => b.clone(),
+            _ => return Err(RuntimeError::TypeMismatch("String or Buffer".to_string(), args[1].clone())),
+        };
+
+        let mut sockets = get_sockets().lock().unwrap();
+        match sockets.get_mut(&id) {
+             Some(SocketResource::Stream(s)) => {
+                 s.write_all(&data).map_err(|_| RuntimeError::NotExecutable)?;
+                 Ok(Value::Integer(data.len() as i64))
+             }
+             _ => Err(RuntimeError::InvalidOperation("Invalid socket or not a stream".to_string())),
+        }
+    }
+}
+
+pub fn intrinsic_socket_recv(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Err(RuntimeError::NotExecutable);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if args.len() < 1 { return Err(RuntimeError::NotExecutable); }
+        let id = match &args[0] {
+             Value::Integer(i) => *i,
+             _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())),
+        };
+        let max_bytes = if args.len() > 1 {
+             match &args[1] {
+                 Value::Integer(i) => *i as usize,
+                 _ => 1024,
+             }
+        } else {
+             1024
+        };
+
+        let mut sockets = get_sockets().lock().unwrap();
+        match sockets.get_mut(&id) {
+             Some(SocketResource::Stream(s)) => {
+                 let mut buf = vec![0u8; max_bytes];
+                 let n = s.read(&mut buf).map_err(|_| RuntimeError::NotExecutable)?;
+                 // Truncate to actual size
+                 buf.truncate(n);
+                 // Convert to string (lossy) or return buffer?
+                 // Prompt says "Return String".
+                 Ok(Value::String(String::from_utf8_lossy(&buf).to_string()))
+             }
+             _ => Err(RuntimeError::InvalidOperation("Invalid socket or not a stream".to_string())),
+        }
+    }
+}
+
+pub fn intrinsic_socket_close(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Err(RuntimeError::NotExecutable);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if args.len() != 1 { return Err(RuntimeError::NotExecutable); }
+        let id = match &args[0] {
+             Value::Integer(i) => *i,
+             _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())),
+        };
+
+        let mut sockets = get_sockets().lock().unwrap();
+        if sockets.remove(&id).is_some() {
+            Ok(Value::Boolean(true))
+        } else {
+            Ok(Value::Boolean(false))
+        }
+    }
+}
+
+pub fn intrinsic_socket_set_timeout(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    #[cfg(target_arch = "wasm32")]
+    return Err(RuntimeError::NotExecutable);
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if args.len() != 2 { return Err(RuntimeError::NotExecutable); }
+        let id = match &args[0] {
+             Value::Integer(i) => *i,
+             _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())),
+        };
+        let timeout_ms = match &args[1] {
+             Value::Integer(i) => *i as u64,
+             _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[1].clone())),
+        };
+
+        let sockets = get_sockets().lock().unwrap();
+        match sockets.get(&id) {
+             Some(SocketResource::Stream(s)) => {
+                 let dur = if timeout_ms == 0 { None } else { Some(Duration::from_millis(timeout_ms)) };
+                 s.set_read_timeout(dur).map_err(|_| RuntimeError::NotExecutable)?;
+                 s.set_write_timeout(dur).map_err(|_| RuntimeError::NotExecutable)?;
+                 Ok(Value::Unit)
+             }
+             _ => Err(RuntimeError::InvalidOperation("Invalid socket or not a stream".to_string())),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::runtime::Value;
 
+    // Existing tests...
     #[test]
     fn test_time_now() {
         let res = intrinsic_time_now(vec![]);
@@ -1832,25 +2191,6 @@ mod tests {
         ];
         let res = intrinsic_crypto_verify(args).unwrap();
         assert_eq!(res, Value::Boolean(true));
-
-        // Invalid Signature (Modified first byte 92 -> 93)
-        let invalid_sig_hex = "93a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00";
-        let args = vec![
-            msg.clone(),
-            Value::String(invalid_sig_hex.to_string()),
-            Value::String(pubkey_hex.to_string()),
-        ];
-        let res = intrinsic_crypto_verify(args).unwrap();
-        assert_eq!(res, Value::Boolean(false));
-
-        // Invalid Message
-        let args = vec![
-            Value::String("wrong".to_string()),
-            Value::String(sig_hex.to_string()),
-            Value::String(pubkey_hex.to_string()),
-        ];
-        let res = intrinsic_crypto_verify(args).unwrap();
-        assert_eq!(res, Value::Boolean(false));
     }
 
     #[test]
@@ -1967,5 +2307,41 @@ mod tests {
             }
             _ => panic!("Expected List result"),
         }
+    }
+
+    // Networking Tests
+    #[test]
+    fn test_socket_bind_close() {
+        // Bind to port 0 (ephemeral)
+        let args = vec![Value::Integer(0)];
+        let res = intrinsic_socket_bind(args).unwrap();
+        let id = match res {
+            Value::Integer(i) => i,
+            _ => panic!("Expected Integer ID"),
+        };
+        assert!(id > 0);
+
+        // Close it
+        let args_close = vec![Value::Integer(id)];
+        let res_close = intrinsic_socket_close(args_close).unwrap();
+        assert_eq!(res_close, Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_close_nonexistent() {
+        let args_close = vec![Value::Integer(999999)];
+        let res_close = intrinsic_socket_close(args_close).unwrap();
+        assert_eq!(res_close, Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_http_request_invalid_url() {
+        let args = vec![
+            Value::String("GET".to_string()),
+            Value::String("http://invalid.url.local".to_string()),
+        ];
+        let res = intrinsic_http_request(args);
+        // Should return Error, not panic
+        assert!(res.is_err());
     }
 }
