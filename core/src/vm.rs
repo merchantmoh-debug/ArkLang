@@ -2,6 +2,26 @@ use crate::bytecode::{Chunk, OpCode};
 use crate::intrinsics;
 use crate::runtime::{RuntimeError, Scope, Value};
 use std::rc::Rc;
+use thiserror::Error;
+
+pub const MAX_STACK_DEPTH: usize = 10_000;
+pub const MAX_STEPS: u64 = 10_000_000;
+
+#[derive(Error, Debug)]
+pub enum ArkError {
+    #[error("Stack overflow")]
+    StackOverflow,
+    #[error("Stack underflow executing {0}")]
+    StackUnderflow(String),
+    #[error("Division by zero")]
+    DivisionByZero,
+    #[error("Execution timeout")]
+    ExecutionTimeout,
+    #[error(transparent)]
+    Runtime(#[from] RuntimeError),
+    #[error("VM Error: {0}")]
+    Generic(String),
+}
 
 // --- GraphArena Implementation ---
 
@@ -84,6 +104,8 @@ pub struct VM<'a> {
     pub ip: usize,
     pub chunk: Rc<Chunk>,
     pub security_level: u8,
+    pub step_count: u64,
+    pub trace: bool,
 }
 
 impl<'a> VM<'a> {
@@ -105,25 +127,36 @@ impl<'a> VM<'a> {
             ip: 0,
             chunk: Rc::new(chunk),
             security_level,
+            step_count: 0,
+            trace: false,
         })
+    }
+
+    #[inline]
+    pub fn push(&mut self, val: Value) -> Result<(), ArkError> {
+        if self.stack.len() >= MAX_STACK_DEPTH {
+            return Err(ArkError::StackOverflow);
+        }
+        self.stack.push(val);
+        Ok(())
     }
 
     /// Calls a public function by name with the given arguments.
     /// This is used by the host environment (e.g., WASM, FFI) to invoke specific Ark functions.
-    pub fn call_public_function(&mut self, name: &str, args: Vec<Value>) -> Result<Value, String> {
+    pub fn call_public_function(&mut self, name: &str, args: Vec<Value>) -> Result<Value, ArkError> {
         // 1. Find the function
         let func = self
             .find_var(name)
-            .ok_or_else(|| format!("Function '{}' not found", name))?;
+            .ok_or_else(|| ArkError::Generic(format!("Function '{}' not found", name)))?;
 
         // 2. Push Arguments
         let arg_count = args.len();
         for arg in args {
-            self.stack.push(arg);
+            self.push(arg)?;
         }
 
         // 3. Push Function
-        self.stack.push(func);
+        self.push(func)?;
 
         // 4. Trigger Call (sets up frame, ip, chunk)
         // Note: op_call pops the function, then the arguments.
@@ -136,8 +169,14 @@ impl<'a> VM<'a> {
         self.run()
     }
 
-    pub fn run(&mut self) -> Result<Value, String> {
+    pub fn run(&mut self) -> Result<Value, ArkError> {
         loop {
+            // Execution Timeout Check
+            self.step_count += 1;
+            if self.step_count > MAX_STEPS {
+                return Err(ArkError::ExecutionTimeout);
+            }
+
             if self.ip >= self.chunk.code.len() {
                 if let Some(val) = self.op_return()? {
                     return Ok(val);
@@ -146,6 +185,11 @@ impl<'a> VM<'a> {
             }
 
             let op = &self.chunk.code[self.ip];
+
+            if self.trace {
+                 println!("IP: {:03} | Op: {:?}", self.ip, op);
+            }
+
             #[cfg(debug_assertions)]
             {
                 use std::io::Write;
@@ -161,54 +205,61 @@ impl<'a> VM<'a> {
             self.ip += 1;
 
             match op {
-                OpCode::Push(v) => self.stack.push(v.clone()),
+                OpCode::Push(v) => self.push(v.clone())?,
                 OpCode::Pop => {
-                    self.stack.pop();
+                    self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("Pop".to_string()))?;
                 }
 
-                OpCode::Add => self.binary_op(|a, b| intrinsics::intrinsic_add(vec![a, b]))?,
-                OpCode::Sub => self.binary_op(|a, b| intrinsics::intrinsic_sub(vec![a, b]))?,
-                OpCode::Mul => self.binary_op(|a, b| intrinsics::intrinsic_mul(vec![a, b]))?,
-                OpCode::Div => self.binary_op(|a, b| intrinsics::intrinsic_div(vec![a, b]))?,
-                OpCode::Mod => self.binary_op(|a, b| intrinsics::intrinsic_mod(vec![a, b]))?,
+                OpCode::Add => self.binary_op("Add", |a, b| intrinsics::intrinsic_add(vec![a, b]).map_err(ArkError::from))?,
+                OpCode::Sub => self.binary_op("Sub", |a, b| intrinsics::intrinsic_sub(vec![a, b]).map_err(ArkError::from))?,
+                OpCode::Mul => self.binary_op("Mul", |a, b| intrinsics::intrinsic_mul(vec![a, b]).map_err(ArkError::from))?,
+                OpCode::Div => self.binary_op("Div", |a, b| {
+                    match b {
+                         Value::Integer(0) => Err(ArkError::DivisionByZero),
+                         _ => intrinsics::intrinsic_div(vec![a, b]).map_err(ArkError::from),
+                    }
+                })?,
+                OpCode::Mod => self.binary_op("Mod", |a, b| {
+                     match b {
+                         Value::Integer(0) => Err(ArkError::DivisionByZero),
+                         _ => intrinsics::intrinsic_mod(vec![a, b]).map_err(ArkError::from),
+                    }
+                })?,
 
-                OpCode::Eq => self.binary_op(|a, b| intrinsics::intrinsic_eq(vec![a, b]))?,
-                OpCode::Neq => self.binary_op_manual(|a, b| {
-                    let res =
-                        intrinsics::intrinsic_eq(vec![a, b]).map_err(|e| format!("{:?}", e))?;
+                OpCode::Eq => self.binary_op("Eq", |a, b| intrinsics::intrinsic_eq(vec![a, b]).map_err(ArkError::from))?,
+                OpCode::Neq => self.binary_op_manual("Neq", |a, b| {
+                    let res = intrinsics::intrinsic_eq(vec![a, b]).map_err(|e| format!("{:?}", e))?;
                     if let Value::Boolean(b) = res {
                         Ok(Value::Boolean(!b))
                     } else {
                         Err("Eq did not return boolean".to_string())
                     }
                 })?,
-                OpCode::Gt => self.binary_op(|a, b| intrinsics::intrinsic_gt(vec![a, b]))?,
-                OpCode::Lt => self.binary_op(|a, b| intrinsics::intrinsic_lt(vec![a, b]))?,
-                OpCode::Ge => self.binary_op(|a, b| intrinsics::intrinsic_ge(vec![a, b]))?,
-                OpCode::Le => self.binary_op(|a, b| intrinsics::intrinsic_le(vec![a, b]))?,
+                OpCode::Gt => self.binary_op("Gt", |a, b| intrinsics::intrinsic_gt(vec![a, b]).map_err(ArkError::from))?,
+                OpCode::Lt => self.binary_op("Lt", |a, b| intrinsics::intrinsic_lt(vec![a, b]).map_err(ArkError::from))?,
+                OpCode::Ge => self.binary_op("Ge", |a, b| intrinsics::intrinsic_ge(vec![a, b]).map_err(ArkError::from))?,
+                OpCode::Le => self.binary_op("Le", |a, b| intrinsics::intrinsic_le(vec![a, b]).map_err(ArkError::from))?,
 
                 OpCode::And => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let res =
-                        intrinsics::intrinsic_and(vec![a, b]).map_err(|e| format!("{:?}", e))?;
-                    self.stack.push(res);
+                    let b = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("And".to_string()))?;
+                    let a = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("And".to_string()))?;
+                    let res = intrinsics::intrinsic_and(vec![a, b])?;
+                    self.push(res)?;
                 }
                 OpCode::Or => {
-                    let b = self.stack.pop().ok_or("Stack underflow")?;
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let res =
-                        intrinsics::intrinsic_or(vec![a, b]).map_err(|e| format!("{:?}", e))?;
-                    self.stack.push(res);
+                    let b = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("Or".to_string()))?;
+                    let a = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("Or".to_string()))?;
+                    let res = intrinsics::intrinsic_or(vec![a, b])?;
+                    self.push(res)?;
                 }
                 OpCode::Not => {
-                    let a = self.stack.pop().ok_or("Stack underflow")?;
-                    let res = intrinsics::intrinsic_not(vec![a]).map_err(|e| format!("{:?}", e))?;
-                    self.stack.push(res);
+                    let a = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("Not".to_string()))?;
+                    let res = intrinsics::intrinsic_not(vec![a])?;
+                    self.push(res)?;
                 }
 
                 OpCode::Print => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
+                    let val = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("Print".to_string()))?;
                     #[cfg(not(test))]
                     println!("{:?}", val);
                     #[cfg(test)]
@@ -221,38 +272,38 @@ impl<'a> VM<'a> {
                 OpCode::MakeStruct(size) => self.op_make_struct(*size)?,
 
                 OpCode::GetField(field) => {
-                    let obj = self.stack.pop().ok_or("Stack underflow")?;
+                    let obj = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("GetField".to_string()))?;
                     if let Value::Struct(mut fields) = obj {
                         if let Some(val) = fields.remove(field) {
-                            self.stack.push(val);
+                            self.push(val)?;
                         } else {
-                            return Err(format!("Field '{}' not found in struct", field));
+                            return Err(ArkError::Generic(format!("Field '{}' not found in struct", field)));
                         }
                     } else {
-                        return Err(format!("GetField expected Struct, got {:?}", obj));
+                        return Err(ArkError::Generic(format!("GetField expected Struct, got {:?}", obj)));
                     }
                 }
 
                 OpCode::SetField(field) => {
-                    let obj = self.stack.pop().ok_or("Stack underflow")?;
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
+                    let obj = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("SetField".to_string()))?;
+                    let val = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("SetField".to_string()))?;
 
                     if let Value::Struct(mut fields) = obj {
                         fields.insert(field.clone(), val);
-                        self.stack.push(Value::Struct(fields));
+                        self.push(Value::Struct(fields))?;
                     } else {
-                        return Err(format!("SetField expected Struct, got {:?}", obj));
+                        return Err(ArkError::Generic(format!("SetField expected Struct, got {:?}", obj)));
                     }
                 }
 
                 OpCode::Load(name) => {
                     let val = self
                         .find_var(name)
-                        .ok_or_else(|| format!("Variable not found: {}", name))?;
-                    self.stack.push(val);
+                        .ok_or_else(|| ArkError::Generic(format!("Variable not found: {}", name)))?;
+                    self.push(val)?;
                 }
                 OpCode::Store(name) => {
-                    let val = self.stack.last().ok_or("Stack underflow")?.clone();
+                    let val = self.stack.last().ok_or_else(|| ArkError::StackUnderflow("Store".to_string()))?.clone();
                     // Store in current scope
                     if let Some(scope) = self.scopes.last_mut() {
                         scope.set(name.clone(), val);
@@ -264,7 +315,7 @@ impl<'a> VM<'a> {
                     self.ip = *offset;
                 }
                 OpCode::JmpIfFalse(offset) => {
-                    let val = self.stack.pop().ok_or("Stack underflow")?;
+                    let val = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("JmpIfFalse".to_string()))?;
                     let is_true = match val {
                         Value::Boolean(b) => b,
                         Value::Integer(i) => i != 0,
@@ -288,30 +339,28 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn binary_op<F>(&mut self, op_fn: F) -> Result<(), String>
+    fn binary_op<F>(&mut self, name: &str, op_fn: F) -> Result<(), ArkError>
     where
-        F: Fn(Value, Value) -> Result<Value, RuntimeError>,
+        F: Fn(Value, Value) -> Result<Value, ArkError>,
     {
-        let b = self.stack.pop().ok_or("Stack underflow")?;
-        let a = self.stack.pop().ok_or("Stack underflow")?;
-        let res = op_fn(a, b).map_err(|e| format!("{:?}", e))?;
-        self.stack.push(res);
-        Ok(())
+        let b = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow(name.to_string()))?;
+        let a = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow(name.to_string()))?;
+        let res = op_fn(a, b)?;
+        self.push(res)
     }
 
-    fn binary_op_manual<F>(&mut self, op_fn: F) -> Result<(), String>
+    fn binary_op_manual<F>(&mut self, name: &str, op_fn: F) -> Result<(), ArkError>
     where
         F: Fn(Value, Value) -> Result<Value, String>,
     {
-        let b = self.stack.pop().ok_or("Stack underflow")?;
-        let a = self.stack.pop().ok_or("Stack underflow")?;
-        let res = op_fn(a, b)?;
-        self.stack.push(res);
-        Ok(())
+        let b = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow(name.to_string()))?;
+        let a = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow(name.to_string()))?;
+        let res = op_fn(a, b).map_err(ArkError::Generic)?;
+        self.push(res)
     }
 
     #[inline]
-    fn op_return(&mut self) -> Result<Option<Value>, String> {
+    fn op_return(&mut self) -> Result<Option<Value>, ArkError> {
         let result = self.stack.pop().unwrap_or(Value::Unit);
 
         if let Some(frame_idx) = self.frames.pop() {
@@ -320,7 +369,7 @@ impl<'a> VM<'a> {
                 let GraphData::Frame(ref frame) = node.data;
                 (frame.chunk.clone(), frame.ip)
             } else {
-                return Err(format!("Frame not found at index {}", frame_idx));
+                return Err(ArkError::Generic(format!("Frame not found at index {}", frame_idx)));
             };
 
             self.chunk = new_chunk;
@@ -330,7 +379,7 @@ impl<'a> VM<'a> {
             self.heap.decref(frame_idx);
 
             self.scopes.pop();
-            self.stack.push(result);
+            self.push(result)?;
             Ok(None) // Continue loop
         } else {
             // Return from main
@@ -339,8 +388,8 @@ impl<'a> VM<'a> {
     }
 
     #[inline]
-    fn op_call(&mut self, arg_count: usize) -> Result<(), String> {
-        let func_val = self.stack.pop().ok_or("Stack underflow during call")?;
+    fn op_call(&mut self, arg_count: usize) -> Result<(), ArkError> {
+        let func_val = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("Call".to_string()))?;
         match func_val {
             Value::Function(chunk) => {
                 // Allocation on Heap (Zero-Copy Ref Count)
@@ -364,60 +413,60 @@ impl<'a> VM<'a> {
                     args.push(
                         self.stack
                             .pop()
-                            .ok_or("Stack underflow during native call")?,
+                            .ok_or_else(|| ArkError::StackUnderflow("NativeCall".to_string()))?,
                     );
                 }
                 // Arguments popped in reverse order (last arg first)
                 // We need them in forward order [arg1, arg2]
                 args.reverse();
 
-                let result = func(args).map_err(|e| format!("{:?}", e))?;
-                self.stack.push(result);
+                let result = func(args).map_err(ArkError::from)?;
+                self.push(result)?;
                 Ok(())
             }
-            _ => Err(format!("Calling non-function value: {:?}", func_val)),
+            _ => Err(ArkError::Generic(format!("Calling non-function value: {:?}", func_val))),
         }
     }
 
     #[inline]
-    fn op_make_list(&mut self, size: usize) -> Result<(), String> {
+    fn op_make_list(&mut self, size: usize) -> Result<(), ArkError> {
         let mut items = Vec::new();
         for _ in 0..size {
-            items.push(self.stack.pop().ok_or("Stack underflow")?);
+            items.push(self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("MakeList".to_string()))?);
         }
         items.reverse();
-        self.stack.push(Value::List(items));
+        self.push(Value::List(items))?;
         Ok(())
     }
 
     #[inline]
-    fn op_make_struct(&mut self, size: usize) -> Result<(), String> {
+    fn op_make_struct(&mut self, size: usize) -> Result<(), ArkError> {
         let mut fields = std::collections::HashMap::new();
         for _ in 0..size {
-            let key_val = self.stack.pop().ok_or("Stack underflow")?;
-            let val = self.stack.pop().ok_or("Stack underflow")?;
+            let key_val = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("MakeStruct".to_string()))?;
+            let val = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("MakeStruct".to_string()))?;
 
             if let Value::String(key) = key_val {
                 fields.insert(key, val);
             } else {
-                return Err(format!("Struct key must be string, got {:?}", key_val));
+                return Err(ArkError::Generic(format!("Struct key must be string, got {:?}", key_val)));
             }
         }
-        self.stack.push(Value::Struct(fields));
+        self.push(Value::Struct(fields))?;
         Ok(())
     }
 
     #[inline]
-    fn op_destructure(&mut self) -> Result<(), String> {
-        let val = self.stack.pop().ok_or("Stack underflow")?;
+    fn op_destructure(&mut self) -> Result<(), ArkError> {
+        let val = self.stack.pop().ok_or_else(|| ArkError::StackUnderflow("Destructure".to_string()))?;
         if let Value::List(items) = val {
             // Push in reverse order so first item is on top for first Store
             for item in items.into_iter().rev() {
-                self.stack.push(item);
+                self.push(item)?;
             }
             Ok(())
         } else {
-            Err(format!("Destructure expected List, got {:?}", val))
+            Err(ArkError::Generic(format!("Destructure expected List, got {:?}", val)))
         }
     }
 
@@ -552,29 +601,70 @@ fn test_vm_function_call() {
     assert_eq!(result.unwrap(), Value::Integer(42));
 }
 
-#[test]
-fn test_vm_call_function_external() {
-    // Define a function that adds 1 to its argument
-    let mut func_chunk = Chunk::new();
-    // Stack on entry: [arg]
-    func_chunk.write(OpCode::Store("n".to_string()));
-    func_chunk.write(OpCode::Load("n".to_string()));
-    func_chunk.write(OpCode::Push(Value::Integer(1)));
-    func_chunk.write(OpCode::Add);
-    func_chunk.write(OpCode::Ret);
+        // Now call the function externally
+        let result = vm.call_public_function("add_one", vec![Value::Integer(99)]).unwrap();
+        assert_eq!(result, Value::Integer(100));
+    }
 
-    let mut chunk = Chunk::new();
-    chunk.write(OpCode::Push(Value::Function(Rc::new(func_chunk))));
-    chunk.write(OpCode::Store("add_one".to_string()));
-    chunk.write(OpCode::Ret); // Main finishes
+#[cfg(test)]
+mod hardening_tests {
+    use super::*;
+    use crate::bytecode::{Chunk, OpCode};
+    use crate::runtime::Value;
 
-    let mut vm = VM::new(chunk, "HASH", 0).unwrap();
-    // Run main to define the function
-    let _ = vm.run().unwrap();
+    #[test]
+    fn test_stack_overflow_protection() {
+        let mut chunk = Chunk::new();
+        // Push MAX_STACK_DEPTH + 1 values.
+        for _ in 0..MAX_STACK_DEPTH + 1 {
+            chunk.write(OpCode::Push(Value::Integer(1)));
+        }
+        chunk.write(OpCode::Ret);
 
-    // Now call the function externally
-    let result = vm
-        .call_public_function("add_one", vec![Value::Integer(99)])
-        .unwrap();
-    assert_eq!(result, Value::Integer(100));
+        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+        let result = vm.run();
+
+        assert!(matches!(result, Err(ArkError::StackOverflow)));
+    }
+
+    #[test]
+    fn test_stack_underflow_on_add() {
+        let mut chunk = Chunk::new();
+        chunk.write(OpCode::Add); // Stack empty
+        chunk.write(OpCode::Ret);
+
+        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+        let result = vm.run();
+
+        match result {
+            Err(ArkError::StackUnderflow(op)) => assert_eq!(op, "Add"),
+            _ => panic!("Expected StackUnderflow, got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn test_division_by_zero() {
+        let mut chunk = Chunk::new();
+        chunk.write(OpCode::Push(Value::Integer(10)));
+        chunk.write(OpCode::Push(Value::Integer(0)));
+        chunk.write(OpCode::Div);
+        chunk.write(OpCode::Ret);
+
+        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+        let result = vm.run();
+
+        assert!(matches!(result, Err(ArkError::DivisionByZero)));
+    }
+
+    #[test]
+    fn test_execution_timeout() {
+        let mut chunk = Chunk::new();
+        // Infinite loop: Jmp(0)
+        chunk.write(OpCode::Jmp(0));
+
+        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+        let result = vm.run();
+
+        assert!(matches!(result, Err(ArkError::ExecutionTimeout)));
+    }
 }
