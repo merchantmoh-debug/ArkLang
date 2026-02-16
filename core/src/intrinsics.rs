@@ -59,11 +59,14 @@ impl IntrinsicRegistry {
             "intrinsic_list_get" | "sys.list.get" | "sys.str.get" => Some(intrinsic_list_get),
             "intrinsic_list_append" | "sys.list.append" => Some(intrinsic_list_append),
             "intrinsic_list_pop" | "sys.list.pop" => Some(intrinsic_list_pop),
+            "intrinsic_list_delete" | "sys.list.delete" => Some(intrinsic_list_delete),
             "intrinsic_len" | "sys.len" => Some(intrinsic_len),
             "intrinsic_struct_get" | "sys.struct.get" => Some(intrinsic_struct_get),
             "intrinsic_struct_set" | "sys.struct.set" => Some(intrinsic_struct_set),
+            "intrinsic_struct_has" | "sys.struct.has" => Some(intrinsic_struct_has),
             "intrinsic_time_now" | "time.now" => Some(intrinsic_time_now),
             "intrinsic_math_pow" | "math.pow" => Some(intrinsic_math_pow),
+            "intrinsic_pow_mod" | "math.pow_mod" => Some(intrinsic_pow_mod),
             "intrinsic_math_sqrt" | "math.sqrt" => Some(intrinsic_math_sqrt),
             "intrinsic_math_sin" | "math.sin" => Some(intrinsic_math_sin),
             "intrinsic_math_cos" | "math.cos" => Some(intrinsic_math_cos),
@@ -198,6 +201,14 @@ impl IntrinsicRegistry {
             Value::NativeFunction(intrinsic_list_pop),
         );
         scope.set(
+            "intrinsic_list_delete".to_string(),
+            Value::NativeFunction(intrinsic_list_delete),
+        );
+        scope.set(
+            "sys.list.delete".to_string(),
+            Value::NativeFunction(intrinsic_list_delete),
+        );
+        scope.set(
             "sys.struct.get".to_string(),
             Value::NativeFunction(intrinsic_struct_get),
         );
@@ -206,12 +217,28 @@ impl IntrinsicRegistry {
             Value::NativeFunction(intrinsic_struct_set),
         );
         scope.set(
+            "intrinsic_struct_has".to_string(),
+            Value::NativeFunction(intrinsic_struct_has),
+        );
+        scope.set(
+            "sys.struct.has".to_string(),
+            Value::NativeFunction(intrinsic_struct_has),
+        );
+        scope.set(
             "time.now".to_string(),
             Value::NativeFunction(intrinsic_time_now),
         );
         scope.set(
             "intrinsic_math_pow".to_string(),
             Value::NativeFunction(intrinsic_math_pow),
+        );
+        scope.set(
+            "intrinsic_pow_mod".to_string(),
+            Value::NativeFunction(intrinsic_pow_mod),
+        );
+        scope.set(
+            "math.pow_mod".to_string(),
+            Value::NativeFunction(intrinsic_pow_mod),
         );
         scope.set(
             "math.pow".to_string(),
@@ -1217,6 +1244,50 @@ pub fn intrinsic_list_append(args: Vec<Value>) -> Result<Value, RuntimeError> {
 }
 
 pub fn intrinsic_list_pop(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() < 1 || args.len() > 2 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let mut args = args;
+
+    // Check if 2 args (pop at index) or 1 arg (pop last)
+    let idx_val = if args.len() == 2 {
+        Some(args.pop().unwrap())
+    } else {
+        None
+    };
+
+    let list_val = args.pop().unwrap();
+
+    match list_val {
+        Value::List(mut list) => {
+            let index = match idx_val {
+                Some(val) => match val {
+                    Value::Integer(n) => n,
+                    _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), val)),
+                },
+                None => {
+                    // Default to last index
+                    if list.is_empty() {
+                        // As per prompt: If empty, return ArkValue::Unit
+                        return Ok(Value::Unit);
+                    }
+                    (list.len() - 1) as i64
+                }
+            };
+
+            if index < 0 || index >= list.len() as i64 {
+                return Err(RuntimeError::NotExecutable);
+            }
+
+            // Linear Pop: Remove element.
+            let val = list.remove(index as usize);
+            Ok(Value::List(vec![val, Value::List(list)]))
+        }
+        _ => Err(RuntimeError::TypeMismatch("List".to_string(), list_val)),
+    }
+}
+
+pub fn intrinsic_list_delete(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 2 {
         return Err(RuntimeError::NotExecutable);
     }
@@ -1234,13 +1305,121 @@ pub fn intrinsic_list_pop(args: Vec<Value>) -> Result<Value, RuntimeError> {
             if index < 0 || index >= list.len() as i64 {
                 return Err(RuntimeError::NotExecutable);
             }
-            // Linear Pop: Remove element. This is O(N) for middle elements, O(1) for end.
-            // Returns [val, list]
-            let val = list.remove(index as usize);
-            Ok(Value::List(vec![val, Value::List(list)]))
+            list.remove(index as usize);
+            Ok(Value::List(list))
         }
         _ => Err(RuntimeError::TypeMismatch("List".to_string(), list_val)),
     }
+}
+
+pub fn intrinsic_struct_has(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let mut args = args;
+    let field_val = args.pop().unwrap();
+    let struct_val = args.pop().unwrap();
+
+    let field = match field_val {
+        Value::String(s) => s,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                field_val,
+            ));
+        }
+    };
+
+    match struct_val {
+        Value::Struct(data) => {
+            let has = data.contains_key(&field);
+            // Return [bool, struct] to preserve linearity
+            Ok(Value::List(vec![Value::Boolean(has), Value::Struct(data)]))
+        }
+        _ => {
+            // If not a struct, return false and the object (to be safe/linear)
+            Ok(Value::List(vec![Value::Boolean(false), struct_val]))
+        }
+    }
+}
+
+pub fn intrinsic_pow_mod(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    // args: [base, exp, mod]
+    // args.pop() gives mod (last), then exp, then base.
+    let mut args = args;
+    let mod_val = args.pop().unwrap();
+    let exp_val = args.pop().unwrap();
+    let base_val = args.pop().unwrap();
+
+    let m = match mod_val {
+        Value::Integer(n) => n,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                mod_val,
+            ))
+        }
+    };
+    let e = match exp_val {
+        Value::Integer(n) => n,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                exp_val,
+            ))
+        }
+    };
+    let b = match base_val {
+        Value::Integer(n) => n,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                base_val,
+            ))
+        }
+    };
+
+    if m == 0 {
+        return Err(RuntimeError::InvalidOperation("Modulo by zero".to_string()));
+    }
+    // Edge case: mod=1 -> 0
+    if m == 1 {
+        return Ok(Value::Integer(0));
+    }
+    // Edge case: exp=0 -> 1
+    if e == 0 {
+        return Ok(Value::Integer(1));
+    }
+
+    if e < 0 {
+        return Err(RuntimeError::InvalidOperation(
+            "Negative exponent in pow_mod".to_string(),
+        ));
+    }
+
+    // Use i128 to avoid overflow
+    let mut base = b as i128;
+    let mut exp = e as i128;
+    let modulus = m as i128;
+    let mut result: i128 = 1;
+
+    base %= modulus;
+    if base < 0 {
+        base += modulus;
+    }
+
+    while exp > 0 {
+        if exp % 2 == 1 {
+            result = (result * base) % modulus;
+        }
+        base = (base * base) % modulus;
+        exp /= 2;
+    }
+
+    Ok(Value::Integer(result as i64))
 }
 
 pub fn intrinsic_len(args: Vec<Value>) -> Result<Value, RuntimeError> {
