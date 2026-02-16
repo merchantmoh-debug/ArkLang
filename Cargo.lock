@@ -58,6 +58,7 @@ dependencies = [
  "chrono",
  "ed25519-dalek",
  "hex",
+ "regex",
  "reqwest",
  "schannel",
  "serde",

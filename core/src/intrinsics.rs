@@ -18,6 +18,9 @@ use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::io::{self, Write};
+use regex::Regex;
 
 #[cfg(not(target_arch = "wasm32"))]
 static AI_CLIENT: OnceLock<Client> = OnceLock::new();
@@ -83,6 +86,14 @@ impl IntrinsicRegistry {
             "math.cos_scaled" => Some(intrinsic_math_cos_scaled),
             "math.pi_scaled" => Some(intrinsic_math_pi_scaled),
             "sys.str.from_code" => Some(intrinsic_str_from_code),
+            "sys.time.sleep" | "intrinsic_time_sleep" => Some(intrinsic_time_sleep),
+            "sys.io.read_bytes" | "intrinsic_io_read_bytes" => Some(intrinsic_io_read_bytes),
+            "sys.io.read_line" | "intrinsic_io_read_line" => Some(intrinsic_io_read_line),
+            "sys.io.write" | "intrinsic_io_write" => Some(intrinsic_io_write),
+            "sys.io.read_file_async" | "intrinsic_io_read_file_async" => {
+                Some(intrinsic_io_read_file_async)
+            }
+            "sys.extract_code" | "intrinsic_extract_code" => Some(intrinsic_extract_code),
             _ => None,
         }
     }
@@ -313,6 +324,30 @@ impl IntrinsicRegistry {
         scope.set(
             "sys.fs.write".to_string(),
             Value::NativeFunction(intrinsic_fs_write),
+        );
+        scope.set(
+            "sys.time.sleep".to_string(),
+            Value::NativeFunction(intrinsic_time_sleep),
+        );
+        scope.set(
+            "sys.io.read_bytes".to_string(),
+            Value::NativeFunction(intrinsic_io_read_bytes),
+        );
+        scope.set(
+            "sys.io.read_line".to_string(),
+            Value::NativeFunction(intrinsic_io_read_line),
+        );
+        scope.set(
+            "sys.io.write".to_string(),
+            Value::NativeFunction(intrinsic_io_write),
+        );
+        scope.set(
+            "sys.io.read_file_async".to_string(),
+            Value::NativeFunction(intrinsic_io_read_file_async),
+        );
+        scope.set(
+            "sys.extract_code".to_string(),
+            Value::NativeFunction(intrinsic_extract_code),
         );
         /*
         scope.set(
@@ -1322,6 +1357,36 @@ pub fn intrinsic_time_now(_args: Vec<Value>) -> Result<Value, RuntimeError> {
     Ok(Value::Integer(since_the_epoch.as_millis() as i64))
 }
 
+pub fn intrinsic_time_sleep(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    let duration_ms = match args[0] {
+        Value::Integer(n) => {
+             if n < 0 {
+                  return Err(RuntimeError::InvalidOperation("Negative sleep duration".to_string()));
+             }
+             n as u64
+        }
+        _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())),
+    };
+
+    #[cfg(target_arch = "wasm32")]
+    {
+         // In WASM, blocking sleep is generally not supported or freezes the browser.
+         // We'll log it as a simulation.
+         println!("[Ark:Time] Sleep {}ms (Simulated)", duration_ms);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        thread::sleep(Duration::from_millis(duration_ms));
+    }
+
+    Ok(Value::Unit)
+}
+
 pub fn intrinsic_math_pow(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 2 {
         return Err(RuntimeError::NotExecutable);
@@ -1492,6 +1557,83 @@ pub fn intrinsic_math_atan2(args: Vec<Value>) -> Result<Value, RuntimeError> {
 pub fn intrinsic_io_cls(_args: Vec<Value>) -> Result<Value, RuntimeError> {
     print!("\x1b[2J\x1b[H");
     Ok(Value::Unit)
+}
+
+pub fn intrinsic_io_read_bytes(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let path_str = match &args[0] {
+        Value::String(s) => s,
+        _ => {
+             return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone()));
+        }
+    };
+
+    check_path_security(path_str)?;
+
+    #[cfg(target_arch = "wasm32")]
+    {
+         println!("[Ark:VFS] Read Bytes from '{}': (Simulated)", path_str);
+         Ok(Value::List(vec![]))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+         // Security: Path Traversal Check
+         let safe_path = validate_safe_path(path_str)?;
+         let content = fs::read(safe_path).map_err(|_| RuntimeError::NotExecutable)?;
+
+         // Convert Vec<u8> to Vec<Value> (List of Integers)
+         let list = content.into_iter().map(|b| Value::Integer(b as i64)).collect();
+         Ok(Value::List(list))
+    }
+}
+
+pub fn intrinsic_io_read_line(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if !args.is_empty() {
+        return Err(RuntimeError::NotExecutable);
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        Ok(Value::String("".to_string()))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).map_err(|_| RuntimeError::NotExecutable)?;
+        // Trim newline
+        if input.ends_with('\n') {
+            input.pop();
+            if input.ends_with('\r') {
+                input.pop();
+            }
+        }
+        Ok(Value::String(input))
+    }
+}
+
+pub fn intrinsic_io_write(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let s = match &args[0] {
+        Value::String(s) => s,
+        _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+    };
+
+    print!("{}", s);
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        io::stdout().flush().map_err(|_| RuntimeError::NotExecutable)?;
+    }
+    Ok(Value::Unit)
+}
+
+pub fn intrinsic_io_read_file_async(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    // MVP: Blocking Fallback.
+    // In a future version, this should spawn a thread or use Tokio fs and return a Promise/Future object.
+    intrinsic_fs_read(args)
 }
 
 pub fn intrinsic_chain_height(_args: Vec<Value>) -> Result<Value, RuntimeError> {
@@ -1735,6 +1877,28 @@ pub fn intrinsic_str_from_code(args: Vec<Value>) -> Result<Value, RuntimeError> 
     }
 }
 
+pub fn intrinsic_extract_code(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let text = match &args[0] {
+        Value::String(s) => s,
+        _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+    };
+
+    // Regex to capture fenced code blocks: ```lang ... ```
+    let re = Regex::new(r"```(?:\w+)?\n([\s\S]*?)```").map_err(|e| RuntimeError::InvalidOperation(e.to_string()))?;
+
+    let mut blocks = Vec::new();
+    for cap in re.captures_iter(text) {
+        if let Some(match_str) = cap.get(1) {
+            blocks.push(Value::String(match_str.as_str().to_string()));
+        }
+    }
+
+    Ok(Value::List(blocks))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1966,6 +2130,79 @@ mod tests {
                 }
             }
             _ => panic!("Expected List result"),
+        }
+    }
+
+    #[test]
+    fn test_time_sleep() {
+        let args = vec![Value::Integer(10)];
+        assert!(intrinsic_time_sleep(args).is_ok());
+    }
+
+    #[test]
+    fn test_time_sleep_negative() {
+        let args = vec![Value::Integer(-10)];
+        assert!(intrinsic_time_sleep(args).is_err());
+    }
+
+    #[test]
+    fn test_io_write_basic() {
+        let args = vec![Value::String("test output".to_string())];
+        assert!(intrinsic_io_write(args).is_ok());
+    }
+
+    #[test]
+    fn test_io_read_bytes_valid() {
+        let filename = "test_bytes.bin";
+        let _ = std::fs::remove_file(filename);
+        std::fs::write(filename, vec![1, 2, 3]).unwrap();
+
+        let args = vec![Value::String(filename.to_string())];
+        let res = intrinsic_io_read_bytes(args).unwrap();
+
+        match res {
+            Value::List(l) => {
+                assert_eq!(l.len(), 3);
+                assert_eq!(l[0], Value::Integer(1));
+                assert_eq!(l[1], Value::Integer(2));
+                assert_eq!(l[2], Value::Integer(3));
+            }
+            _ => panic!("Expected List"),
+        }
+        let _ = std::fs::remove_file(filename);
+    }
+
+    #[test]
+    fn test_extract_code_blocks() {
+        let md = "Start\n```rust\nfn main() {}\n```\nMid\n```\nraw\n```\nEnd";
+        let args = vec![Value::String(md.to_string())];
+        let res = intrinsic_extract_code(args).unwrap();
+
+        match res {
+            Value::List(blocks) => {
+                assert_eq!(blocks.len(), 2);
+                match &blocks[0] {
+                    Value::String(s) => assert_eq!(s, "fn main() {}\n"),
+                    _ => panic!("Expected String"),
+                }
+                match &blocks[1] {
+                    Value::String(s) => assert_eq!(s, "raw\n"),
+                    _ => panic!("Expected String"),
+                }
+            }
+            _ => panic!("Expected List"),
+        }
+    }
+
+    #[test]
+    fn test_extract_code_empty() {
+        let md = "No code blocks here.";
+        let args = vec![Value::String(md.to_string())];
+        let res = intrinsic_extract_code(args).unwrap();
+
+        match res {
+            Value::List(blocks) => assert!(blocks.is_empty()),
+            _ => panic!("Expected List"),
         }
     }
 }
