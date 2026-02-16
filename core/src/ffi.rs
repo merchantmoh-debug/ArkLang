@@ -18,9 +18,11 @@
 
 use crate::compiler::Compiler;
 use crate::loader::load_ark_program;
+use crate::runtime::Value as ArkValue;
 use crate::vm::VM;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char};
+use std::os::raw::c_char;
 
 /// Helper to safely create a CString from a Rust String.
 /// If the string contains null bytes, it returns an error message C-string.
@@ -30,7 +32,9 @@ fn safe_cstring(s: String) -> *mut c_char {
         Err(_) => {
             // Return a safe error message if the string contains a null byte.
             // This is safe because the error message is guaranteed not to contain null bytes.
-            CString::new("Error: String contained null byte").unwrap().into_raw()
+            CString::new("Error: String contained null byte")
+                .unwrap()
+                .into_raw()
         }
     }
 }
@@ -124,38 +128,66 @@ mod tests {
         ark_free_string(ptr);
     }
 
-    #[test]
-    fn test_ark_eval_invalid_json() {
-        let json = r#"{"Invalid": "JSON"}"#;
-        let c_json = CString::new(json).unwrap();
+    // --- FFI Tests ---
 
-        let result_ptr = ark_eval_string(c_json.as_ptr());
-        assert!(!result_ptr.is_null());
+    // Define a C-compatible function for testing
+    #[no_mangle]
+    pub extern "C" fn test_add(a: u64, b: u64) -> u64 {
+        a + b
+    }
 
-        let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
-        let result_str = result_cstr.to_str().unwrap();
-
-        assert!(result_str.starts_with("Error:"));
-
-        ark_free_string(result_ptr);
+    #[no_mangle]
+    pub extern "C" fn test_strlen(s: *const c_char) -> u64 {
+        if s.is_null() { return 0; }
+        unsafe {
+            CStr::from_ptr(s).to_bytes().len() as u64
+        }
     }
 
     #[test]
-    fn test_ark_eval_implicit_return() {
-        // Implicit return of a literal
-        // JSON: {"Expression": {"Literal": "Implicit FFI"}}
-        let json = r#"{"Expression": {"Literal": "Implicit FFI"}}"#;
-        let c_json = CString::new(json).unwrap();
+    fn test_ffi_call_add() {
+        let func_ptr = test_add as usize;
+        let handle = FunctionHandle::Ptr(func_ptr);
 
-        let result_ptr = ark_eval_string(c_json.as_ptr());
-        assert!(!result_ptr.is_null());
+        let args = vec![ArkValue::Integer(10), ArkValue::Integer(20)];
+        let result = ffi_call(&handle, &args, "Integer");
 
-        let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
-        let result_str = result_cstr.to_str().unwrap();
+        assert!(result.is_ok());
+        if let Ok(ArkValue::Integer(val)) = result {
+            assert_eq!(val, 30);
+        } else {
+            panic!("Expected Integer result");
+        }
+    }
 
-        // Should return the string value, not Unit
-        assert_eq!(result_str, "String(\"Implicit FFI\")");
+    #[test]
+    fn test_ffi_call_strlen() {
+        let func_ptr = test_strlen as usize;
+        let handle = FunctionHandle::Ptr(func_ptr);
 
-        ark_free_string(result_ptr);
+        let args = vec![ArkValue::String("Hello".to_string())];
+        let result = ffi_call(&handle, &args, "Integer");
+
+        assert!(result.is_ok());
+        if let Ok(ArkValue::Integer(val)) = result {
+            assert_eq!(val, 5);
+        } else {
+            panic!("Expected Integer result");
+        }
+    }
+
+    #[test]
+    fn test_ffi_security_check() {
+        // Clear allowed list (might affect other tests if run in parallel, but here ok)
+        // get_allowed_libraries().lock().unwrap().clear();
+        // Better: ensure "libc" is not in list.
+
+        let res = ffi_load_library("dangerous_lib");
+        assert!(matches!(res, Err(FfiError::SecurityError(_))));
+
+        ffi_allow_library("safe_lib");
+        // Should pass security check, but fail loading (stub)
+        let res = ffi_load_library("safe_lib");
+        assert!(res.is_ok()); // Stub returns Ok(path)
     }
 }

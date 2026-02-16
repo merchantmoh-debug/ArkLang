@@ -35,6 +35,8 @@ pub enum LinearError {
 struct VarState {
     is_linear: bool,
     is_active: bool,
+    ty: Option<ArkType>,
+    used: bool,
 }
 
 pub struct LinearChecker {
@@ -42,6 +44,8 @@ pub struct LinearChecker {
     var_states: HashMap<String, Vec<VarState>>,
     // Stack of scopes. Each scope contains a list of variables declared in it.
     scope_stack: Vec<Vec<String>>,
+    pub warnings: Vec<String>,
+    func_return_types: Vec<ArkType>,
 }
 
 impl Default for LinearChecker {
@@ -55,12 +59,26 @@ impl LinearChecker {
         LinearChecker {
             var_states: HashMap::new(),
             scope_stack: Vec::new(),
+            warnings: Vec::new(),
+            func_return_types: Vec::new(),
         }
     }
 
     pub fn check(node: &ArkNode) -> Result<(), LinearError> {
         let mut checker = LinearChecker::new();
         checker.traverse_node(node)
+    }
+
+    fn get_intrinsic_signature(name: &str) -> Option<(Vec<ArkType>, ArkType)> {
+        match name {
+            "intrinsic_add" | "add" | "intrinsic_sub" | "sub" | "intrinsic_mul" | "mul" | "intrinsic_div" | "div" => {
+                Some((vec![ArkType::Shared("Integer".to_string()), ArkType::Shared("Integer".to_string())], ArkType::Shared("Integer".to_string())))
+            }
+            "intrinsic_gt" | "gt" | "intrinsic_lt" | "lt" | "intrinsic_eq" | "eq" => {
+                 Some((vec![ArkType::Shared("Integer".to_string()), ArkType::Shared("Integer".to_string())], ArkType::Shared("Boolean".to_string())))
+            }
+             _ => None,
+        }
     }
 
     fn get_intrinsic_return_linearity(name: &str) -> Vec<bool> {
@@ -95,6 +113,10 @@ impl LinearChecker {
                      if state.is_linear && state.is_active {
                          return Err(LinearError::UnusedResource(var_name.clone()));
                      }
+                     // Check for unused variable warning
+                     if !state.used && !var_name.starts_with('_') {
+                        self.warnings.push(format!("Unused variable: {}", var_name));
+                     }
                  }
                  // Clean up empty vector entries if needed, but not strictly required
                  if states.is_empty() {
@@ -105,10 +127,12 @@ impl LinearChecker {
         Ok(())
     }
 
-    fn declare_var(&mut self, name: String, is_linear: bool) {
+    fn declare_var(&mut self, name: String, ty: Option<ArkType>, is_linear: bool) {
         let state = VarState {
             is_linear,
             is_active: is_linear, // Only linear vars track activity
+            ty,
+            used: false,
         };
         self.var_states.entry(name.clone()).or_default().push(state);
 
@@ -123,6 +147,7 @@ impl LinearChecker {
     fn use_var(&mut self, name: &str) -> Result<(), LinearError> {
         if let Some(states) = self.var_states.get_mut(name) {
             if let Some(state) = states.last_mut() {
+                state.used = true;
                 if state.is_linear {
                     if state.is_active {
                         state.is_active = false;
@@ -159,16 +184,54 @@ impl LinearChecker {
         self.var_states.contains_key(name)
     }
 
+    #[cfg(test)]
+    pub fn get_var_type(&self, name: &str) -> Option<ArkType> {
+        if let Some(states) = self.var_states.get(name) {
+            if let Some(state) = states.last() {
+                return state.ty.clone();
+            }
+        }
+        None
+    }
+
     pub fn check_function(&mut self, func: &FunctionDef) -> Result<(), LinearError> {
         self.enter_scope();
+        self.func_return_types.clear();
 
         // 1. Register input arguments
         for (name, ty) in &func.inputs {
             let is_linear = ty.is_linear();
-            self.declare_var(name.clone(), is_linear);
+            self.declare_var(name.clone(), Some(ty.clone()), is_linear);
         }
 
         self.traverse_node(&func.body.content)?;
+
+        // Check return type consistency
+        if !self.func_return_types.is_empty() {
+             let first = &self.func_return_types[0];
+             for ty in &self.func_return_types[1..] {
+                 if ty != first {
+                      self.warnings.push(format!("Inconsistent return types: {:?} vs {:?}", first, ty));
+                 }
+             }
+
+             // Check against declared return type
+             for ty in &self.func_return_types {
+                 if ty != &func.output {
+                      self.warnings.push(format!("Return type mismatch: declared {:?}, got {:?}", func.output, ty));
+                 }
+             }
+        } else {
+             // No explicit return. Assume Void.
+             // Warn if declared type is not Void.
+             let is_void = match &func.output {
+                 ArkType::Shared(name) => name == "Void" || name == "Unit",
+                 _ => false,
+             };
+             if !is_void {
+                  self.warnings.push(format!("Function declared to return {:?} but has no return statements", func.output));
+             }
+        }
 
         self.exit_scope()?;
 
@@ -202,10 +265,63 @@ impl LinearChecker {
             } => self.check_if(condition, then_block, else_block),
             Statement::While { condition, body } => self.check_while(condition, body),
             Statement::Function(func_def) => self.check_nested_function(func_def),
+            Statement::Import(_) | Statement::StructDecl(_) => Ok(()),
+        }
+    }
+
+    fn infer_expression_type(&self, expr: &Expression) -> Option<ArkType> {
+        match expr {
+            Expression::Literal(s) => {
+                if s.parse::<i64>().is_ok() {
+                    Some(ArkType::Shared("Integer".to_string()))
+                } else if s == "true" || s == "false" {
+                    Some(ArkType::Shared("Boolean".to_string()))
+                } else if s.starts_with('"') {
+                     Some(ArkType::Shared("String".to_string()))
+                } else {
+                     // Assume String for other literals
+                     Some(ArkType::Shared("String".to_string()))
+                }
+            }
+            Expression::Variable(name) => {
+                if let Some(states) = self.var_states.get(name) {
+                    if let Some(state) = states.last() {
+                        return state.ty.clone();
+                    }
+                }
+                None
+            }
+            Expression::List(items) => {
+                if items.is_empty() {
+                    return Some(ArkType::Shared("List<Any>".to_string()));
+                }
+                let first_ty = self.infer_expression_type(&items[0]);
+                if let Some(ty) = first_ty {
+                    let ty_name = match ty {
+                        ArkType::Shared(n) | ArkType::Linear(n) | ArkType::Affine(n) => n,
+                    };
+                     Some(ArkType::Shared(format!("List<{}>", ty_name)))
+                } else {
+                     Some(ArkType::Shared("List<Unknown>".to_string()))
+                }
+            }
+            _ => None,
         }
     }
 
     fn check_let(&mut self, name: &str, ty: &Option<ArkType>, value: &Expression) -> Result<(), LinearError> {
+        // Type Inference
+        let inferred_ty = self.infer_expression_type(value);
+
+        // Check for mismatch
+        if let Some(explicit_ty) = ty {
+            if let Some(inferred) = &inferred_ty {
+                 if explicit_ty != inferred {
+                     self.warnings.push(format!("Type mismatch for '{}': expected {:?}, got {:?}", name, explicit_ty, inferred));
+                 }
+            }
+        }
+
         // Heuristic: Check if RHS is a linear variable being moved
         let mut inferred_linear = false;
 
@@ -227,14 +343,21 @@ impl LinearChecker {
         // Process RHS (consume linear vars)
         self.traverse_node(&ArkNode::Expression(value.clone()))?;
 
-        // Determine linearity of new var
-        let is_linear = inferred_linear || ty.as_ref().map(|t| t.is_linear()).unwrap_or(false);
+        // Use inferred type if explicit type is missing
+        let final_ty = ty.clone().or(inferred_ty);
 
-        self.declare_var(name.to_string(), is_linear);
+        // Determine linearity of new var
+        let is_linear = inferred_linear || final_ty.as_ref().map(|t| t.is_linear()).unwrap_or(false);
+
+        self.declare_var(name.to_string(), final_ty, is_linear);
         Ok(())
     }
 
-    fn check_let_destructure(&mut self, names: &[String], value: &Expression) -> Result<(), LinearError> {
+    fn check_let_destructure(
+        &mut self,
+        names: &[String],
+        value: &Expression,
+    ) -> Result<(), LinearError> {
         self.traverse_node(&ArkNode::Expression(value.clone()))?;
 
         let mut call_signature = vec![];
@@ -258,7 +381,7 @@ impl LinearChecker {
                 }
             }
 
-            self.declare_var(name.clone(), is_linear);
+            self.declare_var(name.clone(), None, is_linear);
         }
         Ok(())
     }
@@ -273,13 +396,28 @@ impl LinearChecker {
     }
 
     fn check_return(&mut self, expr: &Expression) -> Result<(), LinearError> {
+        if let Some(ty) = self.infer_expression_type(expr) {
+            self.func_return_types.push(ty);
+        } else {
+             self.func_return_types.push(ArkType::Shared("Unknown".to_string()));
+        }
         self.traverse_node(&ArkNode::Expression(expr.clone()))
     }
 
     fn check_block(&mut self, stmts: &[Statement]) -> Result<(), LinearError> {
         self.enter_scope();
+        let mut dead_code_found = false;
         for s in stmts {
+            if dead_code_found {
+                self.warnings.push("Unreachable code detected".to_string());
+                break;
+            }
+
             self.check_statement(s)?;
+
+            if let Statement::Return(_) = s {
+                dead_code_found = true;
+            }
         }
         self.exit_scope()?;
         Ok(())
@@ -308,7 +446,11 @@ impl LinearChecker {
         Ok(())
     }
 
-    fn check_while(&mut self, condition: &Expression, body: &[Statement]) -> Result<(), LinearError> {
+    fn check_while(
+        &mut self,
+        condition: &Expression,
+        body: &[Statement],
+    ) -> Result<(), LinearError> {
         self.check_expression(condition)?;
         self.enter_scope();
         for stmt in body {
@@ -329,11 +471,52 @@ impl LinearChecker {
             Expression::Variable(name) => {
                 self.use_var(name)
             }
-            Expression::Call { args, .. } => {
+            Expression::Call { function_hash, args } => {
                 for arg in args {
                     self.check_expression(arg)?;
                 }
+
+                if let Some((input_types, _)) = Self::get_intrinsic_signature(function_hash) {
+                    if args.len() != input_types.len() {
+                        self.warnings.push(format!("Argument count mismatch for '{}': expected {}, got {}", function_hash, input_types.len(), args.len()));
+                    } else {
+                        for (i, arg) in args.iter().enumerate() {
+                            if let Some(inferred) = self.infer_expression_type(arg) {
+                                if inferred != input_types[i] {
+                                    self.warnings.push(format!("Argument type mismatch for '{}' at index {}: expected {:?}, got {:?}", function_hash, i, input_types[i], inferred));
+                                }
+                            }
+                        }
+                    }
+                }
                 Ok(())
+            }
+            Expression::GetField { obj, field } => {
+                self.check_expression(obj)?;
+                if let Some(ty) = self.infer_expression_type(obj) {
+                    match ty {
+                        ArkType::Shared(name) if name == "Integer" || name == "String" || name == "Boolean" => {
+                            self.warnings.push(format!("Invalid field access '{}' on primitive type {:?}", field, name));
+                        }
+                        ArkType::Shared(name) if name.starts_with("List<") => {
+                             self.warnings.push(format!("Invalid field access '{}' on List type", field));
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(())
+            }
+            Expression::List(items) => {
+                for item in items {
+                    self.check_expression(item)?;
+                }
+                Ok(())
+            }
+            Expression::StructInit { fields } => {
+                 for (_, expr) in fields {
+                     self.check_expression(expr)?;
+                 }
+                 Ok(())
             }
             _ => Ok(()),
         }
@@ -559,7 +742,10 @@ mod tests {
 
         let mut checker = LinearChecker::new();
         let result = checker.check_function(&func);
-        assert!(result.is_err(), "Checker allowed linear resource to escape into untyped variable");
+        assert!(
+            result.is_err(),
+            "Checker allowed linear resource to escape into untyped variable"
+        );
     }
 
     #[test]
@@ -592,7 +778,10 @@ mod tests {
 
         let mut checker = LinearChecker::new();
         let result = checker.check_function(&func);
-        assert!(result.is_ok(), "Valid shadowing (after consumption) should be allowed");
+        assert!(
+            result.is_ok(),
+            "Valid shadowing (after consumption) should be allowed"
+        );
     }
 
     #[test]
@@ -658,9 +847,9 @@ mod tests {
                             function_hash: "sys.mem.read".to_string(),
                             args: vec![
                                 Expression::Variable("buf".to_string()),
-                                Expression::Literal("0".to_string())
-                            ]
-                        }
+                                Expression::Literal("0".to_string()),
+                            ],
+                        },
                     },
                     Statement::Return(Expression::Variable("val".to_string())),
                 ])))
@@ -692,8 +881,8 @@ mod tests {
                         ty: None, // No type info!
                         value: Expression::Call {
                             function_hash: "sys.mem.alloc".to_string(),
-                            args: vec![Expression::Literal("10".to_string())]
-                        }
+                            args: vec![Expression::Literal("10".to_string())],
+                        },
                     },
                     Statement::Return(Expression::Variable("buf".to_string())),
                 ])))
@@ -703,14 +892,17 @@ mod tests {
 
         let mut checker = LinearChecker::new();
         let result = checker.check_function(&func);
-        assert!(result.is_ok(), "Should infer linearity from sys.mem.alloc and track it");
+        assert!(
+            result.is_ok(),
+            "Should infer linearity from sys.mem.alloc and track it"
+        );
     }
 
     #[test]
     fn test_linear_let_call_inferred_leak() {
-         // let buf = sys.mem.alloc(10);
-         // return;
-         let func = FunctionDef {
+        // let buf = sys.mem.alloc(10);
+        // return;
+        let func = FunctionDef {
             name: "alloc_leak".to_string(),
             inputs: vec![],
             output: ArkType::Shared("Void".to_string()),
@@ -721,8 +913,8 @@ mod tests {
                         ty: None,
                         value: Expression::Call {
                             function_hash: "sys.mem.alloc".to_string(),
-                            args: vec![Expression::Literal("10".to_string())]
-                        }
+                            args: vec![Expression::Literal("10".to_string())],
+                        },
                     },
                     Statement::Return(Expression::Literal("void".to_string())),
                 ])))
@@ -743,7 +935,7 @@ mod tests {
         // let buf: Linear = ...
         // let (val, buf) = unknown(buf) // shadowing, should infer buf is linear
         // return val // Leak buf!
-         let func = FunctionDef {
+        let func = FunctionDef {
             name: "shadow_unknown".to_string(),
             inputs: vec![],
             output: ArkType::Shared("Void".to_string()),
@@ -758,10 +950,8 @@ mod tests {
                         names: vec!["val".to_string(), "buf".to_string()],
                         value: Expression::Call {
                             function_hash: "unknown_func".to_string(),
-                            args: vec![
-                                Expression::Variable("buf".to_string())
-                            ]
-                        }
+                            args: vec![Expression::Variable("buf".to_string())],
+                        },
                     },
                     Statement::Return(Expression::Variable("val".to_string())),
                 ])))
@@ -773,7 +963,9 @@ mod tests {
         let result = checker.check_function(&func);
         match result {
             Err(LinearError::UnusedResource(name)) => assert_eq!(name, "buf"),
-            _ => panic!("Expected UnusedResource for shadowed variable in destructure of unknown function"),
+            _ => panic!(
+                "Expected UnusedResource for shadowed variable in destructure of unknown function"
+            ),
         }
     }
 
@@ -790,9 +982,9 @@ mod tests {
                         inputs: vec![],
                         output: ArkType::Shared("Void".to_string()),
                         body: Box::new(
-                            MastNode::new(ArkNode::Statement(Statement::Return(Expression::Literal(
-                                "void".to_string(),
-                            ))))
+                            MastNode::new(ArkNode::Statement(Statement::Return(
+                                Expression::Literal("void".to_string()),
+                            )))
                             .unwrap(),
                         ),
                     }),
@@ -804,6 +996,121 @@ mod tests {
 
         let mut checker = LinearChecker::new();
         let result = checker.check_function(&func);
-        assert!(result.is_ok(), "Nested function caused scope leak or false positive unused resource");
+        assert!(
+            result.is_ok(),
+            "Nested function caused scope leak or false positive unused resource"
+        );
+    }
+
+    #[test]
+    fn test_integer_inference() {
+        let stmt = Statement::Let {
+            name: "x".to_string(),
+            ty: None,
+            value: Expression::Literal("42".to_string()),
+        };
+        let mut checker = LinearChecker::new();
+        checker.enter_scope();
+        checker.check_statement(&stmt).unwrap();
+
+        let ty = checker.get_var_type("x");
+        assert_eq!(ty, Some(ArkType::Shared("Integer".to_string())));
+    }
+
+    #[test]
+    fn test_string_inference() {
+        let stmt = Statement::Let {
+            name: "s".to_string(),
+            ty: None,
+            value: Expression::Literal("\"hello\"".to_string()),
+        };
+        let mut checker = LinearChecker::new();
+        checker.enter_scope();
+        checker.check_statement(&stmt).unwrap();
+
+        let ty = checker.get_var_type("s");
+        assert_eq!(ty, Some(ArkType::Shared("String".to_string())));
+    }
+
+    #[test]
+    fn test_list_inference() {
+        let stmt = Statement::Let {
+            name: "lst".to_string(),
+            ty: None,
+            value: Expression::List(vec![Expression::Literal("1".to_string())]),
+        };
+        let mut checker = LinearChecker::new();
+        checker.enter_scope();
+        checker.check_statement(&stmt).unwrap();
+
+        let ty = checker.get_var_type("lst");
+        assert_eq!(ty, Some(ArkType::Shared("List<Integer>".to_string())));
+    }
+
+    #[test]
+    fn test_unused_variable_warning() {
+        let func = FunctionDef {
+            name: "unused_check".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                Statement::Let {
+                    name: "x".to_string(),
+                    ty: None,
+                    value: Expression::Literal("42".to_string()),
+                },
+                Statement::Return(Expression::Literal("void".to_string())),
+            ]))).unwrap()),
+        };
+        let mut checker = LinearChecker::new();
+        checker.check_function(&func).unwrap();
+
+        assert!(checker.warnings.iter().any(|w| w.contains("Unused variable: x")));
+    }
+
+    #[test]
+    fn test_dead_code_after_return() {
+         let func = FunctionDef {
+            name: "dead".to_string(),
+            inputs: vec![],
+            output: ArkType::Shared("Void".to_string()),
+            body: Box::new(MastNode::new(ArkNode::Statement(Statement::Block(vec![
+                Statement::Return(Expression::Literal("void".to_string())),
+                Statement::Expression(Expression::Literal("42".to_string())),
+            ]))).unwrap()),
+        };
+        let mut checker = LinearChecker::new();
+        checker.check_function(&func).unwrap();
+
+        assert!(checker.warnings.iter().any(|w| w.contains("Unreachable code detected")));
+    }
+
+    #[test]
+    fn test_type_mismatch_warning() {
+        let stmt = Statement::Let {
+            name: "x".to_string(),
+            ty: Some(ArkType::Shared("Integer".to_string())),
+            value: Expression::Literal("\"string\"".to_string()),
+        };
+        let mut checker = LinearChecker::new();
+        checker.enter_scope();
+        checker.check_statement(&stmt).unwrap();
+
+        assert!(checker.warnings.iter().any(|w| w.contains("Type mismatch")));
+    }
+
+    #[test]
+    fn test_function_signature_check() {
+        let expr = Expression::Call {
+            function_hash: "add".to_string(),
+            args: vec![
+                Expression::Literal("1".to_string()),
+                Expression::Literal("\"str\"".to_string()), // Wrong type
+            ]
+        };
+        let mut checker = LinearChecker::new();
+        checker.check_expression(&expr).unwrap();
+
+        assert!(checker.warnings.iter().any(|w| w.contains("Argument type mismatch")));
     }
 }

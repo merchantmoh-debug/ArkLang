@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>API_REFERENCE</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<style>
+body { font-family: sans-serif; line-height: 1.6; padding: 20px; max_width: 800px; margin: 0 auto; background: #1e1e1e; color: #d4d4d4; }
+h1, h2, h3 { color: #569cd6; }
+code { background: #2d2d2d; padding: 2px 5px; border_radius: 3px; font-family: monospace; }
+pre { background: #2d2d2d; padding: 10px; border_radius: 5px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+a { color: #9cdcfe; }
+</style>
+</head>
+<body>
+<nav>
+<a href="index.html">Index</a> |
+<a href="API_REFERENCE.html">API Reference</a> |
+<a href="STDLIB_REFERENCE.html">StdLib Reference</a> |
+<a href="QUICK_START.html">Quick Start</a>
+</nav>
+<hr>
+<h1 id="ark-api-reference-intrinsics">Ark API Reference (Intrinsics)</h1>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+<p>- <a href="#chain">Chain</a></p>
+<p>- <a href="#core">Core</a></p>
+<p>- <a href="#crypto">Crypto</a></p>
+<p>- <a href="#fs">Fs</a></p>
+<p>- <a href="#io">Io</a></p>
+<p>- <a href="#json">Json</a></p>
+<p>- <a href="#list">List</a></p>
+<p>- <a href="#math">Math</a></p>
+<p>- <a href="#mem">Mem</a></p>
+<p>- <a href="#net">Net</a></p>
+<p>- <a href="#str">Str</a></p>
+<p>- <a href="#struct">Struct</a></p>
+<p>- <a href="#sys">Sys</a></p>
+<p>- <a href="#time">Time</a></p>
+
+<h2 id="chain">Chain</h2>
+<h3 id="<code>syschainget_balance</code>"><code>sys.chain.get_balance</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.chain.get_balance
+sys.chain.get_balance(...)
+</code></pre>
+
+<h3 id="<code>syschainheight</code>"><code>sys.chain.height</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.chain.height
+sys.chain.height(...)
+</code></pre>
+
+<h3 id="<code>syschainsubmit_tx</code>"><code>sys.chain.submit_tx</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.chain.submit_tx
+sys.chain.submit_tx(...)
+</code></pre>
+
+<h3 id="<code>syschainverify_tx</code>"><code>sys.chain.verify_tx</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.chain.verify_tx
+sys.chain.verify_tx(...)
+</code></pre>
+
+<h2 id="core">Core</h2>
+<h3 id="<code>exit</code>"><code>exit</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for exit
+exit(...)
+</code></pre>
+
+<h3 id="<code>get</code>"><code>get</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for get
+get(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_and</code>"><code>intrinsic_and</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_and
+intrinsic_and(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_ask_ai</code>"><code>intrinsic_ask_ai</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_ask_ai
+intrinsic_ask_ai(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_buffer_alloc</code>"><code>intrinsic_buffer_alloc</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_buffer_alloc
+intrinsic_buffer_alloc(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_buffer_inspect</code>"><code>intrinsic_buffer_inspect</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_buffer_inspect
+intrinsic_buffer_inspect(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_buffer_read</code>"><code>intrinsic_buffer_read</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_buffer_read
+intrinsic_buffer_read(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_buffer_write</code>"><code>intrinsic_buffer_write</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_buffer_write
+intrinsic_buffer_write(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_crypto_hash</code>"><code>intrinsic_crypto_hash</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_crypto_hash
+intrinsic_crypto_hash(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_extract_code</code>"><code>intrinsic_extract_code</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_extract_code
+intrinsic_extract_code(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_ge</code>"><code>intrinsic_ge</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_ge
+intrinsic_ge(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_gt</code>"><code>intrinsic_gt</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_gt
+intrinsic_gt(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_le</code>"><code>intrinsic_le</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_le
+intrinsic_le(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_len</code>"><code>intrinsic_len</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_len
+intrinsic_len(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_list_append</code>"><code>intrinsic_list_append</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_list_append
+intrinsic_list_append(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_list_get</code>"><code>intrinsic_list_get</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_list_get
+intrinsic_list_get(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_lt</code>"><code>intrinsic_lt</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_lt
+intrinsic_lt(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_merkle_root</code>"><code>intrinsic_merkle_root</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_merkle_root
+intrinsic_merkle_root(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_not</code>"><code>intrinsic_not</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_not
+intrinsic_not(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_or</code>"><code>intrinsic_or</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_or
+intrinsic_or(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_time_now</code>"><code>intrinsic_time_now</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_time_now
+intrinsic_time_now(...)
+</code></pre>
+
+<h3 id="<code>len</code>"><code>len</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for len
+len(...)
+</code></pre>
+
+<h3 id="<code>print</code>"><code>print</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for print
+print(...)
+</code></pre>
+
+<h3 id="<code>quit</code>"><code>quit</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for quit
+quit(...)
+</code></pre>
+
+<h2 id="crypto">Crypto</h2>
+<h3 id="<code>syscryptoaes_gcm_decrypt</code>"><code>sys.crypto.aes_gcm_decrypt</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.aes_gcm_decrypt
+sys.crypto.aes_gcm_decrypt(...)
+</code></pre>
+
+<h3 id="<code>syscryptoaes_gcm_encrypt</code>"><code>sys.crypto.aes_gcm_encrypt</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.aes_gcm_encrypt
+sys.crypto.aes_gcm_encrypt(...)
+</code></pre>
+
+<h3 id="<code>syscryptoed25519gen</code>"><code>sys.crypto.ed25519.gen</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.ed25519.gen
+sys.crypto.ed25519.gen(...)
+</code></pre>
+
+<h3 id="<code>syscryptoed25519sign</code>"><code>sys.crypto.ed25519.sign</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.ed25519.sign
+sys.crypto.ed25519.sign(...)
+</code></pre>
+
+<h3 id="<code>syscryptoed25519verify</code>"><code>sys.crypto.ed25519.verify</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.ed25519.verify
+sys.crypto.ed25519.verify(...)
+</code></pre>
+
+<h3 id="<code>syscryptohash</code>"><code>sys.crypto.hash</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.hash
+sys.crypto.hash(...)
+</code></pre>
+
+<h3 id="<code>syscryptohmac_sha512</code>"><code>sys.crypto.hmac_sha512</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.hmac_sha512
+sys.crypto.hmac_sha512(...)
+</code></pre>
+
+<h3 id="<code>syscryptomerkle_root</code>"><code>sys.crypto.merkle_root</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.merkle_root
+sys.crypto.merkle_root(...)
+</code></pre>
+
+<h3 id="<code>syscryptopbkdf2_hmac_sha512</code>"><code>sys.crypto.pbkdf2_hmac_sha512</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.pbkdf2_hmac_sha512
+sys.crypto.pbkdf2_hmac_sha512(...)
+</code></pre>
+
+<h3 id="<code>syscryptorandom_bytes</code>"><code>sys.crypto.random_bytes</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.random_bytes
+sys.crypto.random_bytes(...)
+</code></pre>
+
+<h3 id="<code>syscryptosha512</code>"><code>sys.crypto.sha512</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.crypto.sha512
+sys.crypto.sha512(...)
+</code></pre>
+
+<h2 id="fs">Fs</h2>
+<h3 id="<code>sysfsread</code>"><code>sys.fs.read</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.fs.read
+sys.fs.read(...)
+</code></pre>
+
+<h3 id="<code>sysfsread_buffer</code>"><code>sys.fs.read_buffer</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.fs.read_buffer
+sys.fs.read_buffer(...)
+</code></pre>
+
+<h3 id="<code>sysfswrite</code>"><code>sys.fs.write</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.fs.write
+sys.fs.write(...)
+</code></pre>
+
+<h3 id="<code>sysfswrite_buffer</code>"><code>sys.fs.write_buffer</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.fs.write_buffer
+sys.fs.write_buffer(...)
+</code></pre>
+
+<h2 id="io">Io</h2>
+<h3 id="<code>sysioread_bytes</code>"><code>sys.io.read_bytes</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.io.read_bytes
+sys.io.read_bytes(...)
+</code></pre>
+
+<h3 id="<code>sysioread_line</code>"><code>sys.io.read_line</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.io.read_line
+sys.io.read_line(...)
+</code></pre>
+
+<h3 id="<code>sysiowrite</code>"><code>sys.io.write</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.io.write
+sys.io.write(...)
+</code></pre>
+
+<h2 id="json">Json</h2>
+<h3 id="<code>sysjsonparse</code>"><code>sys.json.parse</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.json.parse
+sys.json.parse(...)
+</code></pre>
+
+<h3 id="<code>sysjsonstringify</code>"><code>sys.json.stringify</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.json.stringify
+sys.json.stringify(...)
+</code></pre>
+
+<h2 id="list">List</h2>
+<h3 id="<code>syslistappend</code>"><code>sys.list.append</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.list.append
+sys.list.append(...)
+</code></pre>
+
+<h3 id="<code>syslistdelete</code>"><code>sys.list.delete</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.list.delete
+sys.list.delete(...)
+</code></pre>
+
+<h3 id="<code>syslistget</code>"><code>sys.list.get</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.list.get
+sys.list.get(...)
+</code></pre>
+
+<h3 id="<code>syslistpop</code>"><code>sys.list.pop</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.list.pop
+sys.list.pop(...)
+</code></pre>
+
+<h3 id="<code>syslistset</code>"><code>sys.list.set</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.list.set
+sys.list.set(...)
+</code></pre>
+
+<h2 id="math">Math</h2>
+<h3 id="<code>intrinsic_math_acos</code>"><code>intrinsic_math_acos</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_math_acos
+intrinsic_math_acos(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_math_asin</code>"><code>intrinsic_math_asin</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_math_asin
+intrinsic_math_asin(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_math_atan</code>"><code>intrinsic_math_atan</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_math_atan
+intrinsic_math_atan(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_math_atan2</code>"><code>intrinsic_math_atan2</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_math_atan2
+intrinsic_math_atan2(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_math_cos</code>"><code>intrinsic_math_cos</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_math_cos
+intrinsic_math_cos(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_math_pow</code>"><code>intrinsic_math_pow</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_math_pow
+intrinsic_math_pow(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_math_sin</code>"><code>intrinsic_math_sin</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_math_sin
+intrinsic_math_sin(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_math_sqrt</code>"><code>intrinsic_math_sqrt</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_math_sqrt
+intrinsic_math_sqrt(...)
+</code></pre>
+
+<h3 id="<code>intrinsic_math_tan</code>"><code>intrinsic_math_tan</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for intrinsic_math_tan
+intrinsic_math_tan(...)
+</code></pre>
+
+<h3 id="<code>mathtensor</code>"><code>math.Tensor</code></h3>
+<p>math.Tensor(data: List, shape: List) → Tensor struct</p>
+
+<pre><code>// Example for math.Tensor
+math.Tensor(...)
+</code></pre>
+
+<h3 id="<code>mathacos</code>"><code>math.acos</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.acos
+math.acos(...)
+</code></pre>
+
+<h3 id="<code>mathadd</code>"><code>math.add</code></h3>
+<p>math.add(a, b) → Tensor.  Element-wise addition.</p>
+
+<pre><code>// Example for math.add
+math.add(...)
+</code></pre>
+
+<h3 id="<code>mathasin</code>"><code>math.asin</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.asin
+math.asin(...)
+</code></pre>
+
+<h3 id="<code>mathatan</code>"><code>math.atan</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.atan
+math.atan(...)
+</code></pre>
+
+<h3 id="<code>mathatan2</code>"><code>math.atan2</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.atan2
+math.atan2(...)
+</code></pre>
+
+<h3 id="<code>mathcos</code>"><code>math.cos</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.cos
+math.cos(...)
+</code></pre>
+
+<h3 id="<code>mathcos_scaled</code>"><code>math.cos_scaled</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.cos_scaled
+math.cos_scaled(...)
+</code></pre>
+
+<h3 id="<code>mathdot</code>"><code>math.dot</code></h3>
+<p>math.dot(a, b) → Integer.  Element-wise multiply and sum (1D vectors).</p>
+
+<pre><code>// Example for math.dot
+math.dot(...)
+</code></pre>
+
+<h3 id="<code>mathmatmul</code>"><code>math.matmul</code></h3>
+<p>math.matmul(A, B) → Tensor.  A=[m,k], B=[k,n] → C=[m,n]</p>
+
+<pre><code>// Example for math.matmul
+math.matmul(...)
+</code></pre>
+
+<h3 id="<code>mathmul_scalar</code>"><code>math.mul_scalar</code></h3>
+<p>math.mul_scalar(t, scalar) → Tensor.  Multiply every element by scalar.</p>
+
+<pre><code>// Example for math.mul_scalar
+math.mul_scalar(...)
+</code></pre>
+
+<h3 id="<code>mathpi_scaled</code>"><code>math.pi_scaled</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.pi_scaled
+math.pi_scaled(...)
+</code></pre>
+
+<h3 id="<code>mathpow</code>"><code>math.pow</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.pow
+math.pow(...)
+</code></pre>
+
+<h3 id="<code>mathsin</code>"><code>math.sin</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.sin
+math.sin(...)
+</code></pre>
+
+<h3 id="<code>mathsin_scaled</code>"><code>math.sin_scaled</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.sin_scaled
+math.sin_scaled(...)
+</code></pre>
+
+<h3 id="<code>mathsqrt</code>"><code>math.sqrt</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.sqrt
+math.sqrt(...)
+</code></pre>
+
+<h3 id="<code>mathsub</code>"><code>math.sub</code></h3>
+<p>math.sub(a, b) → Tensor.  Element-wise subtraction.</p>
+
+<pre><code>// Example for math.sub
+math.sub(...)
+</code></pre>
+
+<h3 id="<code>mathtan</code>"><code>math.tan</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for math.tan
+math.tan(...)
+</code></pre>
+
+<h3 id="<code>mathtranspose</code>"><code>math.transpose</code></h3>
+<p>math.transpose(T) → Tensor.  T=[m,n] → T'=[n,m]</p>
+
+<pre><code>// Example for math.transpose
+math.transpose(...)
+</code></pre>
+
+<h3 id="<code>sysmathpow_mod</code>"><code>sys.math.pow_mod</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.math.pow_mod
+sys.math.pow_mod(...)
+</code></pre>
+
+<h2 id="mem">Mem</h2>
+<h3 id="<code>sysmemalloc</code>"><code>sys.mem.alloc</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.mem.alloc
+sys.mem.alloc(...)
+</code></pre>
+
+<h3 id="<code>sysmeminspect</code>"><code>sys.mem.inspect</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.mem.inspect
+sys.mem.inspect(...)
+</code></pre>
+
+<h3 id="<code>sysmemread</code>"><code>sys.mem.read</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.mem.read
+sys.mem.read(...)
+</code></pre>
+
+<h3 id="<code>sysmemwrite</code>"><code>sys.mem.write</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.mem.write
+sys.mem.write(...)
+</code></pre>
+
+<h2 id="net">Net</h2>
+<h3 id="<code>sysnethttprequest</code>"><code>sys.net.http.request</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.net.http.request
+sys.net.http.request(...)
+</code></pre>
+
+<h3 id="<code>sysnetsocketaccept</code>"><code>sys.net.socket.accept</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.net.socket.accept
+sys.net.socket.accept(...)
+</code></pre>
+
+<h3 id="<code>sysnetsocketbind</code>"><code>sys.net.socket.bind</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.net.socket.bind
+sys.net.socket.bind(...)
+</code></pre>
+
+<h3 id="<code>sysnetsocketclose</code>"><code>sys.net.socket.close</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.net.socket.close
+sys.net.socket.close(...)
+</code></pre>
+
+<h3 id="<code>sysnetsocketconnect</code>"><code>sys.net.socket.connect</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.net.socket.connect
+sys.net.socket.connect(...)
+</code></pre>
+
+<h3 id="<code>sysnetsocketrecv</code>"><code>sys.net.socket.recv</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.net.socket.recv
+sys.net.socket.recv(...)
+</code></pre>
+
+<h3 id="<code>sysnetsocketsend</code>"><code>sys.net.socket.send</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.net.socket.send
+sys.net.socket.send(...)
+</code></pre>
+
+<h3 id="<code>sysnetsocketset_timeout</code>"><code>sys.net.socket.set_timeout</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.net.socket.set_timeout
+sys.net.socket.set_timeout(...)
+</code></pre>
+
+<h2 id="str">Str</h2>
+<h3 id="<code>sysstrfrom_code</code>"><code>sys.str.from_code</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.str.from_code
+sys.str.from_code(...)
+</code></pre>
+
+<h3 id="<code>sysstrget</code>"><code>sys.str.get</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.str.get
+sys.str.get(...)
+</code></pre>
+
+<h2 id="struct">Struct</h2>
+<h3 id="<code>sysstructget</code>"><code>sys.struct.get</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.struct.get
+sys.struct.get(...)
+</code></pre>
+
+<h3 id="<code>sysstructhas</code>"><code>sys.struct.has</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.struct.has
+sys.struct.has(...)
+</code></pre>
+
+<h3 id="<code>sysstructset</code>"><code>sys.struct.set</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.struct.set
+sys.struct.set(...)
+</code></pre>
+
+<h2 id="sys">Sys</h2>
+<h3 id="<code>sysexec</code>"><code>sys.exec</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.exec
+sys.exec(...)
+</code></pre>
+
+<h3 id="<code>sysexit</code>"><code>sys.exit</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.exit
+sys.exit(...)
+</code></pre>
+
+<h3 id="<code>syslen</code>"><code>sys.len</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.len
+sys.len(...)
+</code></pre>
+
+<h3 id="<code>syslog</code>"><code>sys.log</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.log
+sys.log(...)
+</code></pre>
+
+<h2 id="time">Time</h2>
+<h3 id="<code>systimenow</code>"><code>sys.time.now</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.time.now
+sys.time.now(...)
+</code></pre>
+
+<h3 id="<code>systimesleep</code>"><code>sys.time.sleep</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sys.time.sleep
+sys.time.sleep(...)
+</code></pre>
+
+</body>
+</html>
