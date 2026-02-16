@@ -1,11 +1,41 @@
+version: '3.8'
 services:
-  ark-sandbox:
+  ark-runtime:
     build: .
+    container_name: ark-runtime
+    ports:
+      - "8080:8080"
     volumes:
-      - .:/app
+      - ./apps:/app/apps:ro
+      - ./lib:/app/lib:ro
+      - ark-data:/home/ark/.ark
     environment:
-      - ARK_SANDBOX=true
-      - ALLOW_DANGEROUS_LOCAL_EXECUTION=false
-    command: python meta/repl.py
-    stdin_open: true # docker run -i
-    tty: true        # docker run -t
+      - ARK_SANDBOX_TYPE=local
+      - ARK_DEBUG=false
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
+    networks:
+      - ark-net
+
+  ark-server:
+    build: .
+    container_name: ark-server
+    command: ["python", "meta/ark.py", "run", "apps/server.ark"]
+    ports:
+      - "3000:3000"
+    depends_on:
+      - ark-runtime
+    restart: unless-stopped
+    networks:
+      - ark-net
+
+volumes:
+  ark-data:
+
+networks:
+  ark-net:
+    driver: bridge
