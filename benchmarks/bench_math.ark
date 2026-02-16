@@ -1,0 +1,12 @@
+sum := 0
+i := 0
+while i < 5000 {
+    // math.sin returns scaled integer (x10000)
+    val := math.sin(i)
+    val_cos := math.cos(i)
+    // Perform arithmetic
+    res := (val * val_cos) / 10000 + i
+    sum := sum + res
+    i := i + 1
+}
+print(sum)
