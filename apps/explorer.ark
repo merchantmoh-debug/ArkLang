@@ -1,50 +1,13 @@
 // apps/explorer.ark
 // Web Explorer for the Ark Blockchain (Mocked)
 
-// Polyfill booleans
-true := 1 == 1
-false := 1 == 0
+import lib.std.string
 
 print("Starting Ark Explorer...")
 
-// --- String Helpers ---
-
-func string_len(s) {
-    return len(s)
-}
-
-func string_slice(s, start, end) {
-    res := ""
-    i := start
-    while i < end {
-        res := res + s[i]
-        i := i + 1
-    }
-    return res
-}
-
-func string_starts_with(s, prefix) {
-    sl := len(s)
-    pl := len(prefix)
-    if pl > sl { return false }
-
-    i := 0
-    while i < pl {
-        if s[i] != prefix[i] {
-            return false
-        }
-        i := i + 1
-    }
-    return true
-}
-
-func int_to_str(n) {
-    return sys.json.stringify(n)
-}
-
 // --- Mock Data ---
 
-block_height := 10500
+block_height := sys.chain.height()
 difficulty := 4
 last_block_hash := "00000000abcdef1234567890abcdef12"
 
@@ -63,33 +26,53 @@ txs := [tx1, tx2]
 // --- Views ---
 
 func view_header(title) {
-    return "<html><head><title>" + title + "</title><style>body{font-family:sans-serif;padding:20px;} .card{border:1px solid #ddd;padding:15px;margin-bottom:10px;border-radius:5px;} h1{color:#333;}</style></head><body><h1>" + title + "</h1>"
+    return "<html><head><title>" + title + "</title><style>body{font-family:sans-serif;padding:20px;background:#f4f4f4;} .container{max-width:800px;margin:0 auto;background:white;padding:20px;border-radius:8px;box-shadow:0 0 10px rgba(0,0,0,0.1);} h1{color:#333;border-bottom:2px solid #eee;padding-bottom:10px;} table{width:100%;border-collapse:collapse;margin-top:20px;} th, td{padding:10px;border:1px solid #ddd;text-align:left;} th{background:#f8f9fa;} a{color:#007bff;text-decoration:none;} a:hover{text-decoration:underline;}</style></head><body><div class='container'><h1>" + title + "</h1>"
 }
 
 func view_footer() {
-    return "<p><a href='/'>Home</a></p></body></html>"
+    return "<p style='margin-top:20px;text-align:center;color:#666;'><a href='/'>Home</a> | Ark Sovereign Stack v112.0</p></div></body></html>"
 }
 
 func view_home() {
     html := view_header("Ark Explorer")
 
-    html := html + "<div class='card'><h2>Chain Stats</h2>"
-    html := html + "<p><strong>Height:</strong> " + int_to_str(block_height) + "</p>"
-    html := html + "<p><strong>Difficulty:</strong> " + int_to_str(difficulty) + "</p>"
-    html := html + "<p><strong>Last Block:</strong> " + last_block_hash + "</p>"
-    html := html + "<p><a href='/graph'>View Memory Graph</a></p></div>"
+    html := html + "<h2>Chain Stats</h2>"
+    html := html + "<table>"
+    html := html + "<tr><th>Height</th><td>" + sys.json.stringify(sys.chain.height()) + "</td></tr>"
+    html := html + "<tr><th>Difficulty</th><td>" + sys.json.stringify(difficulty) + "</td></tr>"
+    html := html + "<tr><th>Last Block</th><td>" + last_block_hash + "</td></tr>"
+    html := html + "</table>"
 
     html := html + "<h2>Recent Blocks</h2>"
+    html := html + "<table><tr><th>Block #</th><th>Hash</th><th>Actions</th></tr>"
 
     i := 0
-    while i < len(blocks) {
+    l_blocks := len(blocks)
+    while i < l_blocks {
         b := blocks[i]
-        html := html + "<div class='card'>"
-        html := html + "<h3>Block #" + int_to_str(b.index) + "</h3>"
-        html := html + "<p>Hash: <a href='/block/" + int_to_str(b.index) + "'>" + b.hash + "</a></p>"
-        html := html + "</div>"
+        html := html + "<tr>"
+        html := html + "<td>" + sys.json.stringify(b.index) + "</td>"
+        html := html + "<td>" + b.hash + "</td>"
+        html := html + "<td><a href='/block/" + sys.json.stringify(b.index) + "'>View</a></td>"
+        html := html + "</tr>"
         i := i + 1
     }
+    html := html + "</table>"
+
+    html := html + "<h2>Transactions</h2>"
+    html := html + "<table><tr><th>Tx ID</th><th>Amount</th><th>Actions</th></tr>"
+    j := 0
+    l_txs := len(txs)
+    while j < l_txs {
+        t := txs[j]
+        html := html + "<tr>"
+        html := html + "<td>" + t.id + "</td>"
+        html := html + "<td>" + sys.json.stringify(t.amount) + " ARK</td>"
+        html := html + "<td><a href='/tx/" + t.id + "'>View</a></td>"
+        html := html + "</tr>"
+        j := j + 1
+    }
+    html := html + "</table>"
 
     html := html + view_footer()
     return html
@@ -100,34 +83,25 @@ func view_block(idx_str) {
     target_block := {}
 
     i := 0
-    while i < len(blocks) {
+    l_blocks := len(blocks)
+    while i < l_blocks {
         b := blocks[i]
-        if int_to_str(b.index) == idx_str {
+        if sys.json.stringify(b.index) == idx_str {
             target_block := b
             found := true
-            i := len(blocks)
+            i := l_blocks // break
         }
         i := i + 1
     }
 
     if found {
         html := view_header("Block #" + idx_str)
-        html := html + "<div class='card'>"
-        html := html + "<p><strong>Hash:</strong> " + target_block.hash + "</p>"
-        html := html + "<p><strong>Previous:</strong> " + target_block.prev + "</p>"
-        html := html + "<p><strong>Timestamp:</strong> " + int_to_str(target_block.ts) + "</p>"
-        html := html + "<p><strong>Transactions:</strong> " + int_to_str(target_block.txs_count) + "</p>"
-        html := html + "</div>"
-
-        html := html + "<h3>Transactions</h3><ul>"
-        j := 0
-        while j < len(txs) {
-            t := txs[j]
-            html := html + "<li><a href='/tx/" + t.id + "'>" + t.id + "</a> (" + int_to_str(t.amount) + " ARK)</li>"
-            j := j + 1
-        }
-        html := html + "</ul>"
-
+        html := html + "<table>"
+        html := html + "<tr><th>Hash</th><td>" + target_block.hash + "</td></tr>"
+        html := html + "<tr><th>Previous Hash</th><td>" + target_block.prev + "</td></tr>"
+        html := html + "<tr><th>Timestamp</th><td>" + sys.json.stringify(target_block.ts) + "</td></tr>"
+        html := html + "<tr><th>Tx Count</th><td>" + sys.json.stringify(target_block.txs_count) + "</td></tr>"
+        html := html + "</table>"
         html := html + view_footer()
         return html
     }
@@ -140,58 +114,30 @@ func view_tx(id) {
     target_tx := {}
 
     i := 0
-    while i < len(txs) {
+    l_txs := len(txs)
+    while i < l_txs {
         t := txs[i]
         if t.id == id {
             target_tx := t
             found := true
-            i := len(txs)
+            i := l_txs // break
         }
         i := i + 1
     }
 
     if found {
         html := view_header("Transaction " + id)
-        html := html + "<div class='card'>"
-        html := html + "<p><strong>From:</strong> " + target_tx.from + "</p>"
-        html := html + "<p><strong>To:</strong> " + target_tx.to + "</p>"
-        html := html + "<p><strong>Amount:</strong> " + int_to_str(target_tx.amount) + " ARK</p>"
-        html := html + "<p><strong>Signature:</strong> " + target_tx.sig + "</p>"
-        html := html + "</div>"
+        html := html + "<table>"
+        html := html + "<tr><th>From</th><td>" + target_tx.from + "</td></tr>"
+        html := html + "<tr><th>To</th><td>" + target_tx.to + "</td></tr>"
+        html := html + "<tr><th>Amount</th><td>" + sys.json.stringify(target_tx.amount) + " ARK</td></tr>"
+        html := html + "<tr><th>Signature</th><td>" + target_tx.sig + "</td></tr>"
+        html := html + "</table>"
         html := html + view_footer()
         return html
     }
 
     return view_404()
-}
-
-func view_graph() {
-    dot := "digraph MemoryGraph {\n  rankdir=RL;\n  node [shape=box];\n"
-
-    i := 0
-    while i < len(blocks) {
-        b := blocks[i]
-        label := "Block #" + int_to_str(b.index) + "\\n" + string_slice(b.hash, 0, 8) + "..."
-        dot := dot + "  b" + int_to_str(b.index) + " [label=\"" + label + "\"];\n"
-
-        j := 0
-        while j < len(blocks) {
-            other := blocks[j]
-            if other.hash == b.prev {
-                dot := dot + "  b" + int_to_str(b.index) + " -> b" + int_to_str(other.index) + ";\n"
-            }
-            j := j + 1
-        }
-        i := i + 1
-    }
-    dot := dot + "}"
-
-    html := view_header("Memory Graph")
-    html := html + "<h2>DAG Visualization (DOT)</h2>"
-    html := html + "<p>Copy the code below into a Graphviz viewer.</p>"
-    html := html + "<textarea rows='20' cols='80' readonly>" + dot + "</textarea>"
-    html := html + view_footer()
-    return html
 }
 
 func view_404() {
@@ -201,23 +147,19 @@ func view_404() {
 // --- Router ---
 
 func handle_request(path) {
-    print("Request: " + path)
+    print("Explorer Request: " + path)
 
     if path == "/" {
         return view_home()
     }
 
-    if path == "/graph" {
-        return view_graph()
-    }
-
-    if string_starts_with(path, "/block/") {
-        idx_str := string_slice(path, 7, len(path))
+    if string.starts_with(path, "/block/") {
+        idx_str := string.slice(path, 7, len(path))
         return view_block(idx_str)
     }
 
-    if string_starts_with(path, "/tx/") {
-        id_str := string_slice(path, 4, len(path))
+    if string.starts_with(path, "/tx/") {
+        id_str := string.slice(path, 4, len(path))
         return view_tx(id_str)
     }
 
@@ -227,11 +169,12 @@ func handle_request(path) {
 // --- Main ---
 
 port := 8080
+// Using sys.net.http.serve because Explorer is simple GET-only interface
 sys.net.http.serve(port, handle_request)
 
-print("Explorer running on port " + int_to_str(port))
+print("Explorer running on port " + sys.json.stringify(port))
 print("Press Ctrl+C to stop.")
 
-while true {
+while 1 {
     sys.time.sleep(1)
 }
