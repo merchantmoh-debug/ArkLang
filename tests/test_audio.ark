@@ -1,3 +1,4 @@
+// @capabilities: fs_write
 import lib.std.audio
 // tests/test_audio.ark
 

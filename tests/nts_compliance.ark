@@ -1,3 +1,4 @@
+// @capabilities: fs_write
 // NTS Compliance Test
 print("Test 1: Clean Write (Should be silent)")
 sys.fs.write("nts_clean.txt", "Clean Write")
