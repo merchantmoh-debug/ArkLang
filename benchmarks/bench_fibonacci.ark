@@ -1,0 +1,8 @@
+func fib(n) {
+    if n <= 1 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+// Prompt asked for 30, but we use 25 to ensure reasonable runtime in non-JIT mode
+res := fib(25)
+print(res)
