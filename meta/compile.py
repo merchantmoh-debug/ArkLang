@@ -1,8 +1,10 @@
 import ast
 import sys
 import os
+import argparse
 from lark import Transformer, Tree, Token
 from meta.ark import ArkValue, ArkInstance, ArkFunction, ArkClass, Scope, INTRINSICS, UNIT_VALUE, eval_binop, is_truthy
+from meta.bytecode import BytecodeEmitter
 
 _FUNC_COUNTER = 0
 def gen_func_name():
@@ -302,4 +304,60 @@ def compile_to_python(code):
     code_obj = compile(py_ast, filename="<ark_jit>", mode="exec")
     return code_obj
 
-if __name__ == "__main__": pass
+def main():
+    parser = argparse.ArgumentParser(description="Ark Compiler")
+    parser.add_argument("file", help="Ark source file")
+    parser.add_argument("--target", choices=["python", "bytecode"], default="python", help="Compilation target")
+    parser.add_argument("-o", "--output", help="Output file")
+
+    args = parser.parse_args()
+
+    if not os.path.exists(args.file):
+        print(f"Error: File {args.file} not found")
+        sys.exit(1)
+
+    with open(args.file, "r") as f:
+        code = f.read()
+
+    from meta.ark import ARK_PARSER
+
+    if args.target == "python":
+        # Current behavior: just compile? Or execute?
+        # The original code provided `compile_to_python` which returns a code object.
+        # It didn't seem to write to a file.
+        # Assuming "compile" implies generating executable or bytecode.
+        # But for Python target, maybe we just print "Compilation successful" or similar?
+        # The prompt says: "meta/compile.py: Add --target bytecode flag"
+        # I will preserve existing behavior if run as script, but now it has arguments.
+        # Since it was `if __name__ == "__main__": pass`, it did nothing before.
+        # So I'm free to define behavior.
+
+        try:
+            compile_to_python(code)
+            print("Successfully compiled to Python AST.")
+        except Exception as e:
+            print(f"Compilation Error: {e}")
+            sys.exit(1)
+
+    elif args.target == "bytecode":
+        try:
+            tree = ARK_PARSER.parse(code)
+            emitter = BytecodeEmitter()
+            bytecode = emitter.compile_ast(tree)
+
+            out_file = args.output
+            if not out_file:
+                base, _ = os.path.splitext(args.file)
+                out_file = base + ".arkb"
+
+            with open(out_file, "wb") as f:
+                f.write(bytecode)
+            print(f"Successfully compiled to {out_file}")
+        except Exception as e:
+            print(f"Bytecode Compilation Error: {e}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+
+if __name__ == "__main__":
+    main()
