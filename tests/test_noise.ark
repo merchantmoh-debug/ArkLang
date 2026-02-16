@@ -1,3 +1,4 @@
+// @capabilities: thread, net
 // tests/test_noise.ark
 
 sys.vm.source("lib/std/net.ark")
