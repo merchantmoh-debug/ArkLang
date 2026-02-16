@@ -18,6 +18,8 @@ ed25519-dalek = { version = "2", features = ["fast"] }
 shell-words = "1.1"
 
 arrow = { version = "50.0", default-features = false, features = ["ipc", "ffi"], optional = true }
+ctrlc = "3.5.2"
+lazy_static = "1.5.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { version = "=0.11.22", features = ["json", "blocking"] }
