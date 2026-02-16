@@ -1,76 +1,27 @@
+# Badge: https://github.com/${{ github.repository }}/actions/workflows/ci.yml/badge.svg
+
 name: Ark Compiler CI
 
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
-  # ─── Python Gauntlet ──────────────────────────────────────────────────
-  python-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: "Tier 1: Sanity Check"
-        run: python meta/ark.py run tests/sanity.ark
-        timeout-minutes: 1
-
-      - name: "Tier 1: Singularity Protocol (Mock AI)"
-        run: python meta/ark.py run tests/singularity.ark
-        timeout-minutes: 1
-
-      - name: "Tier 2: Threading"
-        run: python meta/ark.py run tests/test_threading.ark
-        timeout-minutes: 2
-        env:
-          ALLOW_DANGEROUS_LOCAL_EXECUTION: "true"
-
-      - name: "Tier 2: Math & Trig"
-        run: python meta/ark.py run tests/test_math_trig.ark
-        timeout-minutes: 1
-
-      - name: "Tier 2: String Comparison"
-        run: python meta/ark.py run tests/test_string_cmp.ark
-        timeout-minutes: 1
-
-      - name: "Tier 3: Security — Path Traversal"
-        run: python meta/verify_security.py tests/security/path_traversal.ark
-        timeout-minutes: 1
-
-      - name: "Tier 3: Security — Exec Violation"
-        run: python meta/verify_security.py tests/security/exec_violation.ark
-        timeout-minutes: 1
-
-      - name: "Tier 3: Security — Git Overwrite"
-        run: python meta/verify_security.py tests/security/git_overwrite.ark
-        timeout-minutes: 1
-
-      - name: "Tier 3: Security — Root File Overwrite"
-        run: python meta/verify_security.py tests/security/root_file_overwrite.ark
-        timeout-minutes: 1
-
-      - name: "Tier 3: Jailbreak Attempt"
-        run: python meta/verify_security.py tests/jailbreak_attempt.ark
-        timeout-minutes: 1
-
-  # ─── Rust Core ────────────────────────────────────────────────────────
-  rust-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  # ─── Rust CI ──────────────────────────────────────────────────────────
+  rust-ci:
+    name: Rust CI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -79,17 +30,171 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
 
-      - name: Rust Build Check
-        run: cargo check
+      - name: Cache Cargo Registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check Formatting
+        run: cargo fmt --check
         working-directory: core
 
-      - name: Rust Unit Tests
+      - name: Run Clippy
+        run: cargo clippy -- -D warnings
+        working-directory: core
+
+      - name: Run Tests
         run: cargo test --release
         working-directory: core
-        timeout-minutes: 10
 
-      - name: WASM Compilation Check
-        run: cargo build --target wasm32-unknown-unknown --release
+      - name: Build Release Binary
+        run: cargo build --release --bin ark_loader
         working-directory: core
+
+      - name: Prepare Artifacts
+        shell: bash
+        run: |
+          mkdir dist
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            cp core/target/release/ark_loader.exe dist/ark-core.exe
+          else
+            cp core/target/release/ark_loader dist/ark-core
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ark-core-${{ matrix.os }}
+          path: dist/*
+          if-no-files-found: error
+
+  # ─── Python CI ────────────────────────────────────────────────────────
+  python-ci:
+    name: Python CI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install lark z3-solver pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run Pytest
+        run: python -m pytest meta/ -v
+
+      - name: Run Gauntlet
+        run: python meta/gauntlet.py
         timeout-minutes: 5
+
+  # ─── Security Scan ────────────────────────────────────────────────────
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Security Tools
+        run: |
+          pip install pip-audit bandit
+          cargo install cargo-audit
+
+      - name: Audit Rust Dependencies
+        run: cargo audit
+        working-directory: core
+
+      - name: Audit Python Dependencies
+        run: pip-audit
+
+      - name: Static Analysis (Bandit)
+        run: bandit -r meta/
+
+  # ─── Release ──────────────────────────────────────────────────────────
+  release:
+    name: Release
+    needs: [rust-ci, python-ci, security]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Asset (Linux)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/ark-core-ubuntu-latest/ark-core
+          asset_name: ark-core-linux
+          asset_content_type: application/octet-stream
+
+      - name: Upload Asset (macOS)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/ark-core-macos-latest/ark-core
+          asset_name: ark-core-macos
+          asset_content_type: application/octet-stream
+
+      - name: Upload Asset (Windows)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/ark-core-windows-latest/ark-core.exe
+          asset_name: ark-core-windows.exe
+          asset_content_type: application/vnd.microsoft.portable-executable
