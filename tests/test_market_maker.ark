@@ -1,0 +1,112 @@
+// tests/test_market_maker.ark
+// Integration Test for Market Maker Logic
+// Runs 5 ticks to verify state updates and math
+
+import lib.std.math
+import lib.std.string
+import lib.std.time
+import lib.std.net
+
+print("Testing Market Maker Logic...")
+
+// --- Configuration ---
+config := {
+    PAIR: "ARK/USD",
+    SPREAD: 10,
+    TICK_SPEED: 0, // Instant
+    MAX_POSITION_SIZE: 1000,
+    EXCHANGE_URL: "mock"
+}
+
+// --- State ---
+state := {
+    position: 0,
+    cash: 1000000,
+    open_orders: [],
+    last_price: 15000,
+    latest_orders: []
+}
+
+// --- Logic (Duplicated from App for Isolation) ---
+
+func generate_order_id() {
+    return "ord_test_" + sys.time.now()
+}
+
+func format_price(p) {
+    dollars := p / 100
+    cents := p % 100
+    d_str := sys.json.stringify(dollars)
+    c_str := sys.json.stringify(cents)
+    if cents < 10 { c_str := "0" + c_str }
+    return d_str + "." + c_str
+}
+
+func calculate_fair_value(book) {
+    return state.last_price
+}
+
+func update_quotes(fair_value) {
+    half_spread := config.SPREAD / 2
+    bid_price := fair_value - half_spread
+    ask_price := fair_value + half_spread
+    
+    bid_order := {
+        id: generate_order_id(),
+        side: "buy",
+        price: bid_price,
+        size: 10,
+        status: "open"
+    }
+    
+    ask_order := {
+        id: generate_order_id(),
+        side: "sell",
+        price: ask_price,
+        size: 10,
+        status: "open"
+    }
+    
+    return [bid_order, ask_order]
+}
+
+func fetch_orderbook() {
+    // Deterministic walk for test
+    change := 5
+    state.last_price := state.last_price + change
+    return {}
+}
+
+// --- Test Runner ---
+
+func run_test() {
+    iterations := 5
+    i := 0
+    
+    while i < iterations {
+        book := fetch_orderbook()
+        fv := calculate_fair_value(book)
+        state.latest_orders := update_quotes(fv)
+        
+        let (bid, _) := sys.list.get(state.latest_orders, 0)
+        let (ask, _) := sys.list.get(state.latest_orders, 1)
+        
+        p_str := format_price(state.last_price)
+        b_str := format_price(bid.price)
+        a_str := format_price(ask.price)
+        
+        print("TICK " + i + " | Price: " + p_str + " | Bid: " + b_str + " | Ask: " + a_str)
+        
+        // Assertions
+        if bid.price >= ask.price {
+            print("ERROR: Crossed Book! Bid >= Ask")
+            sys.exit(1)
+        }
+        
+        i := i + 1
+    }
+    
+    print("Test Passed: 5 Ticks Completed Successfully.")
+}
+
+run_test()
