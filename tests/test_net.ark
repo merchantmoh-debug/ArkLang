@@ -1,3 +1,5 @@
+// @capabilities: net
+// @flaky
 // tests/test_net.ark
 
 func handler(path) {

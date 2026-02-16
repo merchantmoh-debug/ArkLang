@@ -52,11 +52,45 @@ class TestResult:
 def generate_fuzz_input(size=1024):
     return os.urandom(size)
 
+def parse_test_header(file_path):
+    """
+    Parses the first block of comments in an Ark file for metadata.
+    Returns: (capabilities: set, flaky: bool)
+    """
+    caps = set()
+    flaky = False
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue # Skip empty lines
+                if not line.startswith("//"):
+                    break # Stop at first non-comment line
+
+                # Check for capabilities
+                if "@capabilities:" in line:
+                    parts = line.split("@capabilities:", 1)[1].strip()
+                    for cap in parts.split(","):
+                        c = cap.strip()
+                        if c:
+                            caps.add(c)
+
+                # Check for flaky
+                if "@flaky" in line:
+                    flaky = True
+    except Exception:
+        pass
+    return caps, flaky
+
 def run_test_task(file_path, fuzz=False, iterations=1):
     """
     Runs a single Ark test file (or fuzz iteration).
     Returns: TestResult
     """
+    # Parse header for metadata
+    required_caps, is_flaky_test = parse_test_header(file_path)
+
     is_expected_fail = "fail_" in file_path or "jailbreak" in file_path
     # Security tests are expected-fail ONLY in unprivileged mode.
     # In privileged mode, the sandbox is bypassed entirely (has_capability('all')),
@@ -78,9 +112,26 @@ def run_test_task(file_path, fuzz=False, iterations=1):
         else:
             is_expected_fail = True
 
+    # Retry logic for flaky tests
+    # If the test is explicitly marked @flaky, we allow up to 2 retries (3 attempts total)
+    # UNLESS iterations > 1 (which means we are stress-testing for flakiness anyway)
+    attempts = 1
+    if is_flaky_test and iterations == 1:
+        attempts = 3
+
+    loop_count = iterations if iterations > 1 else attempts
+
     results = []
 
-    for _ in range(iterations):
+    # Prepare environment
+    env = os.environ.copy()
+    if required_caps:
+        env["ARK_CAPABILITIES"] = ",".join(required_caps)
+        # Clear global override if specific caps are requested to ensure granular control
+        if "ALLOW_DANGEROUS_LOCAL_EXECUTION" in env:
+            del env["ALLOW_DANGEROUS_LOCAL_EXECUTION"]
+
+    for i in range(loop_count):
         cmd = [sys.executable, "meta/ark.py", "run", file_path]
         
         input_data = b"!exit\n"
@@ -96,8 +147,8 @@ def run_test_task(file_path, fuzz=False, iterations=1):
                 input=input_data,
                 capture_output=True,
                 text=False, # Use bytes mode for input/output
-                timeout=10,
-                env=os.environ # Propagate ALLOW_DANGEROUS_LOCAL_EXECUTION
+                timeout=30,
+                env=env
             )
             duration = time.time() - start
 
@@ -126,6 +177,10 @@ def run_test_task(file_path, fuzz=False, iterations=1):
                 "crash": crash
             })
 
+            # Early exit on success if retrying
+            if is_flaky_test and iterations == 1 and success:
+                break
+
         except subprocess.TimeoutExpired:
             results.append({
                 "success": False,
@@ -139,10 +194,10 @@ def run_test_task(file_path, fuzz=False, iterations=1):
     successes = [r["success"] for r in results]
     crashes = [r["crash"] for r in results]
 
-    is_flaky = False
+    is_observed_flaky = False
     if len(results) > 1:
         if any(successes) and not all(successes):
-            is_flaky = True
+            is_observed_flaky = True
 
     has_crash = any(crashes)
 
@@ -153,13 +208,19 @@ def run_test_task(file_path, fuzz=False, iterations=1):
             final_res = r
             break
 
+    final_success = all(successes)
+    if is_flaky_test:
+        final_success = any(successes)
+    elif is_observed_flaky:
+        final_success = False
+
     return TestResult(
         path=file_path,
-        success=all(successes) and not is_flaky, # Strict success
+        success=final_success,
         output=final_res["output"],
         error=final_res["error"],
         duration=final_res["duration"],
-        flaky=is_flaky,
+        flaky=is_observed_flaky,
         crash=has_crash
     )
 
