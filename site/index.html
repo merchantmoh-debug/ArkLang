@@ -3,230 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ark Snake (WASM)</title>
+    <title>Ark - The Sovereign Computing Stack</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <style>
-        body { background: #1a1a1a; color: #eee; font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        canvas { border: 4px solid #333; background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        #status { margin-top: 10px; color: #888; }
+        .secondary-btn {
+            color: var(--text-primary);
+            padding: 12px 24px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-left: 10px;
+            font-weight: 600;
+        }
+        .secondary-btn:hover {
+            background-color: var(--hover-bg);
+            text-decoration: none;
+        }
+        .cta-container {
+            margin-top: 30px;
+        }
     </style>
 </head>
-<body>
-    <h1>Ark Sovereign Snake</h1>
-    <canvas id="game" width="400" height="400"></canvas>
-    <div id="status">Loading WASM...</div>
+<body class="landing-page">
+    <header>
+        <div class="logo">
+            ARK <span>//</span> OMEGA-POINT
+        </div>
+        <nav class="header-controls">
+            <a href="https://github.com/mohamadalzawahreh/ark" target="_blank" class="header-btn">GitHub</a>
+            <a href="../web/index.html" class="header-btn" style="color: var(--text-accent);">Playground</a>
+        </nav>
+    </header>
 
-    <script type="module">
-        const canvas = document.getElementById('game');
-        const ctx = canvas.getContext('2d');
-        const status = document.getElementById('status');
-        const SCALE = 20;
+    <section class="hero">
+        <h1>THE SOVEREIGN<br>COMPUTING STACK</h1>
+        <p>
+            A JIT-compiled language designed to replace the entire SaaS industry with zero-cost, localized, formal verification software.
+        </p>
+        <div class="cta-container">
+            <a href="../web/index.html" class="cta-btn">Try the Playground</a>
+            <a href="https://github.com/mohamadalzawahreh/ark" class="secondary-btn">View Source</a>
+        </div>
+    </section>
 
-        let wasm = null;
-        let gameState = null;
-        let lastInput = "None";
+    <section class="features-grid">
+        <div class="feature-card">
+            <h3>⚡ Zero-Cost Abstraction</h3>
+            <p>JIT-compiled to native code. Runs at the speed of Rust. No garbage collection pauses. Deterministic performance.</p>
+        </div>
+        <div class="feature-card">
+            <h3>🛡️ Formally Verified</h3>
+            <p>Core primitives are verified against specification. Type system ensures memory safety without borrow checker complexity.</p>
+        </div>
+        <div class="feature-card">
+            <h3>📦 95+ Intrinsics</h3>
+            <p>Batteries included: Networking, Crypto, Graphics, and System calls available out of the box.</p>
+        </div>
+        <div class="feature-card">
+            <h3>🔒 Sandboxed</h3>
+            <p>Capability-based security model. Scripts cannot access network or disk without explicit permission.</p>
+        </div>
+    </section>
 
-        // --- WASM Bridge ---
-        async function loadArk() {
-            try {
-                // 1. Load WASM
-                const response = await fetch('wasm/ark.wasm');
-                if (!response.ok) throw new Error(`WASM Fetch Error: ${response.status}`);
-                const bytes = await response.arrayBuffer();
+    <section class="install-section" id="install" style="text-align: center; padding: 60px 20px;">
+        <h2>Get Started</h2>
+        <div class="code-block" style="background: #111; padding: 20px; border-radius: 8px; display: inline-block; text-align: left; font-family: 'JetBrains Mono', monospace; margin-top: 20px; border: 1px solid var(--border-color);">
+            <div style="margin-bottom: 8px;"><span style="color: #666">$</span> git clone https://github.com/mohamadalzawahreh/ark</div>
+            <div style="margin-bottom: 8px;"><span style="color: #666">$</span> cd ark</div>
+            <div><span style="color: #666">$</span> python meta/ark.py install</div>
+        </div>
+    </section>
 
-                const { instance } = await WebAssembly.instantiate(bytes, {
-                    env: {},
-                    // Mock wasm-bindgen imports if present (due to dependencies like chrono/rand)
-                    __wbindgen_placeholder__: new Proxy({}, {
-                        get: (target, prop) => {
-                            // console.log("Mocking import:", prop);
-                            return (...args) => {
-                                console.warn("Called mocked import:", prop, args);
-                                return 0;
-                            };
-                        }
-                    }),
-                    __wbindgen_externref_xform__: new Proxy({}, {
-                        get: (target, prop) => {
-                            return (...args) => { return 0; };
-                        }
-                    })
-                });
-                wasm = instance.exports;
-                status.innerText = "Loading Game Logic...";
-
-                // 2. Load Snake Logic (MAST JSON)
-                const logicResp = await fetch('snake.json');
-                if (!logicResp.ok) throw new Error(`Logic Fetch Error: ${logicResp.status}`);
-                const logicJson = await logicResp.text(); // Get as text
-
-                // 3. Initialize VM
-                const result = callWasmString(wasm.ark_init, logicJson);
-                if (result !== "OK") {
-                    throw new Error(`Ark Init Failed: ${result}`);
-                }
-
-                // 4. Initialize Game State
-                const initRes = callWasmJson(wasm.ark_call, "init", []);
-                if (initRes.error) throw new Error(initRes.error);
-                gameState = initRes;
-
-                status.innerText = "Running (Use Arrow Keys)";
-                requestAnimationFrame(loop);
-
-            } catch (e) {
-                status.innerText = `Error: ${e.message}`;
-                console.error(e);
-            }
-        }
-
-        function callWasmString(func, str) {
-            const encoder = new TextEncoder();
-            const bytes = encoder.encode(str);
-            const len = bytes.length;
-            const ptr = wasm.ark_alloc(len);
-
-            const mem = new Uint8Array(wasm.memory.buffer);
-            mem.set(bytes, ptr);
-
-            const resPtr = func(ptr, len);
-
-            // Read Response
-            // Format: [len (4 bytes LE)] [content...]
-            const view = new DataView(wasm.memory.buffer);
-            const resLen = view.getUint32(resPtr, true);
-            const resBytes = new Uint8Array(wasm.memory.buffer, resPtr + 4, resLen);
-            const decoder = new TextDecoder();
-            const result = decoder.decode(resBytes);
-
-            // Cleanup
-            // We own input ptr (alloc'd), func frees it?
-            // Core implementation:
-            // ark_eval: takes input_ptr. Reconstructs slice. Does NOT free input_ptr automatically?
-            // `slice::from_raw_parts` borrows.
-            // So we MUST free input_ptr.
-            wasm.ark_dealloc(ptr, len);
-            // We must also free result buffer
-            wasm.ark_dealloc(resPtr, resLen + 4);
-
-            return result;
-        }
-
-        function callWasmJson(func, name, args) {
-            const argsStr = JSON.stringify(args);
-
-            const encoder = new TextEncoder();
-            const nameBytes = encoder.encode(name);
-            const argsBytes = encoder.encode(argsStr);
-
-            const namePtr = wasm.ark_alloc(nameBytes.length);
-            const argsPtr = wasm.ark_alloc(argsBytes.length);
-
-            const mem = new Uint8Array(wasm.memory.buffer);
-            mem.set(nameBytes, namePtr);
-            mem.set(argsBytes, argsPtr);
-
-            const resPtr = func(namePtr, nameBytes.length, argsPtr, argsBytes.length);
-
-            // Read Response
-            const view = new DataView(wasm.memory.buffer);
-            const resLen = view.getUint32(resPtr, true);
-            const resBytes = new Uint8Array(wasm.memory.buffer, resPtr + 4, resLen);
-            const decoder = new TextDecoder();
-            const resultStr = decoder.decode(resBytes);
-
-            // Cleanup
-            wasm.ark_dealloc(namePtr, nameBytes.length);
-            wasm.ark_dealloc(argsPtr, argsBytes.length);
-            wasm.ark_dealloc(resPtr, resLen + 4);
-
-            try {
-                return JSON.parse(resultStr);
-            } catch (e) {
-                console.error("JSON Parse Error on Result:", resultStr);
-                return { error: "Invalid JSON from Ark" };
-            }
-        }
-
-        // --- Game Loop ---
-        let lastTime = 0;
-        const TICK_RATE = 100; // ms
-
-        function loop(timestamp) {
-            if (!gameState) return;
-
-            if (timestamp - lastTime > TICK_RATE) {
-                // Update
-                if (!gameState.game_over) {
-                    const newState = callWasmJson(wasm.ark_call, "update", [gameState, lastInput]);
-                    // Don't reset input immediately to ensure 180 prevention works?
-                    // Actually, reset input after consumed.
-                    // But if tick is slow, we might miss input?
-                    // Simple queue or just use current.
-                    // snake_browser.ark consumes input.
-                    // We only send one input per tick.
-                    // If user pressed multiple keys, we send last one.
-
-                    if (newState && !newState.error) {
-                        gameState = newState;
-                    } else {
-                        console.error("Update failed", newState);
-                    }
-                }
-                lastTime = timestamp;
-            }
-
-            draw();
-            requestAnimationFrame(loop);
-        }
-
-        function draw() {
-            if (!gameState) return;
-
-            // Clear
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Draw Snake
-            ctx.fillStyle = '#0f0';
-            if (gameState.snake) {
-                for (const part of gameState.snake) {
-                    // part is [x, y]
-                    // If part is LinearObject/Struct? JSON should be list.
-                    // ark_to_json.py creates List.
-                    ctx.fillRect(part[0] * SCALE, part[1] * SCALE, SCALE - 1, SCALE - 1);
-                }
-            }
-
-            // Draw Apple
-            if (gameState.apple) {
-                ctx.fillStyle = '#f00';
-                ctx.fillRect(gameState.apple[0] * SCALE, gameState.apple[1] * SCALE, SCALE - 1, SCALE - 1);
-            }
-
-            // Score
-            ctx.fillStyle = '#fff';
-            ctx.font = '16px monospace';
-            ctx.fillText(`Score: ${gameState.score || 0}`, 10, 20);
-
-            if (gameState.game_over) {
-                ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = '#fff';
-                ctx.font = '30px monospace';
-                ctx.fillText("GAME OVER", 120, 200);
-            }
-        }
-
-        // --- Input ---
-        window.addEventListener('keydown', e => {
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-                lastInput = e.key;
-                e.preventDefault();
-            }
-        });
-
-        // Start
-        loadArk();
-    </script>
+    <footer>
+        <div style="text-align: center; padding: 40px; color: #666; font-size: 12px; border-top: 1px solid var(--border-color);">
+            &copy; 2024 Ark Sovereign Systems. Released under MIT License.
+        </div>
+    </footer>
 </body>
 </html>

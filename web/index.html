@@ -1,73 +1,102 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Ark-0 Sovereign Console</title>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Inter:wght@200;400;700&display=swap" rel="stylesheet">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ark Web Playground</title>
     <link rel="stylesheet" href="../site/css/style.css">
-    <style>
-       /* Inline Overrides for Web-Specific Layout if needed, 
-          but primarily relying on the new style.css */
-       body {
-           background-image: radial-gradient(circle at 50% 50%, #0d1117 0%, #000 100%);
-       }
-    </style>
-  </head>
-  <body>
-    <div class="scanline"></div>
-    <div id="app">
-        <header>
-          <h1>ARK <span>//</span> OMEGA-POINT v112.0</h1>
-          <div class="system-status">
-            <span class="status-ok">HEART: SOUND</span>
-            <span class="dim">|</span>
-            <span class="status-ok">OIS: 100/100</span>
-            <span class="dim">|</span>
-            <span class="accent-color">MODE: TURTLE</span>
-          </div>
-        </header>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-        <div class="terminal-container">
-            <div id="terminal-output">
-                <div class="line dim">Initialized Ark Omega-Point Runtime...</div>
-                <div class="line">Ready for Sovereign Execution.</div>
-                <br>
+    <!-- CodeMirror 6 Import Map -->
+    <script type="importmap">
+    {
+        "imports": {
+            "codemirror": "https://esm.sh/codemirror@6.0.1",
+            "@codemirror/view": "https://esm.sh/@codemirror/view@6.9.3",
+            "@codemirror/state": "https://esm.sh/@codemirror/state@6.2.0",
+            "@codemirror/language": "https://esm.sh/@codemirror/language@6.6.0",
+            "@codemirror/commands": "https://esm.sh/@codemirror/commands@6.2.2",
+            "@codemirror/search": "https://esm.sh/@codemirror/search@6.2.3",
+            "@codemirror/autocomplete": "https://esm.sh/@codemirror/autocomplete@6.4.2",
+            "@codemirror/lint": "https://esm.sh/@codemirror/lint@6.1.1",
+            "@codemirror/theme-one-dark": "https://esm.sh/@codemirror/theme-one-dark@6.1.1",
+            "@lezer/highlight": "https://esm.sh/@lezer/highlight@1.1.3",
+            "@lezer/common": "https://esm.sh/@lezer/common@1.0.2"
+        }
+    }
+    </script>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            ARK <span>//</span> PLAYGROUND
+        </div>
+        <div class="header-controls">
+            <button class="header-btn" id="font-dec" title="Decrease Font">A-</button>
+            <button class="header-btn" id="font-inc" title="Increase Font">A+</button>
+            <button class="header-btn" id="run-btn" title="Run Code (Ctrl+Enter)">
+                <span class="icon">▶</span> Run
+            </button>
+            <button class="header-btn" id="share-btn" title="Share Code">
+                <span class="icon">🔗</span> Share
+            </button>
+            <button class="header-btn" id="theme-btn" title="Toggle Theme">
+                <span class="icon">◑</span>
+            </button>
+            <a href="../site/index.html" class="header-btn">Home</a>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">Examples</div>
+            <div id="examples-list">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Settings removed for now -->
+        </div>
+
+        <!-- Editor Area -->
+        <div class="editor-area">
+            <div class="editor-tabs">
+                <div class="tab">main.ark</div>
+            </div>
+            <div class="editor-container" id="editor">
+                <!-- CodeMirror mounted here -->
             </div>
         </div>
 
-        <div class="input-area">
-            <span class="prompt">➜</span>
-            <input type="text" id="cmd-input" placeholder="Enter command..." autofocus>
+        <!-- Output Panel -->
+        <div class="output-panel">
+            <div class="output-header">
+                <div class="output-title">Console Output</div>
+                <div class="output-actions">
+                    <button class="icon-btn" id="clear-btn" title="Clear Console">🚫</button>
+                </div>
+            </div>
+            <div class="output-console" id="console-output">
+                <div class="log-entry">
+                    <div class="log-timestamp">[SYS]</div>
+                    <div class="log-content log-info">Ark Web Playground initialized.</div>
+                </div>
+            </div>
         </div>
     </div>
-    
-    <script src="main.js"></script>
-    <script>
-        // Minimal JS to handle input for now
-        const input = document.getElementById('cmd-input');
-        const output = document.getElementById('terminal-output');
 
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                const cmd = input.value;
-                if (cmd.trim()) {
-                    const line = document.createElement('div');
-                    line.className = 'line';
-                    line.innerHTML = `<span class="prompt">➜</span> ${cmd}`;
-                    output.appendChild(line);
-                    
-                    // Echo response (Simulation for now)
-                    const resp = document.createElement('div');
-                    resp.className = 'line';
-                    resp.style.color = '#ccc';
-                    resp.textContent = `[System]: Command '${cmd}' received. Processing...`;
-                    output.appendChild(resp);
+    <div class="status-bar">
+        <div class="status-left">
+            <span>Ready</span>
+        </div>
+        <div class="status-right">
+            <span>Ark Omega-Point v112.0</span>
+            <span id="cursor-pos">Ln 1, Col 1</span>
+        </div>
+    </div>
 
-                    input.value = '';
-                    output.scrollTop = output.scrollHeight;
-                }
-            }
-        });
-    </script>
-  </body>
+    <script type="module" src="main.js"></script>
+</body>
 </html>
