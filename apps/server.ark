@@ -1,18 +1,131 @@
-func handler(req) {
-    print("Ark Server: Received request for " + req)
-    
-    if req == "/health" {
-        return "OK"
+// apps/server.ark
+// HTTP Server (Raw Socket Implementation)
+
+import lib.std.string
+
+func parse_request(req_str) {
+    // Basic parsing: "METHOD /path HTTP/1.1"
+    lines := string.split(req_str, "\n")
+
+    // Check if lines is valid
+    l_lines := len(lines)
+    if l_lines == 0 { return ["", "", ""] }
+
+    first_line := lines[0]
+    parts := string.split(first_line, " ")
+
+    l_parts := len(parts)
+    if l_parts < 2 { return ["", "", ""] }
+
+    method := parts[0]
+    path := parts[1]
+
+    // Find body (after blank line)
+    body := ""
+    i := 0
+    found_body := false
+
+    while i < l_lines {
+        line := lines[i]
+        // Check for empty line (CRLF or LF)
+        trimmed := string.trim(line)
+
+        if found_body {
+            if body != "" { body := body + "\n" }
+            body := body + line
+        } else {
+            if trimmed == "" {
+                found_body := true
+            }
+        }
+        i := i + 1
     }
+
+    return [method, path, body]
+}
+
+func handle_client(client_handle) {
+    // Read request
+    req_str := sys.net.socket.recv(client_handle, 4096)
     
-    return "<h1>Hello from Ark Sovereign Node</h1><p>Path: " + sys.html_escape(req) + "</p>"
+    // Check if recv failed or empty
+    if req_str == "" {
+        sys.net.socket.close(client_handle)
+        return 0
+    }
+    if req_str == false {
+        sys.net.socket.close(client_handle)
+        return 0
+    }
+
+    parsed := parse_request(req_str)
+    method := parsed[0]
+    path := parsed[1]
+    body := parsed[2]
+
+    print("Request: " + method + " " + path)
+
+    status := 404
+    resp_body := "Not Found"
+    content_type := "text/plain"
+
+    if method == "GET" {
+        if path == "/" {
+            status := 200
+            resp_body := "Welcome to Ark Server"
+        }
+        if path == "/health" {
+            status := 200
+            content_type := "application/json"
+            resp_body := "{\"status\": \"ok\", \"version\": \"0.1.0\"}"
+        }
+        if path == "/api/time" {
+            status := 200
+            content_type := "application/json"
+            now := sys.time.now()
+            resp_body := "{\"time\": " + sys.json.stringify(now) + "}"
+        }
+    }
+
+    if method == "POST" {
+        if path == "/api/echo" {
+            status := 200
+            resp_body := body
+        }
+    }
+
+    // Construct Response
+    status_msg := "OK"
+    if status == 404 { status_msg := "Not Found" }
+    
+    // Header
+    response := "HTTP/1.1 " + sys.json.stringify(status) + " " + status_msg + "\r\n"
+    response := response + "Content-Type: " + content_type + "\r\n"
+    response := response + "Content-Length: " + sys.json.stringify(len(resp_body)) + "\r\n"
+    response := response + "Connection: close\r\n\r\n"
+    response := response + resp_body
+
+    sys.net.socket.send(client_handle, response)
+    sys.net.socket.close(client_handle)
+    return 0
 }
 
 port := 8087
-print("Starting server on 8087...")
-sys.net.http.serve(port, handler)
+server_socket := sys.net.socket.bind(port)
+print("Ark Server running on port " + sys.json.stringify(port))
+print("Press Ctrl+C to stop.")
 
-print("Server is running. Press Ctrl+C to stop.")
 while 1 {
-    sys.time.sleep(1)
+    // Accept returns [handle, ip] or false
+    conn := sys.net.socket.accept(server_socket)
+
+    if conn != false {
+        client_handle := conn[0]
+        client_ip := conn[1]
+
+        // Handle in main thread for now (simple)
+        handle_client(client_handle)
+    }
+    // Small sleep to yield if loop is tight
+    sys.time.sleep(0)
 }
