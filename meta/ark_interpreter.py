@@ -16,12 +16,14 @@ try:
         ReturnException, RopeString
     )
     from meta.ark_intrinsics import INTRINSICS, LINEAR_SPECS, INTRINSICS_WITH_SCOPE
+    from meta.ark_security import SandboxViolation
 except ModuleNotFoundError:
     from ark_types import (
         ArkValue, UNIT_VALUE, ArkFunction, ArkClass, ArkInstance, Scope,
         ReturnException, RopeString
     )
     from ark_intrinsics import INTRINSICS, LINEAR_SPECS, INTRINSICS_WITH_SCOPE
+    from ark_security import SandboxViolation
 
 
 # --- Global Parser ---
@@ -506,6 +508,9 @@ def eval_node(node, scope):
     except TailCall:
         raise
     except ArkRuntimeError:
+        raise
+    except SandboxViolation:
+        # Pass-through security exceptions unwrapped
         raise
     except Exception as e:
         # Catch unexpected Python errors (like ZeroDivisionError) and wrap them
