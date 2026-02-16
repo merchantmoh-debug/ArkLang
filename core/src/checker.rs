@@ -90,17 +90,17 @@ impl LinearChecker {
         let scope_vars = self.scope_stack.pop().unwrap_or_default();
         // Check for unused linear resources declared in this scope (lifo order)
         for var_name in scope_vars.iter().rev() {
-             if let Some(states) = self.var_states.get_mut(var_name) {
-                 if let Some(state) = states.pop() {
-                     if state.is_linear && state.is_active {
-                         return Err(LinearError::UnusedResource(var_name.clone()));
-                     }
-                 }
-                 // Clean up empty vector entries if needed, but not strictly required
-                 if states.is_empty() {
-                     self.var_states.remove(var_name);
-                 }
-             }
+            if let Some(states) = self.var_states.get_mut(var_name) {
+                if let Some(state) = states.pop() {
+                    if state.is_linear && state.is_active {
+                        return Err(LinearError::UnusedResource(var_name.clone()));
+                    }
+                }
+                // Clean up empty vector entries if needed, but not strictly required
+                if states.is_empty() {
+                    self.var_states.remove(var_name);
+                }
+            }
         }
         Ok(())
     }
@@ -206,7 +206,12 @@ impl LinearChecker {
         }
     }
 
-    fn check_let(&mut self, name: &str, ty: &Option<ArkType>, value: &Expression) -> Result<(), LinearError> {
+    fn check_let(
+        &mut self,
+        name: &str,
+        ty: &Option<ArkType>,
+        value: &Expression,
+    ) -> Result<(), LinearError> {
         // Heuristic: Check if RHS is a linear variable being moved
         let mut inferred_linear = false;
 
@@ -235,7 +240,11 @@ impl LinearChecker {
         Ok(())
     }
 
-    fn check_let_destructure(&mut self, names: &[String], value: &Expression) -> Result<(), LinearError> {
+    fn check_let_destructure(
+        &mut self,
+        names: &[String],
+        value: &Expression,
+    ) -> Result<(), LinearError> {
         self.traverse_node(&ArkNode::Expression(value.clone()))?;
 
         let mut call_signature = vec![];
@@ -309,7 +318,11 @@ impl LinearChecker {
         Ok(())
     }
 
-    fn check_while(&mut self, condition: &Expression, body: &[Statement]) -> Result<(), LinearError> {
+    fn check_while(
+        &mut self,
+        condition: &Expression,
+        body: &[Statement],
+    ) -> Result<(), LinearError> {
         self.check_expression(condition)?;
         self.enter_scope();
         for stmt in body {
@@ -327,9 +340,7 @@ impl LinearChecker {
 
     fn check_expression(&mut self, expr: &Expression) -> Result<(), LinearError> {
         match expr {
-            Expression::Variable(name) => {
-                self.use_var(name)
-            }
+            Expression::Variable(name) => self.use_var(name),
             Expression::Call { args, .. } => {
                 for arg in args {
                     self.check_expression(arg)?;
@@ -560,7 +571,10 @@ mod tests {
 
         let mut checker = LinearChecker::new();
         let result = checker.check_function(&func);
-        assert!(result.is_err(), "Checker allowed linear resource to escape into untyped variable");
+        assert!(
+            result.is_err(),
+            "Checker allowed linear resource to escape into untyped variable"
+        );
     }
 
     #[test]
@@ -593,7 +607,10 @@ mod tests {
 
         let mut checker = LinearChecker::new();
         let result = checker.check_function(&func);
-        assert!(result.is_ok(), "Valid shadowing (after consumption) should be allowed");
+        assert!(
+            result.is_ok(),
+            "Valid shadowing (after consumption) should be allowed"
+        );
     }
 
     #[test]
@@ -659,9 +676,9 @@ mod tests {
                             function_hash: "sys.mem.read".to_string(),
                             args: vec![
                                 Expression::Variable("buf".to_string()),
-                                Expression::Literal("0".to_string())
-                            ]
-                        }
+                                Expression::Literal("0".to_string()),
+                            ],
+                        },
                     },
                     Statement::Return(Expression::Variable("val".to_string())),
                 ])))
@@ -693,8 +710,8 @@ mod tests {
                         ty: None, // No type info!
                         value: Expression::Call {
                             function_hash: "sys.mem.alloc".to_string(),
-                            args: vec![Expression::Literal("10".to_string())]
-                        }
+                            args: vec![Expression::Literal("10".to_string())],
+                        },
                     },
                     Statement::Return(Expression::Variable("buf".to_string())),
                 ])))
@@ -704,14 +721,17 @@ mod tests {
 
         let mut checker = LinearChecker::new();
         let result = checker.check_function(&func);
-        assert!(result.is_ok(), "Should infer linearity from sys.mem.alloc and track it");
+        assert!(
+            result.is_ok(),
+            "Should infer linearity from sys.mem.alloc and track it"
+        );
     }
 
     #[test]
     fn test_linear_let_call_inferred_leak() {
-         // let buf = sys.mem.alloc(10);
-         // return;
-         let func = FunctionDef {
+        // let buf = sys.mem.alloc(10);
+        // return;
+        let func = FunctionDef {
             name: "alloc_leak".to_string(),
             inputs: vec![],
             output: ArkType::Shared("Void".to_string()),
@@ -722,8 +742,8 @@ mod tests {
                         ty: None,
                         value: Expression::Call {
                             function_hash: "sys.mem.alloc".to_string(),
-                            args: vec![Expression::Literal("10".to_string())]
-                        }
+                            args: vec![Expression::Literal("10".to_string())],
+                        },
                     },
                     Statement::Return(Expression::Literal("void".to_string())),
                 ])))
@@ -744,7 +764,7 @@ mod tests {
         // let buf: Linear = ...
         // let (val, buf) = unknown(buf) // shadowing, should infer buf is linear
         // return val // Leak buf!
-         let func = FunctionDef {
+        let func = FunctionDef {
             name: "shadow_unknown".to_string(),
             inputs: vec![],
             output: ArkType::Shared("Void".to_string()),
@@ -759,10 +779,8 @@ mod tests {
                         names: vec!["val".to_string(), "buf".to_string()],
                         value: Expression::Call {
                             function_hash: "unknown_func".to_string(),
-                            args: vec![
-                                Expression::Variable("buf".to_string())
-                            ]
-                        }
+                            args: vec![Expression::Variable("buf".to_string())],
+                        },
                     },
                     Statement::Return(Expression::Variable("val".to_string())),
                 ])))
@@ -774,7 +792,9 @@ mod tests {
         let result = checker.check_function(&func);
         match result {
             Err(LinearError::UnusedResource(name)) => assert_eq!(name, "buf"),
-            _ => panic!("Expected UnusedResource for shadowed variable in destructure of unknown function"),
+            _ => panic!(
+                "Expected UnusedResource for shadowed variable in destructure of unknown function"
+            ),
         }
     }
 
@@ -791,9 +811,9 @@ mod tests {
                         inputs: vec![],
                         output: ArkType::Shared("Void".to_string()),
                         body: Box::new(
-                            MastNode::new(ArkNode::Statement(Statement::Return(Expression::Literal(
-                                "void".to_string(),
-                            ))))
+                            MastNode::new(ArkNode::Statement(Statement::Return(
+                                Expression::Literal("void".to_string()),
+                            )))
                             .unwrap(),
                         ),
                     }),
@@ -805,6 +825,9 @@ mod tests {
 
         let mut checker = LinearChecker::new();
         let result = checker.check_function(&func);
-        assert!(result.is_ok(), "Nested function caused scope leak or false positive unused resource");
+        assert!(
+            result.is_ok(),
+            "Nested function caused scope leak or false positive unused resource"
+        );
     }
 }

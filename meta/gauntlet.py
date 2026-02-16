@@ -33,6 +33,7 @@ INTERACTIVE_SKIP = {
     "apps/explorer.ark",      # HTTP server — sys.net.http.serve blocks
     "apps/build.ark",         # Build tool — runs cargo build (>10s)
     "apps/iron_hand.ark",     # AI workflow — needs live AI provider + fs_write
+    "apps/miner.ark",         # Miner — connects to external node (connection refused in CI)
     "examples/server.ark",    # HTTP server — sys.net.http.serve blocks
     "examples/snake.ark",     # HTTP game  — sys.net.http.serve blocks
 }
@@ -60,7 +61,7 @@ def run_test_task(file_path, fuzz=False, iterations=1):
     # Security tests are expected-fail ONLY in unprivileged mode.
     # In privileged mode, the sandbox is bypassed entirely (has_capability('all')),
     # so security tests succeed when they should fail — skip them instead.
-    is_security_test = "security" + os.sep in file_path or "security/" in file_path
+    is_security_test = ("security" + os.sep in file_path) or ("security/" in file_path) or ("jailbreak" in file_path)
     if is_security_test:
         privileged = os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() == "true"
         if privileged:

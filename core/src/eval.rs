@@ -17,7 +17,7 @@
  */
 
 use crate::ast::{ArkNode, Expression, Statement};
-use crate::runtime::{Scope, Value, RuntimeError};
+use crate::runtime::{RuntimeError, Scope, Value};
 
 pub struct Interpreter {
     recursion_limit: usize,
@@ -64,7 +64,11 @@ impl Interpreter {
         }
     }
 
-    fn eval_statement(&mut self, stmt: &Statement, scope: &mut Scope) -> Result<Value, RuntimeError> {
+    fn eval_statement(
+        &mut self,
+        stmt: &Statement,
+        scope: &mut Scope,
+    ) -> Result<Value, RuntimeError> {
         match stmt {
             Statement::Let { name, ty: _, value } => {
                 let val = self.eval_expression(value, scope)?;
@@ -189,7 +193,11 @@ impl Interpreter {
         }
     }
 
-    fn eval_expression(&mut self, expr: &Expression, scope: &mut Scope) -> Result<Value, RuntimeError> {
+    fn eval_expression(
+        &mut self,
+        expr: &Expression,
+        scope: &mut Scope,
+    ) -> Result<Value, RuntimeError> {
         self.current_depth += 1;
         if self.current_depth > self.recursion_limit {
             return Err(RuntimeError::RecursionLimitExceeded);
@@ -201,7 +209,11 @@ impl Interpreter {
         result
     }
 
-    fn eval_expression_impl(&mut self, expr: &Expression, scope: &mut Scope) -> Result<Value, RuntimeError> {
+    fn eval_expression_impl(
+        &mut self,
+        expr: &Expression,
+        scope: &mut Scope,
+    ) -> Result<Value, RuntimeError> {
         match expr {
             Expression::StructInit { fields } => {
                 let mut data = std::collections::HashMap::new();
@@ -319,10 +331,7 @@ mod tests {
         for _ in 0..10 {
             expr = Expression::Call {
                 function_hash: "intrinsic_add".to_string(),
-                args: vec![
-                    expr,
-                    Expression::Literal("1".to_string())
-                ]
+                args: vec![expr, Expression::Literal("1".to_string())],
             };
         }
 
