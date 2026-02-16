@@ -18,12 +18,12 @@
 
 pub mod ast;
 pub mod blockchain;
-pub mod consensus;
 #[cfg(feature = "ipc")]
 pub mod bridge;
 pub mod bytecode;
 pub mod checker;
 pub mod compiler;
+pub mod consensus;
 pub mod crypto;
 #[cfg(test)]
 pub mod eval; // Deprecated by VM, enabled for tests
@@ -31,10 +31,10 @@ pub mod ffi;
 pub mod intrinsics;
 pub mod loader;
 // pub mod repl; // Deprecated interpreter REPL
+#[cfg(test)]
+pub mod bench_intrinsics;
 pub mod runtime;
 pub mod types;
 pub mod vm;
 pub mod wasm;
-#[cfg(test)]
-pub mod bench_intrinsics;
 pub use wasm::*;

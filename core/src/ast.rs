@@ -41,18 +41,28 @@ pub fn calculate_hash<T: Serialize>(content: &T) -> Result<String, AstError> {
     Ok(hex::encode(result))
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct Span {
+    pub start_line: u32,
+    pub start_col: u32,
+    pub end_line: u32,
+    pub end_col: u32,
+    pub file: String,
+}
+
 /// Merkle-ized Abstract Syntax Tree Node
 /// Content-Addressed by the hash of its content.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct MastNode {
     pub hash: String, // Hex string of SHA256 hash
     pub content: ArkNode,
+    pub span: Option<Span>,
 }
 
 impl MastNode {
     pub fn new(content: ArkNode) -> Result<Self, AstError> {
         let hash = calculate_hash(&content)?;
-        Ok(MastNode { hash, content })
+        Ok(MastNode { hash, content, span: None })
     }
 }
 
@@ -62,6 +72,37 @@ pub enum ArkNode {
     Statement(Statement),
     Expression(Expression),
     Type(ArkType),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct Match {
+    pub scrutinee: Box<Expression>, // Usually expressions contain boxed sub-expressions
+    pub arms: Vec<(Expression, Expression)>, // Pattern -> Body
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct Lambda {
+    pub params: Vec<(String, ArkType)>,
+    pub body: Box<MastNode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct TryCatch {
+    pub try_block: Box<MastNode>,
+    pub catch_var: String,
+    pub catch_block: Box<MastNode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct Import {
+    pub path: String,
+    pub alias: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct StructDecl {
+    pub name: String,
+    pub fields: Vec<(String, ArkType)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -116,6 +157,10 @@ pub enum Statement {
     Break,
     Continue,
     Function(FunctionDef),
+
+    // New Nodes
+    Import(Import),
+    StructDecl(StructDecl),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]

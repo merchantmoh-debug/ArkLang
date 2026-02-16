@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>QUICK_START</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<style>
+body { font-family: sans-serif; line-height: 1.6; padding: 20px; max_width: 800px; margin: 0 auto; background: #1e1e1e; color: #d4d4d4; }
+h1, h2, h3 { color: #569cd6; }
+code { background: #2d2d2d; padding: 2px 5px; border_radius: 3px; font-family: monospace; }
+pre { background: #2d2d2d; padding: 10px; border_radius: 5px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+a { color: #9cdcfe; }
+</style>
+</head>
+<body>
+<nav>
+<a href="index.html">Index</a> |
+<a href="API_REFERENCE.html">API Reference</a> |
+<a href="STDLIB_REFERENCE.html">StdLib Reference</a> |
+<a href="QUICK_START.html">Quick Start</a>
+</nav>
+<hr>
+<h1 id="ark-quick-start">Ark Quick Start</h1>
+
+<h2 id="installation">Installation</h2>
+
+<p>Ark is a Python-based language. To run Ark, you need Python 3.10+.</p>
+
+<p>1. Clone the repository:</p>
+   <pre><code>   git clone https://github.com/your-repo/ark.git
+   cd ark
+   </code></pre>
+
+<p>2. Run the Ark CLI:</p>
+   <pre><code>   python meta/ark.py --help
+   </code></pre>
+
+<h2 id="hello-world">Hello World</h2>
+
+<p>Create a file named <code>hello.ark</code>:</p>
+
+<pre><code>print("Hello, World!")
+</code></pre>
+
+<p>Run it:</p>
+
+<pre><code>python meta/ark.py run hello.ark
+</code></pre>
+
+<h2 id="basic-syntax">Basic Syntax</h2>
+
+<h3 id="variables">Variables</h3>
+<p>Ark uses <code>:=</code> for assignment (reassignment is allowed with <code>:=</code>).</p>
+
+<pre><code>x := 10
+y := "Ark"
+</code></pre>
+
+<h3 id="functions">Functions</h3>
+
+<pre><code>func add(a, b) {
+    return a + b
+}
+</code></pre>
+
+<h3 id="control-flow">Control Flow</h3>
+
+<pre><code>if x &gt; 5 {
+    print("Big")
+} else {
+    print("Small")
+}
+
+i := 0
+while i &lt; 10 {
+    print(i)
+    i := i + 1
+}
+</code></pre>
+
+</body>
+</html>
