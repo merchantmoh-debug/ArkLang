@@ -1,0 +1,52 @@
+[
+  {
+    "title": "AGENT-01: Rust Data Ops",
+    "session": "sessions/15231985735138332031",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-02: Rust System I/O",
+    "session": "sessions/18399081970537320935",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-03: Rust Cryptography",
+    "session": "sessions/5068027438835014625",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-04: Rust Networking",
+    "session": "sessions/570408427545700672",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-05: Rust Advanced Runtime",
+    "session": "sessions/3058456385728141381",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-06: Gauntlet Sandbox Fix",
+    "session": "sessions/11923256401899470956",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-07: Package Manager MVP",
+    "session": "sessions/8562193867969029386",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-08: Bytecode Compiler",
+    "session": "sessions/3133226824002646914",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-09: Parity Ledger Update",
+    "session": "sessions/1656242047054939551",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-10: LSP Server",
+    "session": "sessions/11166787774999656484",
+    "status": "OK"
+  }
+]

@@ -1,0 +1,52 @@
+[
+  {
+    "title": "AGENT-11: Rust VM Hardening",
+    "session": "sessions/5343777039339636836",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-12: Rust Evaluator Completion",
+    "session": "sessions/12842638798690027536",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-13: Rust Type Checker Enhancement",
+    "session": "sessions/2548242131716572911",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-14: Standard Library Expansion",
+    "session": "sessions/3911659901189608939",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-15: CI/CD Pipeline Enhancement",
+    "session": "sessions/8005692757378542016",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-16: Documentation Generator",
+    "session": "sessions/10331143307516772268",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-17: REPL Enhancement",
+    "session": "sessions/7111154218497911759",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-18: Security Audit Enhancement",
+    "session": "sessions/49821718906129642",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-19: Benchmark Suite",
+    "session": "sessions/8190781150604766862",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-20: WASM Target Preparation",
+    "session": "sessions/12936204838260894504",
+    "status": "OK"
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "title": "AGENT-31: Python Interpreter Hardening",
+    "session": "sessions/9239685698754323440",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-32: Parser & Grammar Enhancement",
+    "session": "sessions/10513887953707552810",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-33: JSON Transpiler Completion",
+    "session": "sessions/11942282489605583515",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-34: Memory + Swarm System",
+    "session": "sessions/4661207637188504930",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-35: Feature Apps Polish",
+    "session": "sessions/16284817114292804460",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-36: Docker Deployment",
+    "session": "sessions/16579302909326191560",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-37: Contributing & Community Docs",
+    "session": "sessions/12641493606277073306",
+    "status": "OK"
+  }
+]

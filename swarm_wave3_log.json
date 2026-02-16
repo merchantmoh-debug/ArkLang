@@ -1,0 +1,52 @@
+[
+  {
+    "title": "AGENT-21: Rust Compiler Optimization",
+    "session": "sessions/1091000025343869859",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-22: Rust Runtime Hardening",
+    "session": "sessions/16713106934050397261",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-23: Rust FFI Completion",
+    "session": "sessions/379350203219369488",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-24: Rust Blockchain Subsystem",
+    "session": "sessions/15255384919699661160",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-25: Rust AST & Type System",
+    "session": "sessions/18267887079144480705",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-26: Rust Crypto Module",
+    "session": "sessions/1166307027071695072",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-27: Python Agent Framework",
+    "session": "sessions/17899443556266734145",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-28: Python Sandbox System",
+    "session": "sessions/9227806539226315396",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-29: MCP Client & Tools",
+    "session": "sessions/7785132216613361343",
+    "status": "OK"
+  },
+  {
+    "title": "AGENT-30: Web Playground",
+    "session": "sessions/10953673649308251359",
+    "status": "OK"
+  }
+]

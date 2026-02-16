@@ -7,20 +7,31 @@
  */
 
 use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
+use regex::Regex;
 #[cfg(not(target_arch = "wasm32"))]
 use reqwest::blocking::Client;
 #[cfg(not(target_arch = "wasm32"))]
 use shell_words;
 use std::env;
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::OnceLock;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::thread;
-use std::io::{self, Write};
-use regex::Regex;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use aes_gcm::{
+    Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit},
+};
+use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
+use hmac::{Hmac, Mac};
+use pbkdf2::pbkdf2;
+use rand::RngCore;
+use rand::rngs::OsRng;
+use sha2::{Digest, Sha512};
 
 #[cfg(not(target_arch = "wasm32"))]
 static AI_CLIENT: OnceLock<Client> = OnceLock::new();
@@ -51,6 +62,29 @@ impl IntrinsicRegistry {
             "sys_fs_read" | "intrinsic_fs_read" | "sys.fs.read" => Some(intrinsic_fs_read),
             "intrinsic_crypto_hash" | "sys.crypto.hash" => Some(intrinsic_crypto_hash),
             "intrinsic_crypto_verify" | "sys.crypto.verify" => Some(intrinsic_crypto_verify),
+            "intrinsic_crypto_sha512" | "sys.crypto.sha512" => Some(intrinsic_crypto_sha512),
+            "intrinsic_crypto_hmac_sha512" | "sys.crypto.hmac_sha512" => {
+                Some(intrinsic_crypto_hmac_sha512)
+            }
+            "intrinsic_crypto_pbkdf2" | "sys.crypto.pbkdf2" => Some(intrinsic_crypto_pbkdf2),
+            "intrinsic_crypto_aes_gcm_encrypt" | "sys.crypto.aes_gcm_encrypt" => {
+                Some(intrinsic_crypto_aes_gcm_encrypt)
+            }
+            "intrinsic_crypto_aes_gcm_decrypt" | "sys.crypto.aes_gcm_decrypt" => {
+                Some(intrinsic_crypto_aes_gcm_decrypt)
+            }
+            "intrinsic_crypto_random_bytes" | "sys.crypto.random_bytes" => {
+                Some(intrinsic_crypto_random_bytes)
+            }
+            "intrinsic_crypto_ed25519_generate" | "sys.crypto.ed25519_generate" => {
+                Some(intrinsic_crypto_ed25519_generate)
+            }
+            "intrinsic_crypto_ed25519_sign" | "sys.crypto.ed25519_sign" => {
+                Some(intrinsic_crypto_ed25519_sign)
+            }
+            "intrinsic_crypto_ed25519_verify" | "sys.crypto.ed25519_verify" => {
+                Some(intrinsic_crypto_ed25519_verify)
+            }
             "intrinsic_merkle_root" | "sys.crypto.merkle_root" => Some(intrinsic_merkle_root),
             "intrinsic_buffer_alloc" | "sys.mem.alloc" => Some(intrinsic_buffer_alloc),
             "intrinsic_buffer_inspect" | "sys.mem.inspect" => Some(intrinsic_buffer_inspect),
@@ -185,6 +219,42 @@ impl IntrinsicRegistry {
         scope.set(
             "sys.crypto.verify".to_string(),
             Value::NativeFunction(intrinsic_crypto_verify),
+        );
+        scope.set(
+            "sys.crypto.sha512".to_string(),
+            Value::NativeFunction(intrinsic_crypto_sha512),
+        );
+        scope.set(
+            "sys.crypto.hmac_sha512".to_string(),
+            Value::NativeFunction(intrinsic_crypto_hmac_sha512),
+        );
+        scope.set(
+            "sys.crypto.pbkdf2".to_string(),
+            Value::NativeFunction(intrinsic_crypto_pbkdf2),
+        );
+        scope.set(
+            "sys.crypto.aes_gcm_encrypt".to_string(),
+            Value::NativeFunction(intrinsic_crypto_aes_gcm_encrypt),
+        );
+        scope.set(
+            "sys.crypto.aes_gcm_decrypt".to_string(),
+            Value::NativeFunction(intrinsic_crypto_aes_gcm_decrypt),
+        );
+        scope.set(
+            "sys.crypto.random_bytes".to_string(),
+            Value::NativeFunction(intrinsic_crypto_random_bytes),
+        );
+        scope.set(
+            "sys.crypto.ed25519_generate".to_string(),
+            Value::NativeFunction(intrinsic_crypto_ed25519_generate),
+        );
+        scope.set(
+            "sys.crypto.ed25519_sign".to_string(),
+            Value::NativeFunction(intrinsic_crypto_ed25519_sign),
+        );
+        scope.set(
+            "sys.crypto.ed25519_verify".to_string(),
+            Value::NativeFunction(intrinsic_crypto_ed25519_verify),
         );
 
         // List/Struct
@@ -1045,6 +1115,301 @@ pub fn intrinsic_crypto_verify(args: Vec<Value>) -> Result<Value, RuntimeError> 
     }
 }
 
+fn get_bytes_from_value(v: &Value, name: &str) -> Result<Vec<u8>, RuntimeError> {
+    match v {
+        Value::Buffer(b) => Ok(b.clone()),
+        Value::String(s) => hex::decode(s)
+            .map_err(|_| RuntimeError::TypeMismatch(format!("Hex String for {}", name), v.clone())),
+        _ => Err(RuntimeError::TypeMismatch(
+            format!("Buffer or Hex String for {}", name),
+            v.clone(),
+        )),
+    }
+}
+
+pub fn intrinsic_crypto_sha512(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let data = match &args[0] {
+        Value::String(s) => s.as_bytes(),
+        Value::Buffer(b) => b.as_slice(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String or Buffer".into(),
+                args[0].clone(),
+            ));
+        }
+    };
+    let mut hasher = Sha512::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    Ok(Value::String(hex::encode(result)))
+}
+
+pub fn intrinsic_crypto_hmac_sha512(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    let key_bytes = get_bytes_from_value(&args[0], "key")?;
+
+    let data_bytes = match &args[1] {
+        Value::String(s) => s.as_bytes(),
+        Value::Buffer(b) => b.as_slice(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String or Buffer".into(),
+                args[1].clone(),
+            ));
+        }
+    };
+
+    type HmacSha512 = Hmac<Sha512>;
+    let mut mac = <HmacSha512 as Mac>::new_from_slice(&key_bytes)
+        .map_err(|_| RuntimeError::InvalidOperation("Invalid Key Length".into()))?;
+    mac.update(data_bytes);
+    let result = mac.finalize().into_bytes();
+    Ok(Value::String(hex::encode(result)))
+}
+
+pub fn intrinsic_crypto_pbkdf2(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 4 {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    let password = match &args[0] {
+        Value::String(s) => s.as_bytes(),
+        Value::Buffer(b) => b.as_slice(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String or Buffer".into(),
+                args[0].clone(),
+            ));
+        }
+    };
+
+    let salt = get_bytes_from_value(&args[1], "salt")?;
+
+    let iterations = match args[2] {
+        Value::Integer(n) => n as u32,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".into(),
+                args[2].clone(),
+            ));
+        }
+    };
+
+    let output_len = match args[3] {
+        Value::Integer(n) => n as usize,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".into(),
+                args[3].clone(),
+            ));
+        }
+    };
+
+    if iterations == 0 {
+        return Err(RuntimeError::InvalidOperation(
+            "Iterations must be > 0".into(),
+        ));
+    }
+
+    let mut result = vec![0u8; output_len];
+    pbkdf2::<Hmac<Sha512>>(password, &salt, iterations, &mut result)
+        .map_err(|_| RuntimeError::InvalidOperation("PBKDF2 Failed".into()))?;
+
+    Ok(Value::String(hex::encode(result)))
+}
+
+pub fn intrinsic_crypto_aes_gcm_encrypt(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    let key_bytes = get_bytes_from_value(&args[0], "key")?;
+    let nonce_bytes = get_bytes_from_value(&args[1], "nonce")?;
+
+    if key_bytes.len() != 32 {
+        return Err(RuntimeError::InvalidOperation(
+            "Key must be 32 bytes".into(),
+        ));
+    }
+    if nonce_bytes.len() != 12 {
+        return Err(RuntimeError::InvalidOperation(
+            "Nonce must be 12 bytes".into(),
+        ));
+    }
+
+    let plaintext = match &args[2] {
+        Value::String(s) => s.as_bytes(),
+        Value::Buffer(b) => b.as_slice(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String or Buffer".into(),
+                args[2].clone(),
+            ));
+        }
+    };
+
+    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
+        .map_err(|_| RuntimeError::InvalidOperation("Invalid Key".into()))?;
+
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext)
+        .map_err(|_| RuntimeError::InvalidOperation("Encryption Failed".into()))?;
+
+    Ok(Value::String(hex::encode(ciphertext)))
+}
+
+pub fn intrinsic_crypto_aes_gcm_decrypt(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    let key_bytes = get_bytes_from_value(&args[0], "key")?;
+    let nonce_bytes = get_bytes_from_value(&args[1], "nonce")?;
+    let ciphertext = get_bytes_from_value(&args[2], "ciphertext")?;
+
+    if key_bytes.len() != 32 {
+        return Err(RuntimeError::InvalidOperation(
+            "Key must be 32 bytes".into(),
+        ));
+    }
+    if nonce_bytes.len() != 12 {
+        return Err(RuntimeError::InvalidOperation(
+            "Nonce must be 12 bytes".into(),
+        ));
+    }
+
+    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
+        .map_err(|_| RuntimeError::InvalidOperation("Invalid Key".into()))?;
+
+    let nonce = Nonce::from_slice(&nonce_bytes);
+
+    let plaintext = cipher.decrypt(nonce, ciphertext.as_ref()).map_err(|_| {
+        RuntimeError::InvalidOperation("Decryption Failed (Invalid Tag or Key)".into())
+    })?;
+
+    Ok(Value::Buffer(plaintext))
+}
+
+pub fn intrinsic_crypto_random_bytes(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let n = match args[0] {
+        Value::Integer(i) => i as usize,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".into(),
+                args[0].clone(),
+            ));
+        }
+    };
+    if n > 65536 {
+        return Err(RuntimeError::InvalidOperation(
+            "Too many random bytes requested".into(),
+        ));
+    }
+    let mut bytes = vec![0u8; n];
+    OsRng.fill_bytes(&mut bytes);
+    Ok(Value::String(hex::encode(bytes)))
+}
+
+pub fn intrinsic_crypto_ed25519_generate(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if !args.is_empty() {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let mut csprng = OsRng;
+    let signing_key = SigningKey::generate(&mut csprng);
+    let verifying_key = signing_key.verifying_key();
+
+    let mut map = std::collections::HashMap::new();
+    map.insert(
+        "private_key".to_string(),
+        Value::String(hex::encode(signing_key.to_bytes())),
+    );
+    map.insert(
+        "public_key".to_string(),
+        Value::String(hex::encode(verifying_key.to_bytes())),
+    );
+
+    Ok(Value::Struct(map))
+}
+
+pub fn intrinsic_crypto_ed25519_sign(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    let msg_bytes = match &args[0] {
+        Value::String(s) => s.as_bytes(),
+        Value::Buffer(b) => b.as_slice(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String or Buffer".into(),
+                args[0].clone(),
+            ));
+        }
+    };
+
+    let key_bytes = get_bytes_from_value(&args[1], "private_key")?;
+
+    if key_bytes.len() != 32 {
+        return Err(RuntimeError::InvalidOperation(
+            "Private Key must be 32 bytes".into(),
+        ));
+    }
+
+    let signing_key = SigningKey::from_bytes(key_bytes.as_slice().try_into().unwrap());
+    let signature = signing_key.sign(msg_bytes);
+
+    Ok(Value::String(hex::encode(signature.to_bytes())))
+}
+
+pub fn intrinsic_crypto_ed25519_verify(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    let msg_bytes = match &args[0] {
+        Value::String(s) => s.as_bytes(),
+        Value::Buffer(b) => b.as_slice(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String or Buffer".into(),
+                args[0].clone(),
+            ));
+        }
+    };
+
+    let sig_bytes = get_bytes_from_value(&args[1], "signature")?;
+    let pub_bytes = get_bytes_from_value(&args[2], "public_key")?;
+
+    if sig_bytes.len() != 64 {
+        return Ok(Value::Boolean(false));
+    }
+    if pub_bytes.len() != 32 {
+        return Ok(Value::Boolean(false));
+    }
+
+    let verifying_key = match VerifyingKey::from_bytes(pub_bytes.as_slice().try_into().unwrap()) {
+        Ok(k) => k,
+        Err(_) => return Ok(Value::Boolean(false)),
+    };
+
+    let signature = ed25519_dalek::Signature::from_bytes(sig_bytes.as_slice().try_into().unwrap());
+
+    match verifying_key.verify(msg_bytes, &signature) {
+        Ok(_) => Ok(Value::Boolean(true)),
+        Err(_) => Ok(Value::Boolean(false)),
+    }
+}
+
 pub fn intrinsic_merkle_root(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
         return Err(RuntimeError::NotExecutable);
@@ -1323,10 +1688,7 @@ pub fn intrinsic_struct_has(args: Vec<Value>) -> Result<Value, RuntimeError> {
     let field = match field_val {
         Value::String(s) => s,
         _ => {
-            return Err(RuntimeError::TypeMismatch(
-                "String".to_string(),
-                field_val,
-            ));
+            return Err(RuntimeError::TypeMismatch("String".to_string(), field_val));
         }
     };
 
@@ -1356,30 +1718,15 @@ pub fn intrinsic_pow_mod(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     let m = match mod_val {
         Value::Integer(n) => n,
-        _ => {
-            return Err(RuntimeError::TypeMismatch(
-                "Integer".to_string(),
-                mod_val,
-            ))
-        }
+        _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), mod_val)),
     };
     let e = match exp_val {
         Value::Integer(n) => n,
-        _ => {
-            return Err(RuntimeError::TypeMismatch(
-                "Integer".to_string(),
-                exp_val,
-            ))
-        }
+        _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), exp_val)),
     };
     let b = match base_val {
         Value::Integer(n) => n,
-        _ => {
-            return Err(RuntimeError::TypeMismatch(
-                "Integer".to_string(),
-                base_val,
-            ))
-        }
+        _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), base_val)),
     };
 
     if m == 0 {
@@ -1543,19 +1890,26 @@ pub fn intrinsic_time_sleep(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     let duration_ms = match args[0] {
         Value::Integer(n) => {
-             if n < 0 {
-                  return Err(RuntimeError::InvalidOperation("Negative sleep duration".to_string()));
-             }
-             n as u64
+            if n < 0 {
+                return Err(RuntimeError::InvalidOperation(
+                    "Negative sleep duration".to_string(),
+                ));
+            }
+            n as u64
         }
-        _ => return Err(RuntimeError::TypeMismatch("Integer".to_string(), args[0].clone())),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[0].clone(),
+            ));
+        }
     };
 
     #[cfg(target_arch = "wasm32")]
     {
-         // In WASM, blocking sleep is generally not supported or freezes the browser.
-         // We'll log it as a simulation.
-         println!("[Ark:Time] Sleep {}ms (Simulated)", duration_ms);
+        // In WASM, blocking sleep is generally not supported or freezes the browser.
+        // We'll log it as a simulation.
+        println!("[Ark:Time] Sleep {}ms (Simulated)", duration_ms);
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1745,7 +2099,10 @@ pub fn intrinsic_io_read_bytes(args: Vec<Value>) -> Result<Value, RuntimeError> 
     let path_str = match &args[0] {
         Value::String(s) => s,
         _ => {
-             return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone()));
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                args[0].clone(),
+            ));
         }
     };
 
@@ -1753,19 +2110,22 @@ pub fn intrinsic_io_read_bytes(args: Vec<Value>) -> Result<Value, RuntimeError> 
 
     #[cfg(target_arch = "wasm32")]
     {
-         println!("[Ark:VFS] Read Bytes from '{}': (Simulated)", path_str);
-         Ok(Value::List(vec![]))
+        println!("[Ark:VFS] Read Bytes from '{}': (Simulated)", path_str);
+        Ok(Value::List(vec![]))
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-         // Security: Path Traversal Check
-         let safe_path = validate_safe_path(path_str)?;
-         let content = fs::read(safe_path).map_err(|_| RuntimeError::NotExecutable)?;
+        // Security: Path Traversal Check
+        let safe_path = validate_safe_path(path_str)?;
+        let content = fs::read(safe_path).map_err(|_| RuntimeError::NotExecutable)?;
 
-         // Convert Vec<u8> to Vec<Value> (List of Integers)
-         let list = content.into_iter().map(|b| Value::Integer(b as i64)).collect();
-         Ok(Value::List(list))
+        // Convert Vec<u8> to Vec<Value> (List of Integers)
+        let list = content
+            .into_iter()
+            .map(|b| Value::Integer(b as i64))
+            .collect();
+        Ok(Value::List(list))
     }
 }
 
@@ -1780,7 +2140,9 @@ pub fn intrinsic_io_read_line(args: Vec<Value>) -> Result<Value, RuntimeError> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let mut input = String::new();
-        io::stdin().read_line(&mut input).map_err(|_| RuntimeError::NotExecutable)?;
+        io::stdin()
+            .read_line(&mut input)
+            .map_err(|_| RuntimeError::NotExecutable)?;
         // Trim newline
         if input.ends_with('\n') {
             input.pop();
@@ -1798,13 +2160,20 @@ pub fn intrinsic_io_write(args: Vec<Value>) -> Result<Value, RuntimeError> {
     }
     let s = match &args[0] {
         Value::String(s) => s,
-        _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                args[0].clone(),
+            ));
+        }
     };
 
     print!("{}", s);
     #[cfg(not(target_arch = "wasm32"))]
     {
-        io::stdout().flush().map_err(|_| RuntimeError::NotExecutable)?;
+        io::stdout()
+            .flush()
+            .map_err(|_| RuntimeError::NotExecutable)?;
     }
     Ok(Value::Unit)
 }
@@ -2062,11 +2431,17 @@ pub fn intrinsic_extract_code(args: Vec<Value>) -> Result<Value, RuntimeError> {
     }
     let text = match &args[0] {
         Value::String(s) => s,
-        _ => return Err(RuntimeError::TypeMismatch("String".to_string(), args[0].clone())),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                args[0].clone(),
+            ));
+        }
     };
 
     // Regex to capture fenced code blocks: ```lang ... ```
-    let re = Regex::new(r"```(?:\w+)?\n([\s\S]*?)```").map_err(|e| RuntimeError::InvalidOperation(e.to_string()))?;
+    let re = Regex::new(r"```(?:\w+)?\n([\s\S]*?)```")
+        .map_err(|e| RuntimeError::InvalidOperation(e.to_string()))?;
 
     let mut blocks = Vec::new();
     for cap in re.captures_iter(text) {
@@ -2374,6 +2749,21 @@ mod tests {
     }
 
     #[test]
+    fn test_crypto_sha512() {
+        // Test Vector: Empty String
+        // SHA-512("") = cf83e135...
+        let args = vec![Value::String("".to_string())];
+        let res = intrinsic_crypto_sha512(args).unwrap();
+        match res {
+            Value::String(h) => assert_eq!(
+                h,
+                "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
+            ),
+            _ => panic!("Expected String"),
+        }
+    }
+
+    #[test]
     fn test_extract_code_empty() {
         let md = "No code blocks here.";
         let args = vec![Value::String(md.to_string())];
@@ -2382,6 +2772,99 @@ mod tests {
         match res {
             Value::List(blocks) => assert!(blocks.is_empty()),
             _ => panic!("Expected List"),
+        }
+    }
+
+    #[test]
+    fn test_crypto_hmac_sha512() {
+        let key = Value::String(hex::encode("key"));
+        let data = Value::String("The quick brown fox jumps over the lazy dog".to_string());
+        let args = vec![key, data];
+        let res = intrinsic_crypto_hmac_sha512(args).unwrap();
+        match res {
+            Value::String(h) => assert_eq!(
+                h,
+                "b42af09057bac1e2d41708e48a902e09b5ff7f12ab428a4fe86653c73dd248fb82f948a549f7b791a5b41915ee4d1ec3935357e4e2317250d0372afa2ebeeb3a"
+            ),
+            _ => panic!("Expected String"),
+        }
+    }
+
+    #[test]
+    fn test_crypto_aes_gcm_roundtrip() {
+        let key = Value::String(hex::encode("01234567890123456789012345678901")); // 32 bytes
+        let nonce = Value::String(hex::encode("012345678901")); // 12 bytes
+        let plaintext = Value::String("Hello World".to_string());
+
+        // Encrypt
+        let args_enc = vec![key.clone(), nonce.clone(), plaintext.clone()];
+        let ciphertext = intrinsic_crypto_aes_gcm_encrypt(args_enc).unwrap();
+
+        // Decrypt
+        let args_dec = vec![key.clone(), nonce.clone(), ciphertext.clone()];
+        let decrypted = intrinsic_crypto_aes_gcm_decrypt(args_dec).unwrap();
+
+        match decrypted {
+            Value::Buffer(b) => assert_eq!(b, b"Hello World"),
+            _ => panic!("Expected Buffer"),
+        }
+    }
+
+    #[test]
+    fn test_crypto_aes_gcm_fail() {
+        let key = Value::String(hex::encode("01234567890123456789012345678901"));
+        let wrong_key = Value::String(hex::encode("01234567890123456789012345678902"));
+        let nonce = Value::String(hex::encode("012345678901"));
+        let plaintext = Value::String("Secret".to_string());
+
+        let args_enc = vec![key, nonce.clone(), plaintext];
+        let ciphertext = intrinsic_crypto_aes_gcm_encrypt(args_enc).unwrap();
+
+        let args_dec = vec![wrong_key, nonce, ciphertext];
+        let res = intrinsic_crypto_aes_gcm_decrypt(args_dec);
+        assert!(res.is_err()); // Should fail with invalid key/tag match
+    }
+
+    #[test]
+    fn test_crypto_ed25519_roundtrip() {
+        // Generate
+        let gen_res = intrinsic_crypto_ed25519_generate(vec![]).unwrap();
+        let (pub_key, priv_key) = match gen_res {
+            Value::Struct(map) => (
+                map.get("public_key").unwrap().clone(),
+                map.get("private_key").unwrap().clone(),
+            ),
+            _ => panic!("Expected Struct"),
+        };
+
+        // Sign
+        let msg = Value::String("message".to_string());
+        let sign_args = vec![msg.clone(), priv_key.clone()];
+        let sig = intrinsic_crypto_ed25519_sign(sign_args).unwrap();
+
+        // Verify
+        let verify_args = vec![msg.clone(), sig.clone(), pub_key.clone()];
+        let valid = intrinsic_crypto_ed25519_verify(verify_args).unwrap();
+        assert_eq!(valid, Value::Boolean(true));
+
+        // Verify Fail (wrong msg)
+        let wrong_msg = Value::String("wrong".to_string());
+        let verify_fail_args = vec![wrong_msg, sig, pub_key];
+        let invalid = intrinsic_crypto_ed25519_verify(verify_fail_args).unwrap();
+        assert_eq!(invalid, Value::Boolean(false));
+    }
+
+    #[test]
+    fn test_crypto_random() {
+        let args = vec![Value::Integer(16)];
+        let res = intrinsic_crypto_random_bytes(args).unwrap();
+        match res {
+            Value::String(s) => {
+                assert_eq!(s.len(), 32); // 16 bytes = 32 hex chars
+                // Verify hex
+                assert!(hex::decode(&s).is_ok());
+            }
+            _ => panic!("Expected String"),
         }
     }
 }
