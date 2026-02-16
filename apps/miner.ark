@@ -1,231 +1,79 @@
 // @capabilities: net, thread
 // apps/miner.ark
-// Industrial-Grade Stratum Miner
-// Protocol: Stratum V1 (JSON-RPC over TCP)
+// Solo Miner (PoW)
 
-// --- Helpers ---
+import lib.std.string
 
-func string_split_lines(buffer) {
-    lines := []
-    current := ""
-    len_res := sys.len(buffer)
-    len := len_res[0]
-    i := 0
+print("Starting Ark Solo Miner (v112.0)...")
 
-    while i < len {
-        char_res := sys.str.get(buffer, i)
-        char := char_res[0]
+my_address := "ark_miner_wallet_v1"
+target_prefix := "00" // Adjust difficulty here (mock)
 
-        if char == "\n" {
-            lines := sys.list.append(lines, current)
-            current := ""
-        } else {
-            current := current + char
-        }
-        i := i + 1
-    }
+print("Target Difficulty Prefix: " + target_prefix)
+print("Press Ctrl+C to stop.")
 
-    return [lines, current]
-}
+while 1 {
+    height_val_struct := sys.chain.height() // Returns ArkValue(int, "Integer") directly?
+    // Wait, sys.chain.height returns Integer.
+    // Check meta/ark_intrinsics.py: return ArkValue(1, "Integer")
+    // So it returns an integer.
 
-func parse_json(s) {
-    // Wrapper for sys.json.parse to handle errors if any (though Ark crashes on error currently)
-    return sys.json.parse(s)
-}
+    height := height_val_struct
+    // Wait, check if wrapper lib/std/chain.ark returns something else.
+    // sys.chain.height returns ArkValue.
 
-// --- Main Miner Logic ---
+    // Construct Block Candidate
+    // Mock Mempool
+    tx_count := 5
+    merkle_root := sys.crypto.hash("txs_" + sys.json.stringify(height))
 
-func run_miner(ip, port) {
-    print(">> [Miner] Connecting to Pool at", ip, ":", port)
-    socket := sys.net.socket.connect(ip, port)
-
-    if socket == false {
-        print(">> [Miner] Connection Failed!")
-        return 0
-    }
-    print(">> [Miner] Connected. Handle:", socket)
-
-    // 1. Subscribe
-    print(">> [Miner] Subscribing...")
-    msg_sub := "{\"id\": 1, \"method\": \"mining.subscribe\", \"params\": [\"ArkMiner/1.0\"]}\n"
-    sys.net.socket.send(socket, msg_sub)
-
-    buffer := ""
-    subscribed := false
-    authorized := false
-
-    // State
-    job_id := ""
-    prevhash := ""
-    coinb1 := ""
-    coinb2 := ""
-    // merkle_branch := [] // Not used in this simplified PoW
-    version := ""
-    nbits := ""
-    ntime := ""
-    clean_jobs := false
-
-    extranonce1 := ""
-    extranonce2_size := 4
-
-    // Target (Start with Max Difficulty / Easy)
-    // We'll just use a hardcoded target for the simulation that matches the Mock Pool
-    // Mock Pool Target implied by nbits "207fffff" is very easy.
-    // Let's assume target is "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-    target := "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-
-    // Nonce
     nonce := 0
+    found := false
 
-    // Set Socket Timeout (Non-blocking mode for loop)
-    // If we have no job, we can wait longer.
-    timeout := 10
-    if job_id == "" {
-        timeout := 1000
-    }
-    sys.net.socket.set_timeout(socket, timeout)
+    print("--------------------------------------------------")
+    print("Mining Block #" + sys.json.stringify(height))
+    print("Merkle Root: " + merkle_root)
 
-    print(">> [Miner] Starting Loop...")
+    start_time := sys.time.now()
 
-    while true {
-        // Update timeout based on state
-        if job_id == "" {
-             sys.net.socket.set_timeout(socket, 1000)
-        } else {
-             sys.net.socket.set_timeout(socket, 10)
-        }
+    while found == false {
+        // Block Header Construction
+        // prev_hash + merkle_root + timestamp + nonce
+        // We use a dummy prev_hash for simulation
+        prev_hash := "0000000000000000000000000000000000000000000000000000000000000000"
 
-        // --- 1. Network Handling ---
-        chunk := sys.net.socket.recv(socket, 4096)
+        header := prev_hash + merkle_root + sys.json.stringify(nonce)
+        block_hash := sys.crypto.hash(header)
 
-        if chunk != false {
-            if chunk == "" {
-                print(">> [Miner] Disconnected by Pool.")
-                return 0
+        // Check Target
+        if string.starts_with(block_hash, target_prefix) {
+            found := true
+            end_time := sys.time.now()
+            duration := end_time - start_time
+
+            print(">>> BLOCK MINED! <<<")
+            print("Hash:      " + block_hash)
+            print("Nonce:     " + sys.json.stringify(nonce))
+            print("Time:      " + sys.json.stringify(duration) + "ms")
+
+            // Submit Block (Coinbase Tx)
+            coinbase_payload := {
+                type: "coinbase",
+                height: height,
+                miner: my_address,
+                hash: block_hash
             }
 
-            buffer := buffer + chunk
-            split_res := string_split_lines(buffer)
-            lines := split_res[0]
-            buffer := split_res[1]
+            // Convert to string for submission (chain intrinsic expects string payload usually, or handles serialization)
+            // sys.chain.submit_tx returns "tx_hash_mock"
+            res := sys.chain.submit_tx(sys.json.stringify(coinbase_payload))
+            print("Broadcast: " + res)
 
-            num_lines_res := sys.len(lines)
-            num_lines := num_lines_res[0]
-            j := 0
-
-            while j < num_lines {
-                line := sys.list.get(lines, j)[0]
-                // Parse JSON
-                // print(">> [Miner] Recv:", line)
-                msg := parse_json(line)
-
-                // Check Message Type
-                // If it has "result", it's a response.
-                // If it has "method", it's a notification.
-
-                // Helper to check fields safely would be nice, but we assume valid Stratum
-
-                // Check if 'result' exists (it might be null, but key exists?)
-                // sys.struct.get throws if key missing.
-                // We use try-like logic? No.
-                // We inspect keys via `sys.struct.has` (if available?)
-                // I recall `sys.struct.has` in `meta/ark.py`. Yes.
-
-                if sys.struct.has(msg, "result") {
-                     res := sys.struct.get(msg, "result")[0]
-                     id := sys.struct.get(msg, "id")[0]
-
-                     if id == 1 {
-                         // Subscribe Response
-                         // [[["mining.notify", "id"]], "extra1", size]
-                         extranonce1 := sys.list.get(res, 1)[0]
-                         subscribed := true
-                         print(">> [Miner] Subscribed. Extranonce1:", extranonce1)
-
-                         // Send Authorize
-                         print(">> [Miner] Authorizing...")
-                         msg_auth := "{\"id\": 2, \"method\": \"mining.authorize\", \"params\": [\"user\", \"pass\"]}\n"
-                         sys.net.socket.send(socket, msg_auth)
-                     }
-
-                     if id == 2 {
-                         authorized := true
-                         print(">> [Miner] Authorized.")
-                     }
-
-                     if id == 4 {
-                         print(">> [Miner] Share Accepted!")
-                         // Exit after success for the test
-                         return 1
-                     }
-                }
-
-                if sys.struct.has(msg, "method") {
-                    method := sys.struct.get(msg, "method")[0]
-                    if method == "mining.notify" {
-                        params := sys.struct.get(msg, "params")[0]
-                        // [job_id, prevhash, coinb1, coinb2, merkle_branch, version, nbits, ntime, clean_jobs]
-                        job_id := sys.list.get(params, 0)[0]
-                        prevhash := sys.list.get(params, 1)[0]
-                        ntime := sys.list.get(params, 7)[0]
-                        clean_jobs := sys.list.get(params, 8)[0]
-
-                        if clean_jobs {
-                            nonce := 0
-                        }
-                        print(">> [Miner] New Job:", job_id)
-                    }
-                }
-
-                j := j + 1
-            }
+            // Simulate network propagation delay
+            sys.time.sleep(2)
         }
 
-        // --- 2. Mining ---
-        if subscribed {
-             if authorized {
-                  // Only mine if we have a job
-                  if job_id != "" {
-                       // Proof of Work
-                       // Construct Header: prevhash + job_id + nonce
-                       // (Simplified for simulation)
-                       header := prevhash + job_id + nonce
-
-                       hash := sys.crypto.hash(header)
-
-                       // Check Target
-                       // String comparison "0000..." < "0000ffff..."
-                       if hash < target {
-                           print(">> [Miner] FOUND BLOCK! Hash:", hash)
-                           print(">> [Miner] Submitting...")
-
-                           // Submit
-                           // params: [user, job_id, extranonce2, ntime, nonce]
-                           // We need to json stringify params.
-                           // Manual stringify for speed/simplicity
-
-                           // nonce is int, need string
-                           nonce_str := "" + nonce
-
-                           payload := "{\"id\": 4, \"method\": \"mining.submit\", \"params\": [\"user\", \"" + job_id + "\", \"00000000\", \"" + ntime + "\", \"" + nonce_str + "\"]}\n"
-                           sys.net.socket.send(socket, payload)
-
-                           // Reset nonce or keep going?
-                           // For test, we wait for response.
-                       }
-
-                       nonce := nonce + 1
-
-                       // Rate limit for simulation
-                       // sys.time.sleep(0.01)
-                  }
-             }
-        }
-
-        // Prevent 100% CPU in tight loop if no job
-        // sys.time.sleep not needed as recv blocks for timeout
-    }
-}
+        nonce := nonce + 1
 
 // Check execution mode
 args_len_info := sys.len(sys_args)

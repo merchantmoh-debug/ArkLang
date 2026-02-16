@@ -1,0 +1,12 @@
+obj := { name: "Ark", ver: 112 }
+// Adding list might complicate parsing if parser is strict about types, but ArkValue handles lists.
+// However, sys.json.parse returns ArkValue from Python dict/list.
+// Let's keep it simple first.
+i := 0
+while i < 500 {
+    s := sys.json.stringify(obj)
+    // parsing back
+    obj2 := sys.json.parse(s)
+    i := i + 1
+}
+print("Done")

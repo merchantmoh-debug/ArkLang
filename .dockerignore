@@ -1,0 +1,14 @@
+.git
+__pycache__
+*.pyc
+target/debug
+target/release/deps
+target/release/build
+*.log
+*.tmp
+node_modules
+.vscode
+.agent
+.antigravity
+*.enc
+swarm_dispatch_log.json

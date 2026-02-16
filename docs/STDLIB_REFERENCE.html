@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>STDLIB_REFERENCE</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<style>
+body { font-family: sans-serif; line-height: 1.6; padding: 20px; max_width: 800px; margin: 0 auto; background: #1e1e1e; color: #d4d4d4; }
+h1, h2, h3 { color: #569cd6; }
+code { background: #2d2d2d; padding: 2px 5px; border_radius: 3px; font-family: monospace; }
+pre { background: #2d2d2d; padding: 10px; border_radius: 5px; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+a { color: #9cdcfe; }
+</style>
+</head>
+<body>
+<nav>
+<a href="index.html">Index</a> |
+<a href="API_REFERENCE.html">API Reference</a> |
+<a href="STDLIB_REFERENCE.html">StdLib Reference</a> |
+<a href="QUICK_START.html">Quick Start</a>
+</nav>
+<hr>
+<h1 id="ark-standard-library-reference">Ark Standard Library Reference</h1>
+
+<h2 id="table-of-contents">Table of Contents</h2>
+<p>- <a href="#ai">Ai</a></p>
+<p>- <a href="#audio">Audio</a></p>
+<p>- <a href="#chain">Chain</a></p>
+<p>- <a href="#event">Event</a></p>
+<p>- <a href="#fs">Fs</a></p>
+<p>- <a href="#io">Io</a></p>
+<p>- <a href="#math">Math</a></p>
+<p>- <a href="#net">Net</a></p>
+<p>- <a href="#result">Result</a></p>
+<p>- <a href="#string">String</a></p>
+
+<h2 id="ai">Ai</h2>
+<h3 id="<code>askprompt</code>"><code>ask(prompt)</code></h3>
+<p>Ark Standard Library: AI (The Neural Bridge)</p>
+<p>(c) 2026 Sovereign Systems</p>
+
+<pre><code>// Example for ask
+ask(...)
+</code></pre>
+
+<h3 id="<code>chatmessage</code>"><code>chat(message)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for chat
+chat(...)
+</code></pre>
+
+<h3 id="<code>newpersona</code>"><code>new(persona)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for new
+new(...)
+</code></pre>
+
+<h2 id="audio">Audio</h2>
+<h3 id="<code>_buf_to_strbuf,-start,-len</code>"><code>_buf_to_str(buf, start, len)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _buf_to_str
+_buf_to_str(..., ..., ...)
+</code></pre>
+
+<h3 id="<code>_mp3_read_metadatapath</code>"><code>_mp3_read_metadata(path)</code></h3>
+<p>--- Mp3 ---</p>
+
+<pre><code>// Example for _mp3_read_metadata
+_mp3_read_metadata(...)
+</code></pre>
+
+<h3 id="<code>_read_u16_lebuf,-idx</code>"><code>_read_u16_le(buf, idx)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _read_u16_le
+_read_u16_le(..., ...)
+</code></pre>
+
+<h3 id="<code>_read_u32_lebuf,-idx</code>"><code>_read_u32_le(buf, idx)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _read_u32_le
+_read_u32_le(..., ...)
+</code></pre>
+
+<h3 id="<code>_synth_sawtoothfreq,-duration_ms,-sample_rate,-volume</code>"><code>_synth_sawtooth(freq, duration_ms, sample_rate, volume)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _synth_sawtooth
+_synth_sawtooth(..., ..., ..., ...)
+</code></pre>
+
+<h3 id="<code>_synth_sinefreq,-duration_ms,-sample_rate,-volume</code>"><code>_synth_sine(freq, duration_ms, sample_rate, volume)</code></h3>
+<p>--- Synth ---</p>
+
+<pre><code>// Example for _synth_sine
+_synth_sine(..., ..., ..., ...)
+</code></pre>
+
+<h3 id="<code>_synth_squarefreq,-duration_ms,-sample_rate,-volume</code>"><code>_synth_square(freq, duration_ms, sample_rate, volume)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _synth_square
+_synth_square(..., ..., ..., ...)
+</code></pre>
+
+<h3 id="<code>_wav_readpath</code>"><code>_wav_read(path)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _wav_read
+_wav_read(...)
+</code></pre>
+
+<h3 id="<code>_wav_writepath,-buffer,-sample_rate,-channels</code>"><code>_wav_write(path, buffer, sample_rate, channels)</code></h3>
+<p>--- Wav ---</p>
+
+<pre><code>// Example for _wav_write
+_wav_write(..., ..., ..., ...)
+</code></pre>
+
+<h3 id="<code>_write_u16_lebuf,-idx,-val</code>"><code>_write_u16_le(buf, idx, val)</code></h3>
+<p>lib/std/audio.ark</p>
+
+<pre><code>// Example for _write_u16_le
+_write_u16_le(..., ..., ...)
+</code></pre>
+
+<h3 id="<code>_write_u32_lebuf,-idx,-val</code>"><code>_write_u32_le(buf, idx, val)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _write_u32_le
+_write_u32_le(..., ..., ...)
+</code></pre>
+
+<h2 id="chain">Chain</h2>
+<h3 id="<code>chain_get_balanceaddr</code>"><code>chain_get_balance(addr)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for chain_get_balance
+chain_get_balance(...)
+</code></pre>
+
+<h3 id="<code>chain_height</code>"><code>chain_height()</code></h3>
+<p>Standard Library: Chain</p>
+
+<pre><code>// Example for chain_height
+chain_height()
+</code></pre>
+
+<h3 id="<code>chain_submit_txpayload</code>"><code>chain_submit_tx(payload)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for chain_submit_tx
+chain_submit_tx(...)
+</code></pre>
+
+<h3 id="<code>chain_verify_txtx_id</code>"><code>chain_verify_tx(tx_id)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for chain_verify_tx
+chain_verify_tx(...)
+</code></pre>
+
+<h2 id="event">Event</h2>
+<h3 id="<code>_event_loop</code>"><code>_event_loop()</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _event_loop
+_event_loop()
+</code></pre>
+
+<h3 id="<code>_event_poll</code>"><code>_event_poll()</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _event_poll
+_event_poll()
+</code></pre>
+
+<h3 id="<code>_event_sleeps</code>"><code>_event_sleep(s)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _event_sleep
+_event_sleep(...)
+</code></pre>
+
+<h3 id="<code>loop</code>"><code>loop()</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for loop
+loop()
+</code></pre>
+
+<h3 id="<code>poll</code>"><code>poll()</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for poll
+poll()
+</code></pre>
+
+<h3 id="<code>sleeps</code>"><code>sleep(s)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sleep
+sleep(...)
+</code></pre>
+
+<h2 id="fs">Fs</h2>
+<h3 id="<code>append_filepath,-content</code>"><code>append_file(path, content)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for append_file
+append_file(..., ...)
+</code></pre>
+
+<h3 id="<code>read_filepath</code>"><code>read_file(path)</code></h3>
+<p>Ark Standard Library: Filesystem</p>
+<p>(c) 2026 Sovereign Systems</p>
+
+<pre><code>// Example for read_file
+read_file(...)
+</code></pre>
+
+<h3 id="<code>write_filepath,-content</code>"><code>write_file(path, content)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for write_file
+write_file(..., ...)
+</code></pre>
+
+<h2 id="io">Io</h2>
+<h3 id="<code>net_request_asyncurl,-cb</code>"><code>net_request_async(url, cb)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for net_request_async
+net_request_async(..., ...)
+</code></pre>
+
+<h3 id="<code>printmsg</code>"><code>print(msg)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for print
+print(...)
+</code></pre>
+
+<h3 id="<code>printlnmsg</code>"><code>println(msg)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for println
+println(...)
+</code></pre>
+
+<h3 id="<code>read_filepath</code>"><code>read_file(path)</code></h3>
+<p>Sync Operations</p>
+
+<pre><code>// Example for read_file
+read_file(...)
+</code></pre>
+
+<h3 id="<code>read_file_asyncpath,-cb</code>"><code>read_file_async(path, cb)</code></h3>
+<p>Async Operations</p>
+
+<pre><code>// Example for read_file_async
+read_file_async(..., ...)
+</code></pre>
+
+<h3 id="<code>write_filepath,-content</code>"><code>write_file(path, content)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for write_file
+write_file(..., ...)
+</code></pre>
+
+<h2 id="math">Math</h2>
+<h3 id="<code>tensordata,-shape</code>"><code>Tensor(data, shape)</code></h3>
+<p>Standard Library: Math</p>
+<p>Fixed-Point Trigonometry (Scale: 10000)</p>
+
+<pre><code>// Example for Tensor
+Tensor(..., ...)
+</code></pre>
+
+<h3 id="<code>adda,-b</code>"><code>add(a, b)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for add
+add(..., ...)
+</code></pre>
+
+<h3 id="<code>dota,-b</code>"><code>dot(a, b)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for dot
+dot(..., ...)
+</code></pre>
+
+<h3 id="<code>matmula,-b</code>"><code>matmul(a, b)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for matmul
+matmul(..., ...)
+</code></pre>
+
+<h3 id="<code>mul_scalart,-s</code>"><code>mul_scalar(t, s)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for mul_scalar
+mul_scalar(..., ...)
+</code></pre>
+
+<h3 id="<code>suba,-b</code>"><code>sub(a, b)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for sub
+sub(..., ...)
+</code></pre>
+
+<h3 id="<code>transposet</code>"><code>transpose(t)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for transpose
+transpose(...)
+</code></pre>
+
+<h2 id="net">Net</h2>
+<h3 id="<code>http_geturl</code>"><code>http_get(url)</code></h3>
+<p>--- HTTP Helpers ---</p>
+
+<pre><code>// Example for http_get
+http_get(...)
+</code></pre>
+
+<h3 id="<code>http_posturl,-body</code>"><code>http_post(url, body)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for http_post
+http_post(..., ...)
+</code></pre>
+
+<h3 id="<code>net_broadcastmsg</code>"><code>net_broadcast(msg)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for net_broadcast
+net_broadcast(...)
+</code></pre>
+
+<h3 id="<code>net_connectip,-port</code>"><code>net_connect(ip, port)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for net_connect
+net_connect(..., ...)
+</code></pre>
+
+<h3 id="<code>net_listenport,-handler</code>"><code>net_listen(port, handler)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for net_listen
+net_listen(..., ...)
+</code></pre>
+
+<h3 id="<code>noise_handshakehandle</code>"><code>noise_handshake(handle)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for noise_handshake
+noise_handshake(...)
+</code></pre>
+
+<h3 id="<code>secure_recvhandle,-size</code>"><code>secure_recv(handle, size)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for secure_recv
+secure_recv(..., ...)
+</code></pre>
+
+<h3 id="<code>secure_sendhandle,-data</code>"><code>secure_send(handle, data)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for secure_send
+secure_send(..., ...)
+</code></pre>
+
+<h2 id="result">Result</h2>
+<h3 id="<code>_result_erre</code>"><code>_Result_Err(e)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _Result_Err
+_Result_Err(...)
+</code></pre>
+
+<h3 id="<code>_result_okval</code>"><code>_Result_Ok(val)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _Result_Ok
+_Result_Ok(...)
+</code></pre>
+
+<h3 id="<code>_result_is_errres</code>"><code>_Result_is_err(res)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _Result_is_err
+_Result_is_err(...)
+</code></pre>
+
+<h3 id="<code>_result_is_okres</code>"><code>_Result_is_ok(res)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _Result_is_ok
+_Result_is_ok(...)
+</code></pre>
+
+<h3 id="<code>_result_mapres,-f</code>"><code>_Result_map(res, f)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _Result_map
+_Result_map(..., ...)
+</code></pre>
+
+<h3 id="<code>_result_map_errres,-f</code>"><code>_Result_map_err(res, f)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _Result_map_err
+_Result_map_err(..., ...)
+</code></pre>
+
+<h3 id="<code>_result_unwrapres</code>"><code>_Result_unwrap(res)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _Result_unwrap
+_Result_unwrap(...)
+</code></pre>
+
+<h3 id="<code>_result_unwrap_errres</code>"><code>_Result_unwrap_err(res)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _Result_unwrap_err
+_Result_unwrap_err(...)
+</code></pre>
+
+<h3 id="<code>_result_unwrap_orres,-default</code>"><code>_Result_unwrap_or(res, default)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _Result_unwrap_or
+_Result_unwrap_or(..., ...)
+</code></pre>
+
+<h2 id="string">String</h2>
+<h3 id="<code>_string_trim_find_ends</code>"><code>_string_trim_find_end(s)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _string_trim_find_end
+_string_trim_find_end(...)
+</code></pre>
+
+<h3 id="<code>_string_trim_find_starts</code>"><code>_string_trim_find_start(s)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for _string_trim_find_start
+_string_trim_find_start(...)
+</code></pre>
+
+<h3 id="<code>string_concata,-b</code>"><code>string_concat(a, b)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_concat
+string_concat(..., ...)
+</code></pre>
+
+<h3 id="<code>string_containss,-sub</code>"><code>string_contains(s, sub)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_contains
+string_contains(..., ...)
+</code></pre>
+
+<h3 id="<code>string_ends_withs,-suffix</code>"><code>string_ends_with(s, suffix)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_ends_with
+string_ends_with(..., ...)
+</code></pre>
+
+<h3 id="<code>string_finds,-sub,-start_index</code>"><code>string_find(s, sub, start_index)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_find
+string_find(..., ..., ...)
+</code></pre>
+
+<h3 id="<code>string_gets,-i</code>"><code>string_get(s, i)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_get
+string_get(..., ...)
+</code></pre>
+
+<h3 id="<code>string_is_spacec</code>"><code>string_is_space(c)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_is_space
+string_is_space(...)
+</code></pre>
+
+<h3 id="<code>string_joinlst,-sep</code>"><code>string_join(lst, sep)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_join
+string_join(..., ...)
+</code></pre>
+
+<h3 id="<code>string_lens</code>"><code>string_len(s)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_len
+string_len(...)
+</code></pre>
+
+<h3 id="<code>string_replaces,-old,-new</code>"><code>string_replace(s, old, new)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_replace
+string_replace(..., ..., ...)
+</code></pre>
+
+<h3 id="<code>string_slices,-start,-end</code>"><code>string_slice(s, start, end)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_slice
+string_slice(..., ..., ...)
+</code></pre>
+
+<h3 id="<code>string_splits,-delim</code>"><code>string_split(s, delim)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_split
+string_split(..., ...)
+</code></pre>
+
+<h3 id="<code>string_starts_withs,-prefix</code>"><code>string_starts_with(s, prefix)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_starts_with
+string_starts_with(..., ...)
+</code></pre>
+
+<h3 id="<code>string_trims</code>"><code>string_trim(s)</code></h3>
+<p>No description available.</p>
+
+<pre><code>// Example for string_trim
+string_trim(...)
+</code></pre>
+
+</body>
+</html>
