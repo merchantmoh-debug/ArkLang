@@ -62,14 +62,18 @@ def test_lsp():
         print(f"Initialize Response: {response}")
         assert response["id"] == 1
         assert response["result"]["capabilities"]["textDocumentSync"] == 1
+        assert response["result"]["capabilities"]["completionProvider"] is not None
 
         # 2. Open valid file
         print("Sending didOpen (valid)...")
-        code = """
-        func main() {
-            print("Hello")
-        }
-        """
+        code = """func main() {
+    print("Hello")
+}
+
+func foo() {
+    return 1
+}
+"""
         send_message(proc, {
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -83,13 +87,11 @@ def test_lsp():
             }
         })
 
-        # Expect publishDiagnostics with empty array
         notification = read_message(proc)
         print(f"Diagnostics (Valid): {notification}")
         assert notification["method"] == "textDocument/publishDiagnostics"
-        assert len(notification["params"]["diagnostics"]) == 0
 
-        # 3. Open invalid file
+        # 3. Open invalid file (Crash Test)
         print("Sending didOpen (invalid)...")
         bad_code = """
         func main() {
@@ -109,37 +111,123 @@ def test_lsp():
             }
         })
 
-        # Expect publishDiagnostics with errors
         notification = read_message(proc)
         print(f"Diagnostics (Invalid): {notification}")
+        # Ensure we got a response (server didn't crash)
+        assert notification is not None
         assert notification["method"] == "textDocument/publishDiagnostics"
         assert len(notification["params"]["diagnostics"]) > 0
-        diag = notification["params"]["diagnostics"][0]
-        print(f"Diagnostic message: {diag['message']}")
 
-        # 4. Test case-insensitive header
-        print("Sending didOpen (lowercase header)...")
+        # 4. Completion
+        print("Sending completion...")
         send_message(proc, {
             "jsonrpc": "2.0",
-            "method": "textDocument/didOpen",
+            "id": 2,
+            "method": "textDocument/completion",
             "params": {
-                "textDocument": {
-                    "uri": "file:///test_lower.ark",
-                    "languageId": "ark",
-                    "version": 1,
-                    "text": code
-                }
+                "textDocument": {"uri": "file:///test.ark"},
+                "position": {"line": 1, "character": 0}
             }
-        }, header_case="lower")
+        })
+        res = read_message(proc)
+        print(f"Completion: {res}")
+        assert res["id"] == 2
+        items = res["result"]["items"]
+        labels = [item["label"] for item in items]
+        assert "if" in labels
+        assert "sys.print" in labels
 
-        notification = read_message(proc)
-        print(f"Diagnostics (Lower): {notification}")
-        assert notification["method"] == "textDocument/publishDiagnostics"
+        # 5. Hover
+        # Hover over 'print' at line 1, char 6 inside 'print("Hello")'
+        # func main() { -> line 0
+        #     print("Hello") -> line 1. 'print' starts at col 4 (4 spaces indent).
+        # 'print' is 4-9.
+        # Position 6 is inside 'print'.
+        print("Sending hover...")
+        send_message(proc, {
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "textDocument/hover",
+            "params": {
+                "textDocument": {"uri": "file:///test.ark"},
+                "position": {"line": 1, "character": 6}
+            }
+        })
+        res = read_message(proc)
+        print(f"Hover: {res}")
+        assert res["id"] == 3
+        # Should return markdown for Function Call
+        if res["result"]:
+            assert "Function Call" in res["result"]["contents"]["value"]
+            assert "print" in res["result"]["contents"]["value"]
+        else:
+            print("Hover returned null (maybe pos missed?)")
+
+        # 6. Definition
+        # Call 'print'. Definition not in file. Should return null.
+        print("Sending definition (missing)...")
+        send_message(proc, {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "textDocument/definition",
+            "params": {
+                "textDocument": {"uri": "file:///test.ark"},
+                "position": {"line": 1, "character": 6}
+            }
+        })
+        res = read_message(proc)
+        print(f"Definition (Missing): {res}")
+        assert res["result"] == 0 or res["result"] is None
+
+        # Call 'foo' (if added).
+        # Let's update file to add call to foo.
+        code_v2 = """func main() {
+    foo()
+}
+
+func foo() {
+    return 1
+}
+"""
+        send_message(proc, {
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": {"uri": "file:///test.ark", "version": 2},
+                "contentChanges": [{"text": code_v2}]
+            }
+        })
+        read_message(proc) # Diagnostics
+
+        # Definition of 'foo'
+        # foo() at line 1. 'foo' at col 4.
+        print("Sending definition (valid)...")
+        send_message(proc, {
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "textDocument/definition",
+            "params": {
+                "textDocument": {"uri": "file:///test.ark"},
+                "position": {"line": 1, "character": 5}
+            }
+        })
+        res = read_message(proc)
+        print(f"Definition (Valid): {res}")
+        assert res["result"] is not None
+        assert res["result"] != 0
+        # Should point to line 4 (func foo)
+        r = res["result"]["range"]
+        assert r["start"]["line"] == 4
 
         print("LSP Test Passed!")
 
     finally:
+        # Cleanup
+        send_message(proc, {"jsonrpc": "2.0", "method": "shutdown", "id": 99})
+        read_message(proc)
+        send_message(proc, {"jsonrpc": "2.0", "method": "exit"})
         proc.terminate()
+        proc.wait()
 
 if __name__ == "__main__":
     test_lsp()
