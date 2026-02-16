@@ -1,5 +1,5 @@
 # Stage 1: Rust builder
-FROM rust:1.84-slim AS rust-builder
+FROM rust:1.93-slim AS rust-builder
 WORKDIR /build
 COPY core/ ./core/
 COPY Cargo.toml Cargo.lock ./
