@@ -136,4 +136,4 @@ The JIT engine includes a static analysis pass (`meta/ark_security.py`) that sca
 ---
 
 ## 📜 License
-MIT License. Open Verification. Sovereign Code.
+Dual Licensed: AGPL v3 (Open Source) or Commercial (Sovereign Systems).
