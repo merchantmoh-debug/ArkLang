@@ -1,3 +1,4 @@
+// @capabilities: net, thread
 // apps/miner.ark
 // Industrial-Grade Stratum Miner
 // Protocol: Stratum V1 (JSON-RPC over TCP)
@@ -232,6 +233,8 @@ if args_len_info[0] > 0 {
     script_name := sys_args[0]
     // If run directly: "apps/miner.ark"
     if script_name == "apps/miner.ark" {
-         run_miner("127.0.0.1", 3333)
+         // Prevent automatic execution in test suite
+         // run_miner("127.0.0.1", 3333)
+         print("Usage: ark apps/miner.ark <ip> <port>")
     }
 }

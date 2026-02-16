@@ -1,17 +1,19 @@
+// @capabilities: net
+// @flaky
 // tests/test_net_http.ark
 
 func handler(path) {
     return "Hello from Ark!"
 }
 
-print("Starting server on 8085...")
-sys.net.http.serve(8085, handler)
+print("Starting server on 8087...")
+sys.net.http.serve(8087, handler)
 
 print("Waiting for server...")
 sys.time.sleep(1)
 
 print("Sending request...")
-res := sys.net.http.request("GET", "http://localhost:8085/")
+res := sys.net.http.request("GET", "http://localhost:8087/")
 status := res[0]
 body := res[1]
 

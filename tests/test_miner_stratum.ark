@@ -1,4 +1,5 @@
 
+// @capabilities: thread, net
 // tests/test_miner_stratum.ark
 // Mock Stratum Pool for Verification
 

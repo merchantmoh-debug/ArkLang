@@ -1,3 +1,4 @@
+// @capabilities: thread
 func worker() {
     print("Worker thread started")
     sys.time.sleep(1)

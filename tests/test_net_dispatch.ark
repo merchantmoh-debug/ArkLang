@@ -1,4 +1,5 @@
 
+// @capabilities: thread, net
 // tests/test_net_dispatch.ark
 
 sys.vm.source("lib/std/net.ark")
