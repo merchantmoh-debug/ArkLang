@@ -73,6 +73,13 @@ pub struct FunctionDef {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum Pattern {
+    Literal(String),
+    Variable(String),
+    Wildcard,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Statement {
     Let {
         name: String,
@@ -100,6 +107,14 @@ pub enum Statement {
         condition: Expression,
         body: Vec<Statement>,
     },
+    For {
+        variable: String,
+        iterable: Expression,
+        body: Vec<Statement>,
+    },
+    Import(String),
+    Break,
+    Continue,
     Function(FunctionDef),
 }
 
@@ -118,5 +133,9 @@ pub enum Expression {
     GetField {
         obj: Box<Expression>,
         field: String,
+    },
+    Match {
+        scrutinee: Box<Expression>,
+        arms: Vec<(Pattern, Expression)>,
     },
 }
