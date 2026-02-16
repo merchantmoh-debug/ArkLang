@@ -16,6 +16,7 @@ thiserror = "1.0"
 bincode = "1.3"
 ed25519-dalek = { version = "2", features = ["fast"] }
 shell-words = "1.1"
+regex = "1.10"
 
 arrow = { version = "50.0", default-features = false, features = ["ipc", "ffi"], optional = true }
 ctrlc = "3.5.2"
