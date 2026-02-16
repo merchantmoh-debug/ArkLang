@@ -1,5 +1,4 @@
-// Standard Library: Time
 time := {
-    now: () => sys.time.now(),
-    sleep: (s) => sys.time.sleep(s)
+    now: func() { return sys.time.now() },
+    sleep: func(s) { sys.time.sleep(s) }
 }
