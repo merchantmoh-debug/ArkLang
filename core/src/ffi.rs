@@ -20,7 +20,7 @@ use crate::compiler::Compiler;
 use crate::loader::load_ark_program;
 use crate::vm::VM;
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_char};
+use std::os::raw::c_char;
 
 /// Helper to safely create a CString from a Rust String.
 /// If the string contains null bytes, it returns an error message C-string.
@@ -30,7 +30,9 @@ fn safe_cstring(s: String) -> *mut c_char {
         Err(_) => {
             // Return a safe error message if the string contains a null byte.
             // This is safe because the error message is guaranteed not to contain null bytes.
-            CString::new("Error: String contained null byte").unwrap().into_raw()
+            CString::new("Error: String contained null byte")
+                .unwrap()
+                .into_raw()
         }
     }
 }

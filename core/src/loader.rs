@@ -42,8 +42,7 @@ pub fn load_ark_program(json: &str) -> Result<MastNode, LoadError> {
 
 fn verify_mast_integrity(mast: &MastNode) -> Result<(), LoadError> {
     // Compute Hash using canonical JSON (matches Python compiler and MastNode::new)
-    let computed_hash = crate::ast::calculate_hash(&mast.content)
-        .map_err(LoadError::AstError)?;
+    let computed_hash = crate::ast::calculate_hash(&mast.content).map_err(LoadError::AstError)?;
 
     // 3. Compare
     if computed_hash != mast.hash {

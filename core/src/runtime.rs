@@ -73,10 +73,9 @@ impl Value {
             | Value::Function(_)
             | Value::NativeFunction(_)
             | Value::String(_) => false,
-            Value::List(_)
-            | Value::LinearObject { .. }
-            | Value::Buffer(_)
-            | Value::Struct(_) => true,
+            Value::List(_) | Value::LinearObject { .. } | Value::Buffer(_) | Value::Struct(_) => {
+                true
+            }
             Value::Return(val) => val.is_linear(), // Recursive check
         }
     }

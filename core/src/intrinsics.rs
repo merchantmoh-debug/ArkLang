@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2026 Mohamad Al-Zawahreh (dba Sovereign Systems).
  *
  * This file is part of the Ark Sovereign Compiler.
@@ -1794,7 +1794,7 @@ mod tests {
 
         // sin(PI/2) approx 10000 (PI/2 = 1.5707... * 10000 = 15707)
         let args = vec![Value::Integer(15708)]; // 1.5708
-        // sin(1.5708) is close to 1
+                                                // sin(1.5708) is close to 1
         let res = intrinsic_math_sin(args).unwrap();
         if let Value::Integer(v) = res {
             assert!(v >= 9999 && v <= 10000);
