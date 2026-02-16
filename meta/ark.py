@@ -107,7 +107,35 @@ def run_file(path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        pass
-    else:
+    if len(sys.argv) < 2:
+        print("Usage: ark <command> [args]")
+        sys.exit(1)
+
+    cmd = sys.argv[1]
+
+    if cmd == "run":
+        if len(sys.argv) < 3:
+            print("Usage: ark run <file>")
+            sys.exit(1)
         run_file(sys.argv[2])
+    elif cmd == "compile":
+        # Delegate to meta/compile.py
+        # Adjust sys.argv to remove 'compile' and look like compile.py arguments
+        # sys.argv is ['meta/ark.py', 'compile', 'file.ark', ...]
+        # We want ['meta/compile.py', 'file.ark', '--target', 'bytecode']
+
+        sys.argv.pop(1) # Remove 'compile'
+        sys.argv[0] = 'meta/compile.py'
+
+        if "--target" not in sys.argv:
+            sys.argv.extend(["--target", "bytecode"])
+
+        from meta import compile as ark_compile
+        ark_compile.main()
+    else:
+        # Fallback for existing behavior or unknown command
+        if len(sys.argv) >= 3:
+             run_file(sys.argv[2])
+        else:
+             print(f"Unknown command: {cmd}")
+             sys.exit(1)

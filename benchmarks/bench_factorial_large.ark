@@ -1,0 +1,10 @@
+res := 1
+i := 1
+while i <= 1000 {
+    res := res * i
+    i := i + 1
+}
+// Only print the length to avoid massive terminal output
+// str() doesn't exist, use concatenation
+s := "" + res
+print(sys.len(s))

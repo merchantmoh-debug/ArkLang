@@ -1,0 +1,7 @@
+i := 0
+while i < 500 {
+    // Implicit conversion via concatenation
+    hash := sys.crypto.hash("test_string" + i)
+    i := i + 1
+}
+print(hash)

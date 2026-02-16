@@ -1,72 +1,47 @@
-import json
+import tomllib
 import os
 from dataclasses import dataclass, field
-from typing import List, Optional
-
-@dataclass
-class PackageConfig:
-    name: str
-    version: str
-    authors: List[str] = field(default_factory=list)
-    type: str = "app"
-
-@dataclass
-class BuildConfig:
-    sources: List[str]
-    output: str
+from typing import Dict
 
 @dataclass
 class Manifest:
-    package: PackageConfig
-    build: Optional[BuildConfig] = None
-    path: str = ""
+    path: str
+    name: str
+    version: str
+    description: str
+    dependencies: Dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: str) -> 'Manifest':
         if not os.path.exists(path):
             raise FileNotFoundError(f"Manifest not found: {path}")
 
-        with open(path, 'r') as f:
-            try:
-                data = json.load(f)
-            except json.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON in manifest {path}: {e}")
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
 
-        pkg_data = data.get("package", {})
-        if not pkg_data:
-            raise ValueError("Manifest missing 'package' section")
+        pkg = data.get("package", {})
+        deps = data.get("dependencies", {})
 
-        package = PackageConfig(
-            name=pkg_data.get("name"),
-            version=pkg_data.get("version"),
-            authors=pkg_data.get("authors", []),
-            type=pkg_data.get("type", "app")
+        return cls(
+            path=path,
+            name=pkg.get("name", "unknown"),
+            version=pkg.get("version", "0.1.0"),
+            description=pkg.get("description", ""),
+            dependencies=deps
         )
 
-        build = None
-        build_data = data.get("build")
-        if build_data:
-            build = BuildConfig(
-                sources=build_data.get("sources", []),
-                output=build_data.get("output")
-            )
-
-        return cls(package=package, build=build, path=path)
-
     def save(self):
-        data = {
-            "package": {
-                "name": self.package.name,
-                "version": self.package.version,
-                "authors": self.package.authors,
-                "type": self.package.type
-            }
-        }
-        if self.build:
-            data["build"] = {
-                "sources": self.build.sources,
-                "output": self.build.output
-            }
+        def escape(s):
+            return s.replace('\\', '\\\\').replace('"', '\\"')
 
-        with open(self.path, 'w') as f:
-            json.dump(data, f, indent=2)
+        content = "[package]\n"
+        content += f'name = "{escape(self.name)}"\n'
+        content += f'version = "{escape(self.version)}"\n'
+        content += f'description = "{escape(self.description)}"\n\n'
+
+        content += "[dependencies]\n"
+        for name, version in self.dependencies.items():
+            content += f'{escape(name)} = "{escape(version)}"\n'
+
+        with open(self.path, "w", encoding="utf-8") as f:
+            f.write(content)

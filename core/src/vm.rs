@@ -21,17 +21,11 @@ impl GraphArena {
 
     pub fn alloc(&mut self, data: GraphData) -> usize {
         if let Some(idx) = self.free_list.pop() {
-            self.nodes[idx] = Some(GraphNode {
-                data,
-                ref_count: 1,
-            });
+            self.nodes[idx] = Some(GraphNode { data, ref_count: 1 });
             idx
         } else {
             let idx = self.nodes.len();
-            self.nodes.push(Some(GraphNode {
-                data,
-                ref_count: 1,
-            }));
+            self.nodes.push(Some(GraphNode { data, ref_count: 1 }));
             idx
         }
     }
@@ -60,7 +54,7 @@ impl GraphArena {
 
     pub fn incref(&mut self, idx: usize) {
         if let Some(node) = self.get_mut(idx) {
-             node.ref_count += 1;
+            node.ref_count += 1;
         }
     }
 }
@@ -496,89 +490,91 @@ mod tests {
     }
 }
 
-    #[test]
-    fn test_vm_complex_ops() {
-        let mut chunk = Chunk::new();
+#[test]
+fn test_vm_complex_ops() {
+    let mut chunk = Chunk::new();
 
-        // 1. Test MakeList and Destructure
-        // Stack: []
-        chunk.write(OpCode::Push(Value::Integer(10)));
-        chunk.write(OpCode::Push(Value::Integer(20)));
-        // Stack: [10, 20]
-        chunk.write(OpCode::MakeList(2));
-        // Stack: [[10, 20]]
-        chunk.write(OpCode::Destructure);
-        // Stack: [20, 10] (Top is 10)
+    // 1. Test MakeList and Destructure
+    // Stack: []
+    chunk.write(OpCode::Push(Value::Integer(10)));
+    chunk.write(OpCode::Push(Value::Integer(20)));
+    // Stack: [10, 20]
+    chunk.write(OpCode::MakeList(2));
+    // Stack: [[10, 20]]
+    chunk.write(OpCode::Destructure);
+    // Stack: [20, 10] (Top is 10)
 
-        chunk.write(OpCode::Add);
-        // Stack: [30] (20 + 10)
+    chunk.write(OpCode::Add);
+    // Stack: [30] (20 + 10)
 
-        // 2. Test MakeStruct and GetField
-        // MakeStruct expects [Value, Key] on stack (Top is Key)
-        chunk.write(OpCode::Push(Value::Integer(100)));
-        chunk.write(OpCode::Push(Value::String("x".to_string())));
-        // Stack: [30, 100, "x"]
-        chunk.write(OpCode::MakeStruct(1));
-        // Stack: [30, {x: 100}]
-        chunk.write(OpCode::GetField("x".to_string()));
-        // Stack: [30, 100]
-        chunk.write(OpCode::Add);
-        // Stack: [130]
+    // 2. Test MakeStruct and GetField
+    // MakeStruct expects [Value, Key] on stack (Top is Key)
+    chunk.write(OpCode::Push(Value::Integer(100)));
+    chunk.write(OpCode::Push(Value::String("x".to_string())));
+    // Stack: [30, 100, "x"]
+    chunk.write(OpCode::MakeStruct(1));
+    // Stack: [30, {x: 100}]
+    chunk.write(OpCode::GetField("x".to_string()));
+    // Stack: [30, 100]
+    chunk.write(OpCode::Add);
+    // Stack: [130]
 
-        chunk.write(OpCode::Ret);
+    chunk.write(OpCode::Ret);
 
-        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
-        let result = vm.run();
-        assert_eq!(result.unwrap(), Value::Integer(130));
-    }
+    let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+    let result = vm.run();
+    assert_eq!(result.unwrap(), Value::Integer(130));
+}
 
-    #[test]
-    fn test_vm_function_call() {
-        // Define a function that adds 1 to its argument
-        let mut func_chunk = Chunk::new();
-        // Stack on entry: [arg]
-        // Store arg to 'n'
-        func_chunk.write(OpCode::Store("n".to_string()));
-        func_chunk.write(OpCode::Load("n".to_string()));
-        func_chunk.write(OpCode::Push(Value::Integer(1)));
-        func_chunk.write(OpCode::Add);
-        func_chunk.write(OpCode::Ret);
+#[test]
+fn test_vm_function_call() {
+    // Define a function that adds 1 to its argument
+    let mut func_chunk = Chunk::new();
+    // Stack on entry: [arg]
+    // Store arg to 'n'
+    func_chunk.write(OpCode::Store("n".to_string()));
+    func_chunk.write(OpCode::Load("n".to_string()));
+    func_chunk.write(OpCode::Push(Value::Integer(1)));
+    func_chunk.write(OpCode::Add);
+    func_chunk.write(OpCode::Ret);
 
-        let mut chunk = Chunk::new();
-        chunk.write(OpCode::Push(Value::Function(Rc::new(func_chunk))));
-        chunk.write(OpCode::Store("add_one".to_string()));
+    let mut chunk = Chunk::new();
+    chunk.write(OpCode::Push(Value::Function(Rc::new(func_chunk))));
+    chunk.write(OpCode::Store("add_one".to_string()));
 
-        chunk.write(OpCode::Push(Value::Integer(41)));
-        chunk.write(OpCode::Load("add_one".to_string()));
-        chunk.write(OpCode::Call(1));
-        // Result should be 42
+    chunk.write(OpCode::Push(Value::Integer(41)));
+    chunk.write(OpCode::Load("add_one".to_string()));
+    chunk.write(OpCode::Call(1));
+    // Result should be 42
 
-        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
-        let result = vm.run();
-        assert_eq!(result.unwrap(), Value::Integer(42));
-    }
+    let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+    let result = vm.run();
+    assert_eq!(result.unwrap(), Value::Integer(42));
+}
 
-    #[test]
-    fn test_vm_call_function_external() {
-        // Define a function that adds 1 to its argument
-        let mut func_chunk = Chunk::new();
-        // Stack on entry: [arg]
-        func_chunk.write(OpCode::Store("n".to_string()));
-        func_chunk.write(OpCode::Load("n".to_string()));
-        func_chunk.write(OpCode::Push(Value::Integer(1)));
-        func_chunk.write(OpCode::Add);
-        func_chunk.write(OpCode::Ret);
+#[test]
+fn test_vm_call_function_external() {
+    // Define a function that adds 1 to its argument
+    let mut func_chunk = Chunk::new();
+    // Stack on entry: [arg]
+    func_chunk.write(OpCode::Store("n".to_string()));
+    func_chunk.write(OpCode::Load("n".to_string()));
+    func_chunk.write(OpCode::Push(Value::Integer(1)));
+    func_chunk.write(OpCode::Add);
+    func_chunk.write(OpCode::Ret);
 
-        let mut chunk = Chunk::new();
-        chunk.write(OpCode::Push(Value::Function(Rc::new(func_chunk))));
-        chunk.write(OpCode::Store("add_one".to_string()));
-        chunk.write(OpCode::Ret); // Main finishes
+    let mut chunk = Chunk::new();
+    chunk.write(OpCode::Push(Value::Function(Rc::new(func_chunk))));
+    chunk.write(OpCode::Store("add_one".to_string()));
+    chunk.write(OpCode::Ret); // Main finishes
 
-        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
-        // Run main to define the function
-        let _ = vm.run().unwrap();
+    let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+    // Run main to define the function
+    let _ = vm.run().unwrap();
 
-        // Now call the function externally
-        let result = vm.call_public_function("add_one", vec![Value::Integer(99)]).unwrap();
-        assert_eq!(result, Value::Integer(100));
-    }
+    // Now call the function externally
+    let result = vm
+        .call_public_function("add_one", vec![Value::Integer(99)])
+        .unwrap();
+    assert_eq!(result, Value::Integer(100));
+}
