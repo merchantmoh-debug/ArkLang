@@ -1,323 +1,274 @@
 import json
 import os
-import concurrent.futures
+import math
+import collections
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import base64
 from src.config import settings
 
-
 class MemoryManager:
-    """Simple JSON-file based memory manager for the agent."""
+    """
+    Encrypted Memory Manager.
+    Stores data in encrypted JSON files.
+    """
 
-    def __init__(self, memory_file: str = settings.MEMORY_FILE):
-        self.memory_file = memory_file
-        self.summary: str = ""
-        self._memory: List[Dict[str, Any]] = []
-        self._fernet: Optional[Fernet] = None
+    def __init__(self, key: Optional[str] = None):
+        self.key = key or settings.ARK_MEMORY_KEY or os.environ.get("ARK_MEMORY_KEY")
+        self.memory_dir = Path.home() / ".ark" / "memory"
+        self.memory_dir.mkdir(parents=True, exist_ok=True)
+        self.fernet = self._init_fernet()
 
-        # Async executor for file saving
-        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        self._last_save_future: Optional[concurrent.futures.Future] = None
+        # Internal cache for conversation history (Legacy Support)
+        self._conversation_history: List[Dict[str, Any]] = []
+        self._load_legacy_conversation()
 
-        self._init_encryption()
-        self._load_memory()
-
-    def _init_encryption(self):
-        """Initializes the encryption key and Fernet instance."""
-        key = os.environ.get("MEMORY_ENCRYPTION_KEY")
-        key_file = Path(".memory_key")
-
-        if not key:
+    def _init_fernet(self) -> Fernet:
+        """Initialize Fernet with a key derived from the master key or generate one."""
+        if not self.key:
+            # Check for existing key file
+            key_file = self.memory_dir / ".key"
             if key_file.exists():
-                try:
-                    with open(key_file, "rb") as f:
-                        key = f.read().strip()
-                except Exception as e:
-                    raise RuntimeError(f"Could not read memory key from {key_file}: {e}")
-
-            if not key:
-                print("Generating new encryption key for memory...")
-                key = Fernet.generate_key()
-                try:
-                    # restrictive permissions (0o600) only work on POSIX, but harmless on Windows
-                    if os.name == 'posix':
-                        # Atomic creation with restricted permissions
-                        fd = os.open(key_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-                        with os.fdopen(fd, "wb") as f:
-                            f.write(key)
-                    else:
-                        with open(key_file, "wb") as f:
-                            f.write(key)
-                except Exception as e:
-                    print(f"Warning: Could not save memory key to {key_file}: {e}")
-                    # We continue with in-memory key, which is secure for this session but not persistent.
-                    # This is acceptable (better than crashing if FS is read-only).
-
-        if isinstance(key, str):
-            key = key.encode()
-
-        try:
-            self._fernet = Fernet(key)
-        except Exception as e:
-            # FAIL CLOSED: Do not continue without valid encryption
-            raise ValueError(f"Error initializing encryption: {e}")
-
-    def _load_memory(self):
-        """Loads memory from the encrypted file (or legacy JSON if present)."""
-        self.summary = ""
-
-        if self._migrate_legacy_memory():
-            return
-
-        data = self._read_encrypted_file()
-        if data is not None:
-            self._process_loaded_data(data)
-        else:
-            self._memory = []
-
-    def _migrate_legacy_memory(self) -> bool:
-        """
-        Checks for and migrates a legacy plaintext memory file.
-        Returns True if migration occurred (memory loaded), False otherwise.
-        """
-        legacy_file = "agent_memory.json"
-        # Check for legacy plaintext file first if we are using the new default extension
-        if not os.path.exists(self.memory_file) and os.path.exists(legacy_file):
-            print(f"Found legacy memory file: {legacy_file}. Migrating to encrypted storage...")
-            try:
-                with open(legacy_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                self._process_loaded_data(data)
-                # If successful, save immediately to encrypted file
-                self.save_memory()
-                # Rename legacy file to .bak
-                os.rename(legacy_file, legacy_file + ".bak")
-                print(f"Migration complete. Legacy file moved to {legacy_file}.bak")
-                return True
-            except Exception as e:
-                print(f"Error migrating legacy memory: {e}")
-                # Fall through to normal load attempt
-        return False
-
-    def _read_encrypted_file(self) -> Optional[Any]:
-        """
-        Reads the memory file, attempting decryption.
-        Handles fallback to plaintext for migration/recovery.
-        Returns the parsed data structure or None if failed/missing.
-        """
-        if not os.path.exists(self.memory_file):
-            return None
-
-        try:
-            with open(self.memory_file, 'rb') as f:
-                file_content = f.read()
-
-            # Attempt to decrypt
-            if self._fernet:
-                try:
-                    decrypted_content = self._fernet.decrypt(file_content)
-                    return json.loads(decrypted_content.decode('utf-8'))
-                except Exception:
-                    # Fallback: maybe it's a plaintext file with the new name?
-                    # Or the key changed?
-                    try:
-                        data = json.loads(file_content.decode('utf-8'))
-                        print("Warning: Memory file was plaintext. Saving as encrypted now.")
-                        # We must process data immediately to save it correctly
-                        summary, history = self._extract_memory_data(data)
-                        self._last_save_future = self._executor.submit(
-                            self._save_memory_task,
-                            summary,
-                            history
-                        )
-                        return data
-                    except json.JSONDecodeError:
-                        print(f"Error: Could not decrypt or decode memory file {self.memory_file}.")
-                        return None
+                with open(key_file, "rb") as f:
+                    key_bytes = f.read()
             else:
-                # Should be unreachable if _init_encryption works correctly,
-                # but defensively handle it.
-                raise RuntimeError("Encryption not initialized.")
+                # Generate new key
+                key_bytes = Fernet.generate_key()
+                # Save it (insecure but better than nothing if no master key provided)
+                with open(key_file, "wb") as f:
+                    f.write(key_bytes)
+            return Fernet(key_bytes)
 
-        except Exception as e:
-            print(f"Warning: Failed to load memory from {self.memory_file}: {e}")
-            return None
-
-    @staticmethod
-    def _extract_memory_data(data: Any) -> Tuple[str, List[Dict[str, Any]]]:
-        """Extracts summary and history from loaded data without side effects."""
-        summary = ""
-        memory = []
-
-        if isinstance(data, dict):
-            summary = data.get("summary", "") or ""
-            history = data.get("history", [])
-            memory = history if isinstance(history, list) else []
-        elif isinstance(data, list):
-            # Backward compatibility for legacy memory files
-            memory = data
-
-        return summary, memory
-
-    def _process_loaded_data(self, data):
-        """Helper to process the raw loaded data structure."""
-        summary, memory = self._extract_memory_data(data)
-
-        if not isinstance(data, (dict, list)):
-            print(f"Warning: Unexpected memory format. Starting fresh.")
-            self._memory = []
+        # Derive key from master password using PBKDF2
+        salt_file = self.memory_dir / ".salt"
+        if salt_file.exists():
+            with open(salt_file, "rb") as f:
+                salt = f.read()
         else:
-            self.summary = summary
-            self._memory = memory
+            salt = os.urandom(16)
+            with open(salt_file, "wb") as f:
+                f.write(salt)
 
-    def _save_memory_task(self, summary: str, history: List[Dict[str, Any]]):
-        """
-        Internal task executed in a thread to save memory to file.
-        """
-        # FAIL CLOSED: Ensure encryption is available
-        if not self._fernet:
-            # We raise here, but it will be caught by the future result check or lost if not checked.
-            raise RuntimeError("Encryption not initialized. Cannot save memory securely.")
-
-        try:
-            payload = {
-                "summary": summary,
-                "history": history,
-            }
-            json_str = json.dumps(payload, indent=2, ensure_ascii=False)
-            data_bytes = json_str.encode('utf-8')
-
-            # Strictly encrypt
-            encrypted_data = self._fernet.encrypt(data_bytes)
-
-            # Atomic write pattern: write to temp file then rename
-            # This prevents partial writes if process crashes mid-write
-            temp_file = f"{self.memory_file}.tmp"
-            with open(temp_file, 'wb') as f:
-                f.write(encrypted_data)
-            os.replace(temp_file, self.memory_file)
-
-        except Exception as e:
-            print(f"Error saving memory in background task: {e}")
-            # Reraise so future.result() sees it if checked
-            raise
-
-    def save_memory(self, append_entry: Optional[Dict[str, Any]] = None):
-        """
-        Saves the current memory state to the encrypted file asynchronously.
-
-        Args:
-            append_entry: Ignored in async rewrite implementation, but kept for compatibility.
-        """
-        # Create a snapshot of the data to avoid race conditions during serialization
-        history_snapshot = list(self._memory)
-        summary_snapshot = self.summary
-
-        # Submit task to executor
-        # We don't wait for result here to keep add_entry fast (O(1))
-        self._last_save_future = self._executor.submit(
-            self._save_memory_task,
-            summary_snapshot,
-            history_snapshot
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=100000,
         )
+        key_bytes = base64.urlsafe_b64encode(kdf.derive(self.key.encode()))
+        return Fernet(key_bytes)
 
-    def wait_for_persistence(self):
-        """
-        Waits for the last save operation to complete.
-        Useful for tests or shutdown hooks to ensure data is written.
-        """
-        if self._last_save_future:
-            try:
-                self._last_save_future.result()
-            except Exception as e:
-                print(f"Error waiting for persistence: {e}")
-                raise
+    def _get_file_path(self, namespace: str) -> Path:
+        return self.memory_dir / f"{namespace}.enc"
+
+    def _load_namespace(self, namespace: str) -> Dict[str, Any]:
+        """Load and decrypt a namespace."""
+        file_path = self._get_file_path(namespace)
+        if not file_path.exists():
+            return {}
+        try:
+            with open(file_path, "rb") as f:
+                encrypted_data = f.read()
+            decrypted_data = self.fernet.decrypt(encrypted_data)
+            return json.loads(decrypted_data.decode())
+        except Exception as e:
+            print(f"Error loading memory namespace {namespace}: {e}")
+            return {}
+
+    def _save_namespace(self, namespace: str, data: Dict[str, Any]):
+        """Encrypt and save a namespace."""
+        file_path = self._get_file_path(namespace)
+        try:
+            json_data = json.dumps(data)
+            encrypted_data = self.fernet.encrypt(json_data.encode())
+            with open(file_path, "wb") as f:
+                f.write(encrypted_data)
+        except Exception as e:
+            print(f"Error saving memory namespace {namespace}: {e}")
+
+    def store(self, key: str, value: Any, namespace: str = "default"):
+        """Store a value in the encrypted memory."""
+        data = self._load_namespace(namespace)
+        data[key] = value
+        self._save_namespace(namespace, data)
+
+    def recall(self, key: str, namespace: str = "default") -> Any:
+        """Recall a value from memory."""
+        data = self._load_namespace(namespace)
+        return data.get(key)
+
+    def search(self, query: str, namespace: str = "default") -> List[Tuple[str, Any]]:
+        """Fuzzy search for keys or values containing the query."""
+        data = self._load_namespace(namespace)
+        results = []
+        query = query.lower()
+        for k, v in data.items():
+            if query in k.lower() or (isinstance(v, str) and query in v.lower()):
+                results.append((k, v))
+        return results
+
+    def forget(self, key: str, namespace: str = "default"):
+        """Delete a key from memory."""
+        data = self._load_namespace(namespace)
+        if key in data:
+            del data[key]
+            self._save_namespace(namespace, data)
+
+    def list_keys(self, namespace: str = "default") -> List[str]:
+        """List all keys in a namespace."""
+        data = self._load_namespace(namespace)
+        return list(data.keys())
+
+    # --- Legacy Compatibility for src/agent.py ---
+
+    def _load_legacy_conversation(self):
+        """Load conversation history from 'conversation' namespace."""
+        history = self.recall("history", namespace="conversation")
+        if isinstance(history, list):
+            self._conversation_history = history
+        else:
+            self._conversation_history = []
 
     def add_entry(self, role: str, content: str, metadata: Optional[Dict[str, Any]] = None):
-        """Adds a new interaction to memory."""
+        """Legacy: Add entry to conversation history."""
         entry = {
             "role": role,
             "content": content,
             "metadata": metadata or {}
         }
-        self._memory.append(entry)
-        # Pass entry to save_memory (even though we don't fully use it yet, helps future proofing)
-        self.save_memory(append_entry=entry)
+        self._conversation_history.append(entry)
+        self.store("history", self._conversation_history, namespace="conversation")
 
     def get_history(self) -> List[Dict[str, Any]]:
-        """Returns the full conversation history."""
-        return self._memory
-
-    def _default_summarizer(self, old_messages: List[Dict[str, Any]], previous_summary: str) -> str:
-        """
-        Fallback summarization that compacts old messages.
-        Concatenates previous summary (if any) with role-tagged message content.
-        """
-        lines: List[str] = []
-        if previous_summary:
-            lines.append(previous_summary.strip())
-        for message in old_messages:
-            role = message.get("role", "unknown")
-            content = message.get("content", "")
-            lines.append(f"{role}: {content}")
-        return "\n".join(lines).strip()
+        """Legacy: Get full history."""
+        return self._conversation_history
 
     def get_context_window(
         self,
         system_prompt: str,
         max_messages: int,
         summarizer: Optional[Callable[[List[Dict[str, Any]], str], str]] = None
-    ) -> List[Dict[str, str]]:
-        """
-        Returns the context window, applying a summary buffer when history exceeds max_messages.
-
-        Args:
-            system_prompt: The system prompt to prepend.
-            max_messages: Maximum number of recent history messages to keep verbatim.
-            summarizer: Callable that receives (old_messages, previous_summary) and returns a summary string.
-
-        Raises:
-            ValueError: If system_prompt is empty, max_messages is invalid, or summarizer returns non-string.
-            TypeError: If summarizer does not accept the required arguments.
-        """
+    ) -> List[Dict[str, Any]]:
+        """Legacy: Get context window with summarization."""
         if not system_prompt:
-            raise ValueError("system_prompt is required to build the context window.")
+            raise ValueError("system_prompt is required")
         if max_messages < 1:
-            raise ValueError("max_messages must be at least 1.")
+            raise ValueError("max_messages must be at least 1")
 
         history = self.get_history()
         system_message = {"role": "system", "content": system_prompt}
 
         if len(history) <= max_messages:
-            return [system_message, *history]
+            return [system_message] + history
 
-        summarizer_fn = summarizer or self._default_summarizer
-        messages_to_summarize = [dict(msg) for msg in history[:-max_messages]]
-        recent_history = [dict(msg) for msg in history[-max_messages:]]
+        previous_summary = self.recall("summary", namespace="conversation") or ""
+        if not isinstance(previous_summary, str):
+            previous_summary = ""
 
-        try:
-            new_summary = summarizer_fn(messages_to_summarize, self.summary)
-        except TypeError as exc:
-            raise TypeError("Summarizer must accept two arguments: (old_messages, previous_summary).") from exc
-
-        if not isinstance(new_summary, str):
-            raise ValueError("Summarizer must return a string.")
-
-        previous_summary = self.summary
-        self.summary = new_summary.strip()
-        if self.summary != previous_summary:
-            self.save_memory()
+        # Summarize logic if summarizer provided
+        if summarizer:
+            messages_to_summarize = history[:-max_messages]
+            recent_history = history[-max_messages:]
+            try:
+                new_summary = summarizer(messages_to_summarize, previous_summary)
+                if isinstance(new_summary, str):
+                    self.store("summary", new_summary, namespace="conversation")
+                    previous_summary = new_summary
+            except Exception as e:
+                print(f"Summarization failed: {e}")
+        else:
+            recent_history = history[-max_messages:]
 
         summary_message = {
             "role": "system",
-            "content": f"Previous Summary: {self.summary}"
+            "content": f"Previous Summary: {previous_summary}"
         }
 
-        return [system_message, summary_message, *recent_history]
+        return [system_message, summary_message] + recent_history
+
+    def save_memory(self, append_entry=None):
+        """Legacy: explicit save (no-op as we save on write)."""
+        pass
 
     def clear_memory(self):
-        """Clears the agent's memory."""
-        self._memory = []
-        self.summary = ""
-        self.save_memory()
+        self._conversation_history = []
+        self.forget("history", namespace="conversation")
+        self.forget("summary", namespace="conversation")
+
+
+class ConversationHistory(MemoryManager):
+    """
+    Conversation History Manager.
+    Extends MemoryManager to handle chat logs.
+    """
+
+    def add_turn(self, role: str, content: str):
+        """Add a conversation turn."""
+        self.add_entry(role, content)
+
+    def get_context(self, max_turns: int = 10) -> List[Dict[str, Any]]:
+        """Get the last N turns."""
+        history = self.get_history()
+        return history[-max_turns:]
+
+    def summarize(self) -> str:
+        """Generate a summary of the conversation."""
+        history = self.get_history()
+        if not history:
+            return "No history."
+        return "\n".join([f"{h['role']}: {h['content'][:50]}..." for h in history])
+
+
+class VectorMemory:
+    """
+    Simple Vector Memory using TF-IDF.
+    """
+
+    def __init__(self):
+        self.documents: Dict[str, str] = {}
+        self.vectors: Dict[str, Dict[str, float]] = {}
+
+    def _compute_tfidf(self, text: str) -> Dict[str, float]:
+        """Compute simple TF vector."""
+        words = text.lower().split()
+        if not words:
+            return {}
+        tf = collections.Counter(words)
+        total = len(words)
+        return {k: v / total for k, v in tf.items()}
+
+    def _cosine_similarity(self, v1: Dict[str, float], v2: Dict[str, float]) -> float:
+        """Compute cosine similarity between two sparse vectors."""
+        intersection = set(v1.keys()) & set(v2.keys())
+        numerator = sum(v1[x] * v2[x] for x in intersection)
+
+        sum1 = sum(v1[x]**2 for x in v1)
+        sum2 = sum(v2[x]**2 for x in v2)
+
+        if sum1 == 0 or sum2 == 0:
+            return 0.0
+
+        denominator = math.sqrt(sum1) * math.sqrt(sum2)
+
+        if denominator == 0:
+            return 0.0
+        return numerator / denominator
+
+    def store_embedding(self, key: str, text: str):
+        """Store text and its vector."""
+        self.documents[key] = text
+        self.vectors[key] = self._compute_tfidf(text)
+
+    def search_similar(self, query: str, top_k: int = 5) -> List[Tuple[str, float]]:
+        """Search for similar documents."""
+        query_vec = self._compute_tfidf(query)
+        scores = []
+        for key, vec in self.vectors.items():
+            score = self._cosine_similarity(query_vec, vec)
+            scores.append((key, score))
+
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[:top_k]

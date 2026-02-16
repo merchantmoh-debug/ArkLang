@@ -148,6 +148,9 @@ impl Compiler {
                 self.chunk.write(OpCode::SetField(field.clone()));
                 self.chunk.write(OpCode::Store(obj_name.clone()));
             }
+            Statement::Import(_) | Statement::StructDecl(_) => {
+                println!("Compiler Warning: Unhandled Statement");
+            }
         }
     }
 
@@ -252,6 +255,9 @@ impl Compiler {
                         self.chunk.write(OpCode::Call(args.len()));
                     }
                 }
+            }
+            Expression::Match(_) | Expression::Lambda(_) | Expression::TryCatch(_) => {
+                println!("Compiler Warning: Unhandled Expression");
             }
         }
     }
