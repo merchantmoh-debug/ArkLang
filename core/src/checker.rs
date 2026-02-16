@@ -201,6 +201,7 @@ impl LinearChecker {
                 else_block,
             } => self.check_if(condition, then_block, else_block),
             Statement::While { condition, body } => self.check_while(condition, body),
+            Statement::For { .. } | Statement::Import(_) | Statement::Break | Statement::Continue => Ok(()), // Not checked yet
             Statement::Function(func_def) => self.check_nested_function(func_def),
         }
     }

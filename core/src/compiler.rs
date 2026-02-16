@@ -154,6 +154,9 @@ impl Compiler {
                 self.chunk.write(OpCode::SetField(field.clone()));
                 self.chunk.write(OpCode::Store(obj_name.clone()));
             }
+            Statement::For { .. } | Statement::Import(_) | Statement::Break | Statement::Continue => {
+                // Not supported in bytecode compiler yet
+            }
         }
     }
 
@@ -183,6 +186,9 @@ impl Compiler {
 
             Expression::Variable(name) => {
                 self.chunk.write(OpCode::Load(name.clone()));
+            }
+            Expression::Match { .. } => {
+                // Not supported in bytecode compiler yet
             }
             Expression::Call {
                 function_hash,
