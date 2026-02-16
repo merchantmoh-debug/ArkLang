@@ -1,0 +1,8 @@
+s := ""
+i := 0
+while i < 5000 {
+    s := s + "a"
+    i := i + 1
+}
+// Resulting string length
+print(sys.len(s))
