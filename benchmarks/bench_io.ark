@@ -1,4 +1,5 @@
-file := "benchmarks/bench_temp.txt"
+// @capabilities: fs_read, fs_write, exec
+file := "bench_temp.txt"
 content := "Some temporary content for IO benchmark."
 i := 0
 while i < 50 {

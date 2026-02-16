@@ -35,16 +35,16 @@ func string_find(s, sub, start_index) {
     while i <= (n - m) {
         // Check if substring matches starting at i
         j := 0
-        match := true
+        is_match := true
         while j < m {
             if (get(s, i + j) == get(sub, j)) == false {
-                match := false
+                is_match := false
                 j := m // break inner loop simulation
             }
             j := j + 1
         }
 
-        if match { return i }
+        if is_match { return i }
         i := i + 1
     }
 
@@ -62,15 +62,15 @@ func string_starts_with(s, prefix) {
 
     // Check match
     i := 0
-    match := true
+    is_match := true
     while i < pl {
         if (get(s, i) == get(prefix, i)) == false {
-            match := false
+            is_match := false
             i := pl // break
         }
         i := i + 1
     }
-    return match
+    return is_match
 }
 
 func string_ends_with(s, suffix) {
@@ -80,15 +80,15 @@ func string_ends_with(s, suffix) {
 
     start := l - sl
     i := 0
-    match := true
+    is_match := true
     while i < sl {
         if (get(s, start + i) == get(suffix, i)) == false {
-            match := false
+            is_match := false
             i := sl // break
         }
         i := i + 1
     }
-    return match
+    return is_match
 }
 
 func string_split(s, delim) {
