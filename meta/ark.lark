@@ -1,39 +1,60 @@
 // Ark-1: The Kinetic Grammar (Infix/Algol)
 // Matches meta/factorial.ark
 
-start: (statement | function_def | class_def)+
+start: top_level_item+
+
+?top_level_item: statement
+               | function_def
+               | class_def
+               | doc_wrapper
 
 ?statement: assignment
           | flow_stmt
           | expression
           | import_stmt
+          | match_stmt
+          | try_stmt
 
 import_stmt: "import" IDENTIFIER ("." IDENTIFIER)*
 
 // --- Definitions ---
-function_def: "func" IDENTIFIER "(" [param_list] ")" "{" block "}"
+function_def: (DOC_COMMENT "func" | "func") IDENTIFIER "(" [param_list] ")" "{" block "}"
 param_list: IDENTIFIER ("," IDENTIFIER)*
-class_def: "class" IDENTIFIER "{" function_def* "}"
+class_def: (DOC_COMMENT "class" | "class") IDENTIFIER "{" function_def* "}"
+
+doc_wrapper: DOC_COMMENT
 
 // --- Control Flow ---
-flow_stmt: if_stmt | while_stmt | return_stmt
+?flow_stmt: if_stmt | while_stmt | return_stmt
 return_stmt: "return" expression
 
 if_stmt: "if" expression "{" block "}" ("else" "if" expression "{" block "}")* ["else" "{" block "}"]
 
 while_stmt: "while" expression "{" block "}"
 
+// Match
+match_stmt: "match" expression "{" match_case* "}"
+match_case: pattern "=>" ("{" block "}" | expression [","])
+?pattern: expression
+
+// Try-Catch
+try_stmt: "try" "{" block "}" "catch" IDENTIFIER "{" block "}"
+
 block: statement*
 
 // --- Assignments ---
-?assignment: assign_var | assign_attr | assign_destructure
+?assignment: assign_var | assign_attr | assign_destructure | assign_op
 
-assign_var: IDENTIFIER ":=" expression
-assign_destructure: "let" "(" IDENTIFIER ("," IDENTIFIER)* ")" ":=" expression
-assign_attr: atom "." IDENTIFIER ":=" expression
+assign_var: IDENTIFIER _ASSIGN expression
+assign_destructure: "let" "(" IDENTIFIER ("," IDENTIFIER)* ")" _ASSIGN expression
+assign_attr: atom "." IDENTIFIER _ASSIGN expression
+assign_op: atom ASSIGN_OP expression
 
 // --- Expressions ---
-?expression: logical_or
+?expression: pipe_expr
+
+?pipe_expr: logical_or
+          | pipe_expr "|>" logical_or -> pipe_op
 
 ?logical_or: logical_and
            | logical_or OR logical_and -> logical_or
@@ -41,49 +62,76 @@ assign_attr: atom "." IDENTIFIER ":=" expression
 ?logical_and: comparison
             | logical_and AND comparison -> logical_and
 
-?comparison: sum
-           | comparison ">" sum -> gt
-           | comparison "<" sum -> lt
-           | comparison ">=" sum -> ge
-           | comparison "<=" sum -> le
-           | comparison "==" sum -> eq
-           | comparison "!=" sum -> neq
+?comparison: range_expr
+           | comparison ">" range_expr -> gt
+           | comparison "<" range_expr -> lt
+           | comparison ">=" range_expr -> ge
+           | comparison "<=" range_expr -> le
+           | comparison "==" range_expr -> eq
+           | comparison "!=" range_expr -> neq
+
+?range_expr: sum
+           | sum ".." sum -> range_exclusive
+           | sum "..=" sum -> range_inclusive
 
 ?sum: product
     | sum "+" product -> add
     | sum "-" product -> sub
 
-?product: atom
-        | product "*" atom -> mul
-        | product "/" atom -> div
-        | product "%" atom -> mod
+?product: unary
+        | product "*" unary -> mul
+        | product "/" unary -> div
+        | product "%" unary -> mod
+
+?unary: atom
+      | "!" unary -> not_op
+      | "-" unary -> neg_op
+      | "~" unary -> bit_not_op
 
 ?atom: primary
      | atom "." IDENTIFIER -> get_attr
+     | atom "?." IDENTIFIER -> optional_chain
      | atom "(" [expr_list] ")" -> call_expr
      | atom "[" expression "]" -> get_item
 
 ?primary: NUMBER -> number
+        | FSTRING -> f_string
+        | MULTI_STRING -> multi_string
         | STRING -> string
         | IDENTIFIER -> var
         | "(" expression ")"
         | "[" [expr_list] "]" -> list_cons
         | "{" [field_list] "}" -> struct_init
+        | lambda_expr
+
+lambda_expr: ("|" [param_list] "|" | "func" "(" [param_list] ")") "{" block "}"
 
 field_list: field_init ("," field_init)*
-field_init: IDENTIFIER ":" expression
+field_init: IDENTIFIER _COLON expression
 
 expr_list: expression ("," expression)*
 
 // Tokens
+FSTRING.2: /f"(\\\\"|[^"])*"/
+MULTI_STRING.2: /"""(.|\n)*?"""/
+
 AND.2: "&&" | "and"
 OR.2: "||" | "or"
+_ASSIGN: ":="
+_COLON: ":"
+ASSIGN_OP: "+=" | "-=" | "*=" | "/="
 IDENTIFIER: /[a-zA-Z_][a-zA-Z0-9_]*/
 NUMBER: /-?\d+/
+
 %import common.ESCAPED_STRING
 STRING: ESCAPED_STRING
 
+// Comments
+DOC_COMMENT: "///" /[^\n]*/
+MULTI_COMMENT: "/*" /(.|\n)*?/ "*/"
+COMMENT: "//" /[^\n]*/
+
 %import common.WS
-%import common.CPP_COMMENT
 %ignore WS
-%ignore CPP_COMMENT
+%ignore COMMENT
+%ignore MULTI_COMMENT
