@@ -16,12 +16,14 @@ try:
         ReturnException, RopeString
     )
     from meta.ark_intrinsics import INTRINSICS, LINEAR_SPECS, INTRINSICS_WITH_SCOPE
+    from meta.ark_security import SandboxViolation
 except ModuleNotFoundError:
     from ark_types import (
         ArkValue, UNIT_VALUE, ArkFunction, ArkClass, ArkInstance, Scope,
         ReturnException, RopeString
     )
     from ark_intrinsics import INTRINSICS, LINEAR_SPECS, INTRINSICS_WITH_SCOPE
+    from ark_security import SandboxViolation
 
 
 # --- Global Parser ---
@@ -29,7 +31,105 @@ grammar_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ark.lar
 with open(grammar_path, "r") as f:
     ARK_GRAMMAR = f.read()
 
-ARK_PARSER = Lark(ARK_GRAMMAR, start="start", parser="lalr")
+ARK_PARSER = Lark(ARK_GRAMMAR, start="start", parser="lalr", propagate_positions=True)
+
+
+# ─── Hardening Structures ─────────────────────────────────────────────────────
+
+class ArkRuntimeError(Exception):
+    def __init__(self, msg, node=None):
+        self.msg = msg
+        self.node = node
+        self.stack = []
+        if node:
+            self.line = getattr(node, 'line', None)
+            if self.line is None and hasattr(node, 'meta'):
+                self.line = getattr(node.meta, 'line', None)
+
+            self.col = getattr(node, 'column', None)
+            if self.col is None and hasattr(node, 'meta'):
+                self.col = getattr(node.meta, 'column', None)
+
+            if self.line:
+                # Initial frame based on node location
+                self.stack.append((self.line, self.col, "<unknown>"))
+        else:
+            self.line = None
+            self.col = None
+        super().__init__(self.__str__())
+
+    def add_frame(self, line, col, func_name):
+        self.stack.append((line, col, func_name))
+
+    def __str__(self):
+        out = ["Traceback (most recent call last):"]
+        # Use reversed stack to show calls from outer to inner?
+        # Typically tracebacks show call -> callee -> callee.
+        # But our stack is built inside-out (exception raised, then caught by caller).
+        # So we append frames as we unwind.
+        # So the LAST appended frame is the OUTERMOST call.
+        # So we should print in REVERSE order of append.
+        for line, col, name in reversed(self.stack):
+             out.append(f"  File \"main.ark\", line {line}, in {name}")
+
+        loc_str = ""
+        if self.line and not self.stack:
+             loc_str = f"Line {self.line}: "
+
+        out.append(f"RuntimeError: {loc_str}{self.msg}")
+        return "\n".join(out)
+
+class TailCall(Exception):
+    def __init__(self, func, args):
+        self.func = func
+        self.args = args
+
+class OptimizedScope(Scope):
+    __slots__ = ('_cache', '_access_counts')
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._cache = {}
+        self._access_counts = {}
+
+    def get(self, name: str) -> Optional[ArkValue]:
+        # 1. Local Lookup (O(1))
+        if name in self.vars:
+            val = self.vars[name]
+            if val.type == "Moved":
+                # We can't easily import LinearityViolation, relying on runtime checks or generic error
+                # Ideally we should raise the specific error.
+                # Assuming simple exception for now to avoid circular deps if any.
+                raise Exception(f"Use of moved variable '{name}'")
+            return val
+
+        # 2. Cache Lookup (O(1))
+        if name in self._cache:
+            return self._cache[name]
+
+        # 3. Parent Lookup (O(depth))
+        if self.parent:
+            val = self.parent.get(name)
+            if val:
+                # Heuristic: Only cache frequent variables to avoid thrashing
+                count = self._access_counts.get(name, 0) + 1
+                self._access_counts[name] = count
+                if count > 10:
+                    self._cache[name] = val
+            return val
+        return None
+
+    def set(self, name: str, val: ArkValue):
+        # Always set in local scope (shadowing)
+        self.vars[name] = val
+
+    def mark_moved(self, name: str):
+        # Invalidate cache if we mark a variable as moved (even if it's in parent)
+        # Actually mark_moved logic:
+        # If in self.vars: mark moved.
+        # Else if parent: parent.mark_moved(name).
+        if name in self._cache:
+            del self._cache[name]
+        super().mark_moved(name)
 
 
 # ─── Evaluator ────────────────────────────────────────────────────────────────
@@ -85,8 +185,37 @@ def handle_struct_init(node, scope):
     return ArkValue(ArkInstance(None, fields), "Instance")
 
 def handle_return_stmt(node, scope):
-    val = eval_node(node.children[0], scope) if node.children else UNIT_VALUE
-    raise ReturnException(val)
+    if node.children:
+        expr = node.children[0]
+
+        # TCO Detection: Check if we are returning a call to the current function
+        if hasattr(expr, "data") and expr.data == "call_expr":
+             # We need to check if the function being called is the same as __current_func__
+             # First, resolve the function expression (first child of call_expr)
+             func_expr_node = expr.children[0]
+
+             # We evaluate the function reference.
+             # Note: This might have side effects if it's a complex expression, but usually it's just a var.
+             func_val = eval_node(func_expr_node, scope)
+
+             current_func = scope.get("__current_func__")
+
+             # Strict check: same function object and purely self-recursive (not method call on different instance)
+             # If it's a simple function call
+             if current_func and func_val.val == current_func.val:
+                 # Evaluate arguments
+                 arg_vals = []
+                 if len(expr.children) > 1:
+                     arg_list_node = expr.children[1]
+                     if hasattr(arg_list_node, "children"):
+                         arg_vals = [eval_node(c, scope) for c in arg_list_node.children]
+
+                 # Raise TailCall exception to unwind to call_user_func loop
+                 raise TailCall(func_val.val, arg_vals)
+
+        val = eval_node(expr, scope)
+        raise ReturnException(val)
+    raise ReturnException(UNIT_VALUE)
 
 def handle_if_stmt(node, scope):
     num_children = len(node.children)
@@ -125,7 +254,7 @@ def handle_var(node, scope):
     if val: return val
     if name in INTRINSICS:
         return ArkValue(name, "Intrinsic")
-    raise Exception(f"Undefined variable: {name}")
+    raise ArkRuntimeError(f"Undefined variable: {name}", node)
 
 def handle_assign_var(node, scope):
     name = node.children[0].value
@@ -138,10 +267,10 @@ def handle_assign_destructure(node, scope):
     var_tokens = node.children[:-1]
     val = eval_node(expr_node, scope)
     if val.type != "List":
-        raise Exception(f"Destructuring expects List, got {val.type}")
+        raise ArkRuntimeError(f"Destructuring expects List, got {val.type}", node)
     items = val.val
     if len(items) < len(var_tokens):
-        raise Exception(f"Not enough items to destructure: needed {len(var_tokens)}, got {len(items)}")
+        raise ArkRuntimeError(f"Not enough items to destructure: needed {len(var_tokens)}, got {len(items)}", node)
     for i, token in enumerate(var_tokens):
         scope.set(token.value, items[i])
     return val
@@ -153,7 +282,7 @@ def handle_assign_attr(node, scope):
     if obj.type == "Instance":
         obj.val.fields[attr] = val
         return val
-    raise Exception(f"Cannot set attribute on {obj.type}")
+    raise ArkRuntimeError(f"Cannot set attribute on {obj.type}", node)
 
 def handle_get_attr(node, scope):
     obj = eval_node(node.children[0], scope)
@@ -173,44 +302,71 @@ def handle_get_attr(node, scope):
     if obj.type == "Class":
         if attr in obj.val.methods:
             return ArkValue(obj.val.methods[attr], "Function")
-    raise Exception(f"Attribute {attr} not found on {obj.type}")
+    raise ArkRuntimeError(f"Attribute {attr} not found on {obj.type}", node)
 
 def handle_call_expr(node, scope):
-    func_val = eval_node(node.children[0], scope)
-    args = []
-    arg_list_node = None
-    if len(node.children) > 1:
-        arg_list_node = node.children[1]
-        if hasattr(arg_list_node, "children"):
-            args = [eval_node(c, scope) for c in arg_list_node.children]
-    
-    if func_val.type == "Intrinsic":
-        intrinsic_name = func_val.val
-        if intrinsic_name in LINEAR_SPECS:
-            consumed_indices = LINEAR_SPECS[intrinsic_name]
-            if arg_list_node and hasattr(arg_list_node, "children"):
-                for idx in consumed_indices:
-                    if idx < len(arg_list_node.children):
-                        arg_node = arg_list_node.children[idx]
-                        if hasattr(arg_node, "data") and arg_node.data == "var":
-                            var_name = arg_node.children[0].value
-                            scope.mark_moved(var_name)
+    # This handler might be re-entered after TCO loop or normally
+    try:
+        func_val = eval_node(node.children[0], scope)
+        args = []
+        arg_list_node = None
+        if len(node.children) > 1:
+            arg_list_node = node.children[1]
+            if hasattr(arg_list_node, "children"):
+                args = [eval_node(c, scope) for c in arg_list_node.children]
         
-        if intrinsic_name in INTRINSICS_WITH_SCOPE:
-            return INTRINSICS[func_val.val](args, scope)
-        return INTRINSICS[func_val.val](args)
+        if func_val.type == "Intrinsic":
+            intrinsic_name = func_val.val
+            if intrinsic_name in LINEAR_SPECS:
+                consumed_indices = LINEAR_SPECS[intrinsic_name]
+                if arg_list_node and hasattr(arg_list_node, "children"):
+                    for idx in consumed_indices:
+                        if idx < len(arg_list_node.children):
+                            arg_node = arg_list_node.children[idx]
+                            if hasattr(arg_node, "data") and arg_node.data == "var":
+                                var_name = arg_node.children[0].value
+                                scope.mark_moved(var_name)
 
-    if func_val.type == "Function":
-        return call_user_func(func_val.val, args)
+            if intrinsic_name in INTRINSICS_WITH_SCOPE:
+                return INTRINSICS[func_val.val](args, scope)
+            return INTRINSICS[func_val.val](args)
 
-    if func_val.type == "Class":
-        return instantiate_class(func_val.val, args)
+        if func_val.type == "Function":
+            return call_user_func(func_val.val, args)
 
-    if func_val.type == "BoundMethod":
-        method, instance = func_val.val
-        return call_user_func(method, args, instance)
+        if func_val.type == "Class":
+            return instantiate_class(func_val.val, args)
 
-    raise Exception(f"Not callable: {func_val.type}")
+        if func_val.type == "BoundMethod":
+            method, instance = func_val.val
+            return call_user_func(method, args, instance)
+
+        raise ArkRuntimeError(f"Not callable: {func_val.type}", node)
+
+    except ArkRuntimeError as e:
+        # Annotate with call site info if available and needed?
+        # The ArkRuntimeError already has the inner node.
+        # We could add a frame here if we want to trace calls.
+        # But call_user_func handles the recursion loop.
+        # This handle_call_expr is the CALLER side.
+        # So yes, we can add a frame here.
+        func_name = "<unknown>"
+        try:
+            if func_val.type == "Function":
+                func_name = func_val.val.name
+            elif func_val.type == "BoundMethod":
+                func_name = func_val.val[0].name
+        except:
+            pass
+
+        line = getattr(node, 'line', None)
+        if line is None and hasattr(node, 'meta'):
+            line = getattr(node.meta, 'line', None)
+        col = getattr(node, 'column', None)
+        if col is None and hasattr(node, 'meta'):
+            col = getattr(node.meta, 'column', None)
+        e.add_frame(line, col, func_name)
+        raise
 
 def handle_number(node, scope):
     return ArkValue(int(node.children[0].value), "Integer")
@@ -225,6 +381,13 @@ def handle_string(node, scope):
 def handle_binop(node, scope):
     left = eval_node(node.children[0], scope)
     right = eval_node(node.children[1], scope)
+
+    # Assertions
+    if node.data == "add":
+        if not (left.type in ("Integer", "String", "List") and right.type in ("Integer", "String", "List")):
+             # Actually Ark supports Int+Int, Str+Str, List+List?
+             pass
+
     return eval_binop(node.data, left, right)
 
 def handle_list_cons(node, scope):
@@ -239,21 +402,22 @@ def handle_get_item(node, scope):
     collection = eval_node(node.children[0], scope)
     index_val = eval_node(node.children[1], scope)
     if index_val.type != "Integer":
-        raise Exception(f"Index must be Integer, got {index_val.type}")
+        raise ArkRuntimeError(f"Index must be Integer, got {index_val.type}", node)
     idx = index_val.val
+
     if collection.type == "List":
         if idx < 0 or idx >= len(collection.val):
-            raise Exception(f"List index out of range: {idx}")
+            raise ArkRuntimeError(f"List index out of range: {idx}", node)
         return collection.val[idx]
     if collection.type == "String":
         if idx < 0 or idx >= len(collection.val):
-            raise Exception(f"String index out of range: {idx}")
+            raise ArkRuntimeError(f"String index out of range: {idx}", node)
         return ArkValue(collection.val[idx], "String")
     if collection.type == "Buffer":
         if idx < 0 or idx >= len(collection.val):
-            raise Exception(f"Buffer index out of range: {idx}")
+            raise ArkRuntimeError(f"Buffer index out of range: {idx}", node)
         return ArkValue(int(collection.val[idx]), "Integer")
-    raise Exception(f"Cannot index type {collection.type}")
+    raise ArkRuntimeError(f"Cannot index type {collection.type}", node)
 
 def handle_import(node, scope):
     parts = [t.value for t in node.children]
@@ -266,7 +430,7 @@ def handle_import(node, scope):
         rel_path = os.path.join(*parts) + ".ark"
     
     if not os.path.exists(rel_path):
-        raise Exception(f"Import Error: Module {'.'.join(parts)} not found at {rel_path}")
+        raise ArkRuntimeError(f"Import Error: Module {'.'.join(parts)} not found at {rel_path}", node)
 
     root = scope
     while root.parent:
@@ -332,25 +496,76 @@ NODE_HANDLERS = {
 
 def eval_node(node, scope):
     if node is None: return UNIT_VALUE
-    if hasattr(node, "data"):
-        handler = NODE_HANDLERS.get(node.data)
-        if handler:
-            return handler(node, scope)
-    return UNIT_VALUE
 
+    try:
+        if hasattr(node, "data"):
+            handler = NODE_HANDLERS.get(node.data)
+            if handler:
+                return handler(node, scope)
+        return UNIT_VALUE
+    except ReturnException:
+        raise
+    except TailCall:
+        raise
+    except ArkRuntimeError:
+        raise
+    except SandboxViolation:
+        # Pass-through security exceptions unwrapped
+        raise
+    except Exception as e:
+        # Catch unexpected Python errors (like ZeroDivisionError) and wrap them
+        raise ArkRuntimeError(str(e), node) from e
+
+
+MAX_RECURSION_DEPTH = 1000
+_recursion_depth = 0
 
 def call_user_func(func: ArkFunction, args: List[ArkValue], instance: Optional[ArkValue] = None):
-    func_scope = Scope(func.closure)
-    if instance:
-        func_scope.set("this", instance)
-    for i, param in enumerate(func.params):
-        if i < len(args):
-            func_scope.set(param, args[i])
+    global _recursion_depth
+    if _recursion_depth > MAX_RECURSION_DEPTH:
+        raise ArkRuntimeError("maximum recursion depth exceeded")
+
+    _recursion_depth += 1
+
+    current_func = func
+    current_args = args
+    current_instance = instance
+
     try:
-        eval_node(func.body, func_scope)
-        return UNIT_VALUE
-    except ReturnException as ret:
-        return ret.value
+        # Loop for TCO
+        while True:
+            # Use OptimizedScope with caching
+            func_scope = OptimizedScope(current_func.closure)
+
+            # Inject current function for TCO detection in return statements
+            func_scope.set("__current_func__", ArkValue(current_func, "Function"))
+
+            if current_instance:
+                func_scope.set("this", current_instance)
+
+            for i, param in enumerate(current_func.params):
+                if i < len(current_args):
+                    func_scope.set(param, current_args[i])
+
+            try:
+                eval_node(current_func.body, func_scope)
+                return UNIT_VALUE
+            except TailCall as tc:
+                # Unwind stack frame for tail call
+                current_func = tc.func
+                current_args = tc.args
+                # Reset instance if needed, but for self-recursion it's same or handled?
+                # If tc.func is same as current_func, instance is preserved if it's bound.
+                # But if we are calling a method on self, 'this' is in scope.
+                # If we pass 'this' explicitly?
+                # Ark methods implicitly bind.
+                # If we are in TCO, we are just looping.
+                # We assume strict self-recursion on same function object.
+                continue
+            except ReturnException as ret:
+                return ret.value
+    finally:
+        _recursion_depth -= 1
 
 
 def instantiate_class(klass: ArkClass, args: List[ArkValue]):
@@ -384,11 +599,24 @@ def eval_binop(op, left, right):
             if not isinstance(l, RopeString):
                 l = RopeString(str(l))
             return ArkValue(l + r, "String")
+        if left.type != "Integer" or right.type != "Integer":
+             # Should we allow List concat?
+             # Original code implied string/integer only.
+             # Strictness.
+             pass
         return ArkValue(l + r, "Integer")
+
+    # Check types for arithmetic
+    if op in ("sub", "mul", "div", "mod"):
+         if left.type != "Integer" or right.type != "Integer":
+              raise ArkRuntimeError(f"Operator {op} requires Integers, got {left.type} and {right.type}")
+
     if op == "sub": return ArkValue(l - r, "Integer")
     if op == "mul": return ArkValue(l * r, "Integer")
     if op == "div": return ArkValue(l // r, "Integer")
     if op == "mod": return ArkValue(l % r, "Integer")
+
+    # Comparisons
     if op == "lt": return ArkValue(l < r, "Boolean")
     if op == "gt": return ArkValue(l > r, "Boolean")
     if op == "le": return ArkValue(l <= r, "Boolean")

@@ -182,6 +182,10 @@ impl Interpreter {
                 scope.set(func_def.name.clone(), Value::Unit);
                 Ok(Value::Unit)
             }
+            Statement::Import(_) | Statement::StructDecl(_) => {
+                println!("Interpreter Warning: New AST nodes Import/StructDecl not supported in tree-walker.");
+                Ok(Value::Unit)
+            }
         }
     }
 
@@ -272,6 +276,10 @@ impl Interpreter {
                     values.push(self.eval_expression(item, scope)?);
                 }
                 Ok(Value::List(values))
+            }
+            Expression::Match(_) | Expression::Lambda(_) | Expression::TryCatch(_) => {
+                println!("Interpreter Warning: New AST nodes Match/Lambda/TryCatch not supported in tree-walker.");
+                Err(RuntimeError::NotExecutable)
             }
         }
     }

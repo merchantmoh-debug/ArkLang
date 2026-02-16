@@ -1,10 +1,12 @@
-from .base import ExecutionResult, CodeSandbox
-from .factory import get_sandbox
+from .base import ExecutionResult, BaseSandbox
+from .factory import create_sandbox
 from .local import LocalSandbox
+from .docker_exec import DockerSandbox
 
 __all__ = [
     "ExecutionResult",
-    "CodeSandbox",
-    "get_sandbox",
+    "BaseSandbox",
+    "create_sandbox",
     "LocalSandbox",
+    "DockerSandbox",
 ]
