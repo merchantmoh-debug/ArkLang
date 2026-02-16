@@ -39,7 +39,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             core/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('core/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -107,6 +107,8 @@ jobs:
       - name: Run Gauntlet
         run: python meta/gauntlet.py
         timeout-minutes: 5
+        env:
+          ALLOW_DANGEROUS_LOCAL_EXECUTION: "true"
 
   # ─── Security Scan ────────────────────────────────────────────────────
   security:
@@ -133,7 +135,6 @@ jobs:
 
       - name: Audit Rust Dependencies
         run: cargo audit
-        working-directory: core
 
       - name: Audit Python Dependencies
         run: pip-audit
