@@ -1,0 +1,58 @@
+// 1. Creation
+l := []
+i := 0
+while i < 1000 {
+    l := sys.list.append(l, i)
+    i := i + 1
+}
+
+// 2. Map (multiply by 2)
+mapped := []
+i := 0
+len_res := sys.len(l)
+len := len_res[0]
+l := len_res[1]
+
+while i < len {
+    res := sys.list.get(l, i)
+    val := res[0]
+    l := res[1]
+
+    mapped := sys.list.append(mapped, val * 2)
+    i := i + 1
+}
+
+// 3. Filter (keep even numbers)
+filtered := []
+i := 0
+len_res := sys.len(mapped)
+len := len_res[0]
+mapped := len_res[1]
+
+while i < len {
+    res := sys.list.get(mapped, i)
+    val := res[0]
+    mapped := res[1]
+
+    if val % 2 == 0 {
+        filtered := sys.list.append(filtered, val)
+    }
+    i := i + 1
+}
+
+// 4. Reduce (sum)
+sum := 0
+i := 0
+len_res := sys.len(filtered)
+len := len_res[0]
+filtered := len_res[1]
+
+while i < len {
+    res := sys.list.get(filtered, i)
+    val := res[0]
+    filtered := res[1]
+
+    sum := sum + val
+    i := i + 1
+}
+print(sum)

@@ -1,200 +1,308 @@
 import sys
 import os
-import lark
 import atexit
+import shlex
+import platform
+import re
+import lark
 
-# Initialize flags
-HAS_PROMPT_TOOLKIT = False
-HAS_PYGMENTS = False
-HAS_READLINE = False
-
-# Try importing prompt_toolkit
-try:
-    from prompt_toolkit import PromptSession
-    from prompt_toolkit.history import FileHistory
-    from prompt_toolkit.lexers import PygmentsLexer
-    from prompt_toolkit.completion import WordCompleter
-    from prompt_toolkit.styles import Style
-    HAS_PROMPT_TOOLKIT = True
-except ImportError:
-    pass
-
-# Try importing pygments
-try:
-    from pygments.lexer import RegexLexer, words
-    from pygments.token import Keyword, Name, String, Number, Operator, Text, Comment
-    HAS_PYGMENTS = True
-except ImportError:
-    pass
-
-# Try importing readline
 try:
     import readline
-    HAS_READLINE = True
 except ImportError:
-    pass
-
-# Ensure we can import ark.py from the same directory
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import ark
-
-if HAS_PYGMENTS:
-    class ArkLexer(RegexLexer):
-        name = 'Ark'
-        aliases = ['ark']
-        filenames = ['*.ark']
-
-        tokens = {
-            'root': [
-                (r'\s+', Text),
-                (r'//.*?$', Comment.Single),
-                (words(('func', 'class', 'if', 'else', 'while', 'return', 'let', 'and', 'or'), suffix=r'\b'), Keyword),
-                (words(('true', 'false'), suffix=r'\b'), Keyword.Constant),
-                (r'"(\\\\|\\"|[^"])*"', String),
-                (r'-?\d+', Number),
-                (r'[:=+\-*/%<>&|!]+', Operator),
-                (r'[a-zA-Z_][a-zA-Z0-9_]*', Name),
-                (r'[(){}\[\],.]', Text),
-            ]
-        }
-else:
-    class ArkLexer:
-        pass
-
-def run_repl():
-    print("ARK OMEGA-POINT v112.0 REPL")
-    print("Type 'exit' to quit, 'help' for commands.")
-
-    # Initialize Scope
-    scope = ark.Scope()
-    scope.set("sys", ark.ArkValue("sys", "Namespace"))
-    # Pre-populate true/false for convenience
-    scope.set("true", ark.ArkValue(True, "Boolean"))
-    scope.set("false", ark.ArkValue(False, "Boolean"))
-    scope.set("math", ark.ArkValue("math", "Namespace"))
-
-    # Load Grammar
-    grammar_path = os.path.join(os.path.dirname(__file__), "ark.lark")
-    if not os.path.exists(grammar_path):
-        print(f"Error: Grammar file not found at {grammar_path}")
-        return
-
-    with open(grammar_path, "r") as f:
-        grammar = f.read()
-
-    # Create Parser
     try:
-        parser = lark.Lark(grammar, start="start", parser="lalr")
-    except Exception as e:
-        print(f"Error loading grammar: {e}")
-        return
+        import pyreadline3 as readline
+    except ImportError:
+        readline = None
 
-    # Setup History File
-    history_file = os.path.expanduser("~/.ark_history")
+# Ensure we can import ark.py
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+try:
+    import ark
+except ImportError:
+    # Fallback if run from root
+    sys.path.append(os.path.join(os.getcwd(), 'meta'))
+    import ark
 
-    session = None
-    # We prefer PromptToolkit if both it and Pygments are available
-    if HAS_PROMPT_TOOLKIT and HAS_PYGMENTS:
-        # Keywords + Intrinsics for completion
-        completer_words = [
-            'func', 'class', 'if', 'else', 'while', 'return', 'let',
-            'true', 'false', 'and', 'or', 'sys'
-        ] + list(ark.INTRINSICS.keys())
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
-        ark_completer = WordCompleter(completer_words, ignore_case=False)
+def colorize(text, color):
+    if os.name == 'nt': return text
+    return f"{color}{text}{Colors.ENDC}"
 
-        session = PromptSession(
-            history=FileHistory(history_file),
-            lexer=PygmentsLexer(ArkLexer),
-            completer=ark_completer,
-            style=Style.from_dict({
-                'completion-menu.completion': 'bg:#008888 #ffffff',
-                'completion-menu.completion.current': 'bg:#00aaaa #000000',
-                'scrollbar.background': 'bg:#88aaaa',
-                'scrollbar.button': 'bg:#222222',
-            })
-        )
-    else:
-        # Fallback Setup
-        if not HAS_PROMPT_TOOLKIT:
-            print("Note: 'prompt_toolkit' not found. Using basic REPL.")
-        elif not HAS_PYGMENTS:
-            print("Note: 'pygments' not found. Using basic REPL.")
+def colorize_prompt(text, color):
+    if os.name == 'nt': return text
+    if not readline: return colorize(text, color)
+    # Wrap escape sequences in \001 and \002 for readline
+    return f"\001{color}\002{text}\001{Colors.ENDC}\002"
 
-        if HAS_READLINE:
+KEYWORDS = [
+    'let', 'func', 'if', 'else', 'while', 'for', 'return',
+    'import', 'struct', 'match', 'true', 'false', 'nil',
+    'class', 'and', 'or'
+]
+
+class ArkCompleter:
+    def __init__(self, scope):
+        self.scope = scope
+
+    def complete(self, text, state):
+        if not text:
+            return None
+
+        candidates = []
+        # Keywords
+        candidates.extend([k for k in KEYWORDS if k.startswith(text)])
+        # Intrinsics
+        candidates.extend([k for k in ark.INTRINSICS.keys() if k.startswith(text)])
+        # Variables in scope
+        candidates.extend([k for k in self.scope.vars.keys() if k.startswith(text)])
+
+        candidates = sorted(list(set(candidates)))
+        if state < len(candidates):
+            return candidates[state]
+        return None
+
+class REPL:
+    def __init__(self):
+        self.history_file = os.path.expanduser("~/.ark_history")
+        self.init_scope()
+        self.setup_readline()
+
+    def init_scope(self):
+        self.scope = ark.Scope()
+        self.scope.set("sys", ark.ArkValue("sys", "Namespace"))
+        self.scope.set("math", ark.ArkValue("math", "Namespace"))
+        self.scope.set("true", ark.ArkValue(True, "Boolean"))
+        self.scope.set("false", ark.ArkValue(False, "Boolean"))
+        # Add sys_args
+        self.scope.set("sys_args", ark.ArkValue([], "List"))
+
+    def setup_readline(self):
+        if readline:
+            if os.path.exists(self.history_file):
+                try:
+                    readline.read_history_file(self.history_file)
+                except IOError:
+                    pass
+            atexit.register(self.save_history)
+
+            self.completer = ArkCompleter(self.scope)
+            readline.set_completer(self.completer.complete)
+            readline.parse_and_bind("tab: complete")
+
+    def save_history(self):
+        if readline:
             try:
-                readline.read_history_file(history_file)
-            except FileNotFoundError:
+                readline.write_history_file(self.history_file)
+            except IOError:
                 pass
-            atexit.register(readline.write_history_file, history_file)
 
-    buffer = []
-
-    while True:
+    def get_input(self, prompt=">>> "):
+        buffer = []
         try:
-            if session:
-                text = session.prompt('ark> ')
+            line = input(colorize_prompt(prompt, Colors.BLUE))
+            buffer.append(line)
+
+            while True:
+                full_text = "\n".join(buffer)
+
+                # Check for trailing backslash
+                if full_text.strip().endswith('\\'):
+                    buffer[-1] = buffer[-1].rstrip('\\')
+                    next_line = input(colorize_prompt("... ", Colors.BLUE))
+                    buffer.append(next_line)
+                    continue
+
+                # Check brace/paren balance
+                open_braces = full_text.count('{')
+                close_braces = full_text.count('}')
+                open_parens = full_text.count('(')
+                close_parens = full_text.count(')')
+
+                if open_braces > close_braces or open_parens > close_parens:
+                    next_line = input(colorize_prompt("... ", Colors.BLUE))
+                    buffer.append(next_line)
+                else:
+                    break
+
+            return "\n".join(buffer)
+
+        except EOFError:
+            raise
+
+    def get_type_hint(self, node):
+        if hasattr(node, 'data'):
+            if node.data == 'number': return "Integer"
+            if node.data == 'string': return "String"
+            if node.data == 'logical_or' or node.data == 'logical_and': return "Boolean"
+            if node.data == 'var':
+                name = node.children[0].value
+                val = self.scope.get(name)
+                if val: return val.type
+                return "Unknown (Undefined)"
+        return "Dynamic/Expression"
+
+    def handle_command(self, text):
+        parts = shlex.split(text)
+        cmd = parts[0]
+        args = parts[1:]
+
+        if cmd == ":help":
+            print(colorize("Commands:", Colors.HEADER))
+            print("  :help        Show this help")
+            print("  :reset       Reset session")
+            print("  :load <file> Load and execute file")
+            print("  :save <file> Save history to file")
+            print("  :type <expr> Show type of expression (static guess)")
+            print("  :env         Show variables in scope")
+            print("  :quit        Exit REPL")
+            return True
+
+        elif cmd == ":reset":
+            self.init_scope()
+            if readline:
+                self.completer.scope = self.scope
+            print(colorize("Session reset.", Colors.YELLOW))
+            return True
+
+        elif cmd == ":load":
+            if not args:
+                print(colorize("Usage: :load <file>", Colors.RED))
+                return True
+            path = args[0]
+            try:
+                with open(path, 'r') as f:
+                    code = f.read()
+                tree = ark.ARK_PARSER.parse(code)
+                ark.eval_node(tree, self.scope)
+                print(colorize(f"Loaded {path}", Colors.GREEN))
+            except Exception as e:
+                print(colorize(f"Error loading {path}: {e}", Colors.RED))
+            return True
+
+        elif cmd == ":save":
+            if not args:
+                print(colorize("Usage: :save <file>", Colors.RED))
+                return True
+            path = args[0]
+            if readline:
+                try:
+                    readline.write_history_file(path)
+                    print(colorize(f"History saved to {path}", Colors.GREEN))
+                except Exception as e:
+                    print(colorize(f"Error saving history: {e}", Colors.RED))
             else:
-                # Basic Input with ANSI color for prompt
-                # Note: input() uses stdout, ANSI codes work in most terminals
-                text = input('\033[94mark>\033[0m ')
+                print(colorize("Readline not available.", Colors.RED))
+            return True
 
-            if not text.strip():
+        elif cmd == ":env":
+            print(colorize("Scope Variables:", Colors.HEADER))
+            for k, v in self.scope.vars.items():
+                print(f"  {colorize(k, Colors.CYAN)}: {v.type} = {v.val}")
+            return True
+
+        elif cmd in [":quit", ":exit"]:
+            sys.exit(0)
+
+        elif cmd == ":type":
+            if not args:
+                print(colorize("Usage: :type <expr>", Colors.RED))
+                return True
+            expr = " ".join(args)
+            try:
+                tree = ark.ARK_PARSER.parse(expr)
+                # If tree is a statement block, drill down
+                if tree.data in ['start', 'block', 'flow_stmt']:
+                     # This is a bit hacky, but valid for simple expressions
+                     # Real static analysis requires a full visitor
+                     pass
+                hint = self.get_type_hint(tree)
+                if hint == "Dynamic/Expression":
+                     # Try to drill down one level if it's a statement wrapper
+                     if tree.children and hasattr(tree.children[0], 'data'):
+                         hint = self.get_type_hint(tree.children[0])
+
+                print(f"{colorize('Type Hint:', Colors.YELLOW)} {hint}")
+            except Exception as e:
+                print(colorize(f"Parse Error: {e}", Colors.RED))
+            return True
+
+        print(colorize(f"Unknown command: {cmd}", Colors.RED))
+        return True
+
+    def run(self):
+        banner = r"""
+  ____  ____  _   _
+ / _  ||  _ \| | / /
+| |_| || |_) | |/ /
+|  _  ||  _ <|   <
+| | | || | \ \| |\ \
+|_| |_||_|  \_\_| \_\  v0.1.0
+
+Type :help for commands, :quit to exit
+"""
+        print(colorize(banner, Colors.CYAN))
+
+        while True:
+            try:
+                text = self.get_input()
+                if not text.strip():
+                    continue
+
+                if text.strip().startswith(':'):
+                    self.handle_command(text.strip())
+                    continue
+
+                # Parse
+                try:
+                    tree = ark.ARK_PARSER.parse(text)
+                except lark.UnexpectedInput as e:
+                     print(f"{colorize('Syntax Error:', Colors.RED)} {e}")
+                     continue
+                except lark.UnexpectedCharacters as e:
+                     print(f"{colorize('Syntax Error:', Colors.RED)} {e}")
+                     continue
+                except Exception as e:
+                     print(f"{colorize('Parse Error:', Colors.RED)} {e}")
+                     continue
+
+                # Eval
+                try:
+                    result = ark.eval_node(tree, self.scope)
+
+                    if result.type != "Unit":
+                        if result.type == "String":
+                            print(f'{colorize("=>", Colors.GREEN)} "{colorize(result.val, Colors.GREEN)}"')
+                        elif result.type in ["Integer", "Float"]:
+                            print(f'{colorize("=>", Colors.GREEN)} {colorize(str(result.val), Colors.CYAN)}')
+                        elif result.type == "Boolean":
+                            print(f'{colorize("=>", Colors.GREEN)} {colorize(str(result.val).lower(), Colors.YELLOW)}')
+                        else:
+                            print(f'{colorize("=>", Colors.GREEN)} {result.val}')
+
+                except ark.ReturnException as e:
+                    print(f'{colorize("=>", Colors.GREEN)} {e.value.val}')
+                except ark.SandboxViolation as e:
+                    print(f"{colorize('Security Violation:', Colors.RED)} {e}")
+                except Exception as e:
+                    print(f"{colorize('Runtime Error:', Colors.RED)} {e}")
+
+            except KeyboardInterrupt:
+                print("\n^C")
                 continue
-
-            # Handle exit
-            if not buffer and text.strip() in ['exit', 'quit']:
+            except EOFError:
+                print("\nGoodbye!")
                 break
 
-            # Handle help
-            if not buffer and text.strip() == 'help':
-                print("\nAvailable Commands:")
-                print("  exit, quit  - Quit REPL")
-                print("  help        - Show this help")
-                print("\nAvailable Intrinsics:")
-                # Simple word wrap for display
-                intrinsics = sorted(ark.INTRINSICS.keys())
-                print(", ".join(intrinsics))
-                print("")
-                continue
-
-            buffer.append(text)
-            full_text = "\n".join(buffer)
-
-            # Parse
-            try:
-                tree = parser.parse(text)
-            except lark.UnexpectedToken as e:
-                print(f"\033[91mSyntax Error:\033[0m {e}")
-                continue
-            except lark.UnexpectedCharacters as e:
-                print(f"\033[91mSyntax Error:\033[0m {e}")
-                continue
-
-            # Evaluate
-            try:
-                result = ark.eval_node(tree, scope)
-                if result.type != "Unit":
-                    # Pretty print result if it's not Unit
-                    if result.type == "String":
-                        print(f'\033[92m=> "{result.val}"\033[0m')
-                    else:
-                        print(f"\033[92m=> {result.val}\033[0m")
-            except ark.ReturnException as e:
-                print(f"\033[92m=> {e.value.val}\033[0m")
-            except ark.SandboxViolation as e:
-                print(f"\033[91mSecurity Violation:\033[0m {e}")
-            except Exception as e:
-                print(f"\033[91mRuntime Error:\033[0m {e}")
-
-        except KeyboardInterrupt:
-            # Handle Ctrl+C (clear input)
-            print("^C")
-            continue
-        except EOFError:
-            # Handle Ctrl+D (exit)
-            print("Goodbye!")
-            break
-
 if __name__ == "__main__":
-    run_repl()
+    repl = REPL()
+    repl.run()

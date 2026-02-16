@@ -1,26 +1,41 @@
-# SOVEREIGN SYSTEMS CONTRIBUTOR LICENSE AGREEMENT (CLA) v1.0
+# Sovereign Systems Individual Contributor License Agreement ("Agreement") v2.0
 
 **Effective Date:** February 7, 2026
 **Beneficiary:** Mohamad Al-Zawahreh dba Sovereign Systems ("The Owner")
-**Jurisdiction:** Ontario, Canada
+**Project:** Ark Sovereign Computing Stack ("The Project")
 
-Thank you for your interest in contributing to the Ark Project. To ensure the legal integrity of the project and the ability of The Owner to defend the codebase and offer commercial licenses, we require all contributors to agree to the following terms.
+Thank you for your interest in contributing to The Project. In order to clarify the intellectual property license granted with Contributions from any person or entity, The Owner must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the license terms below. This license is for your protection as a Contributor as well as the protection of The Owner and its users; it does not change your rights to use your own Contributions for any other purpose.
 
-### 1. DEFINITIONS
-"Contribution" means any source code, object code, patch, tool, documentation, or other material posted or submitted by You to the Ark repository.
+You accept and agree to the following terms and conditions for Your present and future Contributions submitted to The Owner. In return, the Owner shall not use Your Contributions in a way that is contrary to the public benefit or inconsistent with its nonprofit status and bylaws in effect at the time of the Contribution.
 
-### 2. ASSIGNMENT OF COPYRIGHT
-By submitting a Contribution, You hereby assign to Mohamad Al-Zawahreh (and any future legal entity he designates) all right, title, and interest in and to the Contribution, including all copyrights and moral rights. This assignment is perpetual, worldwide, and irrevocable.
+### 1. Definitions
 
-### 3. GRANT OF PATENT LICENSE
-You hereby grant to The Owner and to recipients of software distributed by The Owner a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable patent license to make, have made, use, offer to sell, sell, import, and otherwise transfer the Contribution.
+"You" (or "Your") shall mean the copyright owner or legal entity authorized by the copyright owner that is making this Agreement with The Owner. For legal entities, the entity making a Contribution and all other entities that control, are controlled by, or are under common control with that entity are considered to be a single Contributor.
 
-### 4. WAIVER
-You acknowledge that The Owner has the right to:
-(a) Re-license your Contribution under proprietary or commercial licenses (Dual Licensing);
-(b) Use your Contribution in closed-source products without compensation to You.
+"Contribution" shall mean any original work of authorship, including any modifications or additions to an existing work, that is intentionally submitted by You to The Owner for inclusion in, or documentation of, any of the products owned or managed by The Owner (the "Work"). For the purposes of this definition, "submitted" means any form of electronic, verbal, or written communication sent to The Owner or its representatives, including but not limited to communication on electronic mailing lists, source code control systems, and issue tracking systems that are managed by, or on behalf of, The Owner for the purpose of discussing and improving the Work, but excluding communication that is conspicuously marked or otherwise designated in writing by You as "Not a Contribution."
 
-### 5. ORIGINALITY
-You represent that your Contribution is Your original creation and that You have the legal authority to enter into this agreement.
+### 2. Grant of Copyright License
 
-**BY SUBMITTING A PULL REQUEST OR CODE TO THIS REPOSITORY, YOU SIGNIFY YOUR BINDING ACCEPTANCE OF THIS AGREEMENT.**
+Subject to the terms and conditions of this Agreement, You hereby grant to The Owner and to recipients of software distributed by The Owner a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable copyright license to reproduce, prepare derivative works of, publicly display, publicly perform, sublicense, and distribute Your Contributions and such derivative works.
+
+### 3. Grant of Patent License
+
+Subject to the terms and conditions of this Agreement, You hereby grant to The Owner and to recipients of software distributed by The Owner a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated in this section) patent license to make, have made, use, offer to sell, sell, import, and otherwise transfer the Work, where such license applies only to those patent claims licensable by You that are necessarily infringed by Your Contribution(s) alone or by combination of Your Contribution(s) with the Work to which such Contribution(s) was submitted. If any entity institutes patent litigation against You or any other entity (including a cross-claim or counterclaim in a lawsuit) alleging that your Contribution, or the Work to which you have contributed, constitutes direct or contributory patent infringement, then any patent licenses granted to that entity under this Agreement for that Contribution or Work shall terminate as of the date such litigation is filed.
+
+### 4. You Represent That:
+
+1.  You are legally entitled to grant the above license.
+2.  If your employer(s) has rights to intellectual property that you create that includes your Contributions, you have received permission to make Contributions on behalf of that employer, that your employer has waived such rights for your Contributions to The Owner, or that your employer has executed a separate Corporate CLA with The Owner.
+3.  Each of Your Contributions is Your original creation (see section 7 for submissions on behalf of others).
+
+### 5. Support
+
+You are not expected to provide support for Your Contributions, except to the extent You desire to provide support. You may provide support for free, for a fee, or not at all. Unless required by applicable law or agreed to in writing, You provide Your Contributions on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE.
+
+### 6. Sign-Off Process
+
+To sign this CLA, simply add the following line to your Pull Request description:
+
+`I have read and agree to the terms of the Sovereign Systems CLA v2.0`
+
+This signifies your binding acceptance of this Agreement.
