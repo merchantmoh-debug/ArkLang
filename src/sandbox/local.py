@@ -179,8 +179,59 @@ class LocalSandbox(BaseSandbox):
             if language == "python":
                 cmd = [sys.executable, filepath]
             elif language == "ark":
-                cmd = [sys.executable, "meta/ark.py", "run", filepath]
-                # ark.py expects to run from root, but path to script is absolute.
+                # Step 1: Transpile to JSON (MAST)
+                json_path = filepath + ".json"
+                transpile_cmd = [
+                    sys.executable,
+                    os.path.abspath("meta/ark_to_json.py"),
+                    filepath,
+                    "-o",
+                    json_path
+                ]
+
+                try:
+                    proc = await asyncio.create_subprocess_exec(
+                        *transpile_cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        cwd=os.getcwd() # Run from repo root
+                    )
+                    stdout, stderr = await proc.communicate()
+                    if proc.returncode != 0:
+                        return ExecutionResult(
+                            stdout=stdout.decode(),
+                            stderr=f"Transpilation failed:\n{stderr.decode()}",
+                            exit_code=proc.returncode,
+                            duration_ms=(time.time() - start_time) * 1000,
+                        )
+                except Exception as e:
+                     return ExecutionResult(
+                        stdout="",
+                        stderr=f"Transpilation error: {e}",
+                        exit_code=1,
+                        duration_ms=(time.time() - start_time) * 1000,
+                    )
+
+                # Step 2: Execute with Rust Runtime
+                loader_path = os.path.abspath("target/release/ark_loader")
+                if not os.path.exists(loader_path):
+                     # Fallback to debug build if release missing?
+                     loader_path = os.path.abspath("core/target/release/ark_loader")
+
+                if not os.path.exists(loader_path):
+                     return ExecutionResult(
+                        stdout="",
+                        stderr="Ark Runtime (ark_loader) not found. Please compile core.",
+                        exit_code=1,
+                        duration_ms=0.0
+                    )
+
+                cmd = [loader_path, json_path]
+                # Run from root so intrinsic paths are relative to root?
+                # Or temp dir?
+                # If script imports from lib/std, we need root context.
+                # But sandbox usually isolates.
+                # Let's run from root but rely on loader security.
                 cwd = os.getcwd()
             elif language == "javascript":
                 cmd = ["node", filepath]
@@ -300,7 +351,7 @@ if __name__ == "__main__":
 
         # 3. Test Ark (if available)
         if os.path.exists("meta/ark.py"):
-            res = await sandbox.execute('print("Hello Ark");', "ark")
+            res = await sandbox.execute('print("Hello Ark")', "ark")
             if res.exit_code == 0:
                  print(f"Ark execution: OK ({res.stdout.strip()})")
             else:

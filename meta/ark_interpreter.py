@@ -421,16 +421,26 @@ def handle_get_item(node, scope):
 
 def handle_import(node, scope):
     parts = [t.value for t in node.children]
-    if parts[0] == "std":
-        rel_path = os.path.join("lib", *parts) + ".ark"
-    else:
-        rel_path = os.path.join(*parts) + ".ark"
 
-    if not os.path.exists(rel_path):
-        rel_path = os.path.join(*parts) + ".ark"
-    
-    if not os.path.exists(rel_path):
-        raise ArkRuntimeError(f"Import Error: Module {'.'.join(parts)} not found at {rel_path}", node)
+    # Security: Restrict imports to CWD and lib/
+    cwd = os.getcwd()
+
+    if parts[0] == "std":
+        rel_path = os.path.join(cwd, "lib", *parts) + ".ark"
+    else:
+        rel_path = os.path.join(cwd, *parts) + ".ark"
+
+    # Normalize and resolve symlinks
+    try:
+        abs_path = os.path.abspath(rel_path)
+        # Verify traversal
+        if not abs_path.startswith(cwd):
+             raise ArkRuntimeError(f"Security Violation: Import path '{rel_path}' escapes sandbox.", node)
+    except Exception as e:
+         raise ArkRuntimeError(f"Import Error: Invalid path resolution: {e}", node)
+
+    if not os.path.exists(abs_path):
+        raise ArkRuntimeError(f"Import Error: Module {'.'.join(parts)} not found at {abs_path}", node)
 
     root = scope
     while root.parent:
@@ -441,17 +451,24 @@ def handle_import(node, scope):
     
     loaded_set = root.vars["__loaded_imports__"].val
     
-    abs_path = os.path.abspath(rel_path)
     if abs_path in loaded_set:
         return ArkValue(None, "Unit")
     
     loaded_set.add(abs_path)
 
-    with open(abs_path, "r") as f:
-        code = f.read()
+    try:
+        with open(abs_path, "r", encoding="utf-8") as f:
+            code = f.read()
+    except Exception as e:
+        raise ArkRuntimeError(f"Import Error: Failed to read module {'.'.join(parts)}: {e}", node)
     
-    tree = ARK_PARSER.parse(code)
-    eval_node(tree, scope)
+    try:
+        tree = ARK_PARSER.parse(code)
+        eval_node(tree, scope)
+    except Exception as e:
+        # Wrap parser errors to prevent leakage
+        raise ArkRuntimeError(f"Import Error: Failed to parse module {'.'.join(parts)}: {e}", node)
+
     return ArkValue(None, "Unit")
 
 
