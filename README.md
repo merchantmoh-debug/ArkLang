@@ -17,6 +17,7 @@
 ![Status](https://img.shields.io/badge/Status-WAR_SPEED-red?style=for-the-badge)
 ![Security](https://img.shields.io/badge/Security-LINEAR_TYPES-blue?style=for-the-badge)
 ![Intelligence](https://img.shields.io/badge/Ai-NEURO_SYMBOLIC-00ffff?style=for-the-badge)
+![Gauntlet](https://img.shields.io/badge/Gauntlet-61%2B_Tests_Passing-green?style=for-the-badge)
 
 </div>
 
@@ -391,7 +392,7 @@ It is this: **Ark allows a single developer to replace an entire corporation.**
 | **Blockchain Core** | 🟠 PROTOTYPE | **FINANCE** 🏦 | **Replaces Stripe / SWIFT** | Mock chain intrinsics. No consensus or persistence. |
 | **Linear Logic** | 🟡 BETA | **LAW** ⚖️ | **Replaces Usage Contracts** | Python checker + Rust checker enforce move semantics. |
 | **Arrow Bridge** | 🔴 VISION | **BIG DATA** 🏭 | **Replaces ETL / Snowflake** | No Arrow integration yet. |
-| **WASM Runtime** | 🟡 BETA | **CLOUD / SAAS** ☁️ | **Replaces AWS / Vercel** | Rust→WASM compiles. 58% intrinsic parity. |
+| **WASM Runtime** | 🟡 BETA | **CLOUD / SAAS** ☁️ | **Replaces AWS / Vercel** | Rust→WASM compiles. 60% intrinsic parity. |
 | **The Swarm** | 🟠 PROTOTYPE | **LABOR** 👷 | **Replaces Upwork / Employees** | AI bridge works (Ollama/Gemini). No multi-agent orchestration. |
 
 ### The Power of One

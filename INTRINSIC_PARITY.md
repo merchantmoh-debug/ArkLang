@@ -9,8 +9,8 @@
 | Status | Meaning |
 |---|---|
 | ✅ | **PARITY** — Exists in both Python and Rust |
-| ⚠️ | **PYTHON_ONLY** — Exists only in `ark.py` (debt) |
-| 🔲 | **STUB** — Rust function exists but returns `unimplemented!()` |
+| ❌ | **PYTHON_ONLY** — Exists only in `ark.py` (debt) |
+| 🟡 | **STUB** — Rust function exists but returns `unimplemented!()` |
 
 ---
 
@@ -41,28 +41,29 @@
 | `sys.fs.write` | ✅ | ✅ | ✅ |
 | `sys.fs.read_buffer` | ✅ | ✅ | ✅ |
 | `sys.fs.write_buffer` | ✅ | ✅ | ✅ |
-| `sys.io.read_bytes` | ✅ | ❌ | ⚠️ |
-| `sys.io.read_line` | ✅ | ❌ | ⚠️ |
-| `sys.io.write` | ✅ | ❌ | ⚠️ |
-| `sys.io.read_file_async` | ✅ | ❌ | ⚠️ |
+| `sys.io.read_bytes` | ✅ | ❌ | ❌ |
+| `sys.io.read_line` | ✅ | ❌ | ❌ |
+| `sys.io.write` | ✅ | ❌ | ❌ |
+| `sys.io.read_file_async` | ✅ | ❌ | ❌ |
 | `sys.exec` | ✅ | ✅ | ✅ |
+| `io.cls` | ✅ | ✅ | ✅ |
 
 ## Cryptography
 
 | Intrinsic | Python | Rust | Status |
 |---|---|---|---|
 | `sys.crypto.hash` | ✅ | ✅ | ✅ |
-| `sys.crypto.verify` | ✅ (via `ed25519.verify`) | ✅ | ✅ |
+| `sys.crypto.verify` | ✅ | ✅ | ✅ |
 | `sys.crypto.merkle_root` | ✅ | ✅ | ✅ |
-| `sys.crypto.sha512` | ✅ | ❌ | ⚠️ |
-| `sys.crypto.hmac_sha512` | ✅ | ❌ | ⚠️ |
-| `sys.crypto.pbkdf2_hmac_sha512` | ✅ | ❌ | ⚠️ |
-| `sys.crypto.aes_gcm_encrypt` | ✅ | ❌ | ⚠️ |
-| `sys.crypto.aes_gcm_decrypt` | ✅ | ❌ | ⚠️ |
-| `sys.crypto.random_bytes` | ✅ | ❌ | ⚠️ |
-| `sys.crypto.ed25519.gen` | ✅ | ❌ | ⚠️ |
-| `sys.crypto.ed25519.sign` | ✅ | ❌ | ⚠️ |
-| `sys.crypto.ed25519.verify` | ✅ | ❌ | ⚠️ |
+| `sys.crypto.sha512` | ✅ | ❌ | ❌ |
+| `sys.crypto.hmac_sha512` | ✅ | ❌ | ❌ |
+| `sys.crypto.pbkdf2_hmac_sha512` | ✅ | ❌ | ❌ |
+| `sys.crypto.aes_gcm_encrypt` | ✅ | ❌ | ❌ |
+| `sys.crypto.aes_gcm_decrypt` | ✅ | ❌ | ❌ |
+| `sys.crypto.random_bytes` | ✅ | ❌ | ❌ |
+| `sys.crypto.ed25519.gen` | ✅ | ❌ | ❌ |
+| `sys.crypto.ed25519.sign` | ✅ | ❌ | ❌ |
+| `sys.crypto.ed25519.verify` | ✅ | ❌ | ❌ |
 
 ## Math
 
@@ -80,7 +81,14 @@
 | `math.sin_scaled` | ✅ | ✅ | ✅ |
 | `math.cos_scaled` | ✅ | ✅ | ✅ |
 | `math.pi_scaled` | ✅ | ✅ | ✅ |
-| `sys.math.pow_mod` | ✅ | ❌ | ⚠️ |
+| `sys.math.pow_mod` | ✅ | ❌ | ❌ |
+| `math.Tensor` | ✅ | ❌ | ❌ |
+| `math.matmul` | ✅ | ❌ | ❌ |
+| `math.transpose` | ✅ | ❌ | ❌ |
+| `math.dot` | ✅ | ❌ | ❌ |
+| `math.add` | ✅ | ❌ | ❌ |
+| `math.sub` | ✅ | ❌ | ❌ |
+| `math.mul_scalar` | ✅ | ❌ | ❌ |
 
 ## Memory & Buffers
 
@@ -99,11 +107,11 @@
 | `sys.list.set` | ✅ | ✅ | ✅ |
 | `sys.list.append` | ✅ | ✅ | ✅ |
 | `sys.len` | ✅ | ✅ | ✅ |
-| `sys.list.pop` | ✅ | ❌ | ⚠️ |
-| `sys.list.delete` | ✅ | ❌ | ⚠️ |
+| `sys.list.pop` | ✅ | ✅ | ✅ |
+| `sys.list.delete` | ✅ | ❌ | ❌ |
 | `sys.struct.get` | ✅ | ✅ | ✅ |
 | `sys.struct.set` | ✅ | ✅ | ✅ |
-| `sys.struct.has` | ✅ | ❌ | ⚠️ |
+| `sys.struct.has` | ✅ | ❌ | ❌ |
 | `sys.str.get` | ✅ | ✅ | ✅ |
 | `sys.str.from_code` | ✅ | ✅ | ✅ |
 
@@ -111,15 +119,15 @@
 
 | Intrinsic | Python | Rust | Status |
 |---|---|---|---|
-| `sys.net.http.request` | ✅ | ❌ | ⚠️ |
-| `sys.net.http.serve` | ✅ | ❌ | ⚠️ |
-| `sys.net.socket.bind` | ✅ | ❌ | ⚠️ |
-| `sys.net.socket.accept` | ✅ | ❌ | ⚠️ |
-| `sys.net.socket.connect` | ✅ | ❌ | ⚠️ |
-| `sys.net.socket.send` | ✅ | ❌ | ⚠️ |
-| `sys.net.socket.recv` | ✅ | ❌ | ⚠️ |
-| `sys.net.socket.close` | ✅ | ❌ | ⚠️ |
-| `sys.net.socket.set_timeout` | ✅ | ❌ | ⚠️ |
+| `sys.net.http.request` | ✅ | ❌ | ❌ |
+| `sys.net.http.serve` | ✅ | ❌ | ❌ |
+| `sys.net.socket.bind` | ✅ | ❌ | ❌ |
+| `sys.net.socket.accept` | ✅ | ❌ | ❌ |
+| `sys.net.socket.connect` | ✅ | ❌ | ❌ |
+| `sys.net.socket.send` | ✅ | ❌ | ❌ |
+| `sys.net.socket.recv` | ✅ | ❌ | ❌ |
+| `sys.net.socket.close` | ✅ | ❌ | ❌ |
+| `sys.net.socket.set_timeout` | ✅ | ❌ | ❌ |
 
 ## Blockchain / Chain
 
@@ -135,19 +143,20 @@
 | Intrinsic | Python | Rust | Status |
 |---|---|---|---|
 | `sys.time.now` | ✅ | ✅ | ✅ |
-| `sys.time.sleep` | ✅ | ❌ | ⚠️ |
-| `sys.json.parse` | ✅ | ❌ | ⚠️ |
-| `sys.json.stringify` | ✅ | ❌ | ⚠️ |
-| `sys.log` | ✅ | ❌ | ⚠️ |
-| `sys.exit` | ✅ | ❌ | ⚠️ |
-| `sys.vm.eval` | ✅ | ❌ | ⚠️ |
-| `sys.vm.source` | ✅ | ❌ | ⚠️ |
-| `sys.event.poll` | ✅ | ❌ | ⚠️ |
-| `sys.func.apply` | ✅ | ❌ | ⚠️ |
-| `sys.thread.spawn` | ✅ | ❌ | ⚠️ |
+| `sys.time.sleep` | ✅ | ❌ | ❌ |
+| `sys.json.parse` | ✅ | ❌ | ❌ |
+| `sys.json.stringify` | ✅ | ❌ | ❌ |
+| `sys.log` | ✅ | ❌ | ❌ |
+| `sys.exit` | ✅ | ❌ | ❌ |
+| `sys.html_escape` | ✅ (Unregistered) | ❌ | ❌ |
+| `sys.z3.verify` | ✅ (Unregistered) | ❌ | ❌ |
+| `sys.vm.eval` | ✅ | ❌ | ❌ |
+| `sys.vm.source` | ✅ | ❌ | ❌ |
+| `sys.event.poll` | ✅ | ❌ | ❌ |
+| `sys.func.apply` | ✅ | ❌ | ❌ |
+| `sys.thread.spawn` | ✅ | ❌ | ❌ |
 | `intrinsic_ask_ai` | ✅ | ✅ | ✅ |
-| `io.cls` | ✅ | ✅ | ✅ |
-| `intrinsic_extract_code` | ✅ | ❌ | ⚠️ |
+| `intrinsic_extract_code` | ✅ | ❌ | ❌ |
 
 ---
 
@@ -155,17 +164,17 @@
 
 | Status | Count |
 |---|---|
-| ✅ PARITY | **55** |
-| ⚠️ PYTHON_ONLY | **40** |
-| 🔲 STUB | **0** |
-| **Total** | **95** |
+| ✅ PARITY | **63** |
+| ❌ PYTHON_ONLY | **42** |
+| 🟡 STUB | **0** |
+| **Total** | **105** |
 
-**Parity Ratio: 57.9%** — Target: 80%+ by Phase 75.
+**Parity Ratio: 60.0%** — Target: 80%+ by Phase 75.
 
 ### Priority Debt (Must port to Rust for WASM viability)
 
 1. `sys.json.parse` / `sys.json.stringify` — Required for all WASM FFI
-2. `sys.list.pop` / `sys.list.delete` — Common list ops
+2. `sys.list.delete` — Common list ops
 3. `sys.exit` — Basic program control
 4. `sys.time.sleep` — Used in async/network tests
 5. `sys.log` — Debugging
