@@ -598,6 +598,11 @@ impl Compiler {
                 Ok(())
             }
 
+            Expression::Integer(n) => {
+                self.chunk.write(OpCode::Push(Value::Integer(*n)));
+                Ok(())
+            }
+
             Expression::Variable(name) => {
                 // Scope check?
                 // We check if variable exists in any scope?

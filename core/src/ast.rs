@@ -171,6 +171,7 @@ pub enum Statement {
 pub enum Expression {
     Variable(String),
     Literal(String), // Placeholder
+    Integer(i64),    // Added for Number support
     Call {
         function_hash: String,
         args: Vec<Expression>,

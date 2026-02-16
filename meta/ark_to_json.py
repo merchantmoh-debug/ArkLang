@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import argparse
+import hashlib
 from typing import Any, Dict, List, Optional, Union
 from lark import Tree, Token
 
@@ -16,11 +17,36 @@ except ImportError:
     from meta.ark import ARK_PARSER
 
 # ------------------------------------------------------------------------------
-# 1. AST Serialization
+# 1. Hashing Logic (Must match Rust core/src/ast.rs)
+# ------------------------------------------------------------------------------
+
+def calculate_hash(content: Any) -> str:
+    # Serialize to Canonical JSON
+    canonical = json.dumps(content, sort_keys=True, separators=(',', ':'))
+    # SHA-256
+    sha = hashlib.sha256()
+    sha.update(canonical.encode('utf-8'))
+    return sha.hexdigest()
+
+def create_mast_node(content: Any, span: Optional[Dict] = None) -> Dict[str, Any]:
+    h = calculate_hash(content)
+    return {
+        "hash": h,
+        "content": content,
+        "span": span
+    }
+
+# ------------------------------------------------------------------------------
+# 2. AST Conversion (Python AST -> Rust ArkNode)
 # ------------------------------------------------------------------------------
 
 class ArkASTSerializer:
-    def to_json(self, node: Union[Tree, Token, List, Any]) -> Any:
+    def to_mast(self, node: Union[Tree, Token, List, Any]) -> Dict[str, Any]:
+        content = self.visit(node)
+        span = self._get_span(node) if isinstance(node, (Tree, Token)) else None
+        return create_mast_node(content, span)
+
+    def visit(self, node: Union[Tree, Token, List, Any]) -> Any:
         if isinstance(node, Tree):
             handler_name = f"visit_{node.data}"
             handler = getattr(self, handler_name, self.generic_visit)
@@ -28,96 +54,85 @@ class ArkASTSerializer:
         elif isinstance(node, Token):
             return self.visit_token(node)
         elif isinstance(node, list):
-            return [self.to_json(item) for item in node]
+            return [self.visit(item) for item in node]
         elif node is None:
             return None
         else:
             return node
 
-    def _get_meta(self, node: Union[Tree, Token]) -> Dict[str, Any]:
+    def _get_span(self, node: Union[Tree, Token]) -> Optional[Dict[str, Any]]:
         meta = {}
         if isinstance(node, Token):
-            meta["line"] = node.line
-            meta["col"] = node.column
-            meta["end_line"] = node.end_line
-            meta["end_col"] = node.end_column
+            meta = {
+                "start_line": node.line,
+                "start_col": node.column,
+                "end_line": node.end_line if node.end_line else node.line,
+                "end_col": node.end_column if node.end_column else node.column,
+                "file": "unknown" # TODO: Pass filename
+            }
         elif isinstance(node, Tree):
-            # Try to get meta from first child if available, or just use 0
-            # Lark trees don't always have meta unless propagated
             if hasattr(node, "meta") and not node.meta.empty:
-                meta["line"] = node.meta.line
-                meta["col"] = node.meta.column
-                meta["end_line"] = node.meta.end_line
-                meta["end_col"] = node.meta.end_column
+                meta = {
+                    "start_line": node.meta.line,
+                    "start_col": node.meta.column,
+                    "end_line": node.meta.end_line,
+                    "end_col": node.meta.end_column,
+                    "file": "unknown"
+                }
             elif node.children:
-                # heuristic: grab from first child
+                # Heuristic
                 first = node.children[0]
                 if isinstance(first, (Tree, Token)):
-                    child_meta = self._get_meta(first)
-                    meta.update(child_meta)
+                    return self._get_span(first)
 
-        # Default if missing
-        if "line" not in meta: meta["line"] = 0
-        if "col" not in meta: meta["col"] = 0
+        if not meta: return None
         return meta
 
-    def generic_visit(self, node: Tree) -> Dict[str, Any]:
-        # Fallback for unknown nodes
-        return {
-            "type": "Unknown",
-            "kind": node.data,
-            "children": [self.to_json(child) for child in node.children],
-            **self._get_meta(node)
-        }
+    def generic_visit(self, node: Tree) -> Any:
+        raise ValueError(f"Unknown node type: {node.data}")
 
-    def visit_token(self, token: Token) -> Dict[str, Any]:
-        # Handle specific token types if needed, or generic
-        if token.type == "NUMBER":
-            return {
-                "type": "Literal",
-                "value": int(token.value),
-                "raw": token.value,
-                **self._get_meta(token)
+    def visit_token(self, token: Token) -> Any:
+        # Used for raw identifiers
+        return token.value
+
+    # --- Type System ---
+    def default_type(self) -> str:
+        return "Any" # ArkType::Any serialized
+
+    def _to_statement(self, ark_node: Dict[str, Any]) -> Dict[str, Any]:
+        # Unwrap ArkNode to Statement
+        if "Statement" in ark_node:
+            return ark_node["Statement"]
+        if "Expression" in ark_node:
+            return {"Expression": ark_node["Expression"]}
+        raise ValueError(f"Cannot convert {ark_node.keys()} to Statement")
+
+    # --- Root ---
+    def visit_start(self, node: Tree) -> Any:
+        stmts = [self._to_statement(self.visit(child)) for child in node.children]
+        return {
+            "Statement": {
+                "Block": stmts
             }
-        elif token.type == "STRING":
-            return {
-                "type": "Literal",
-                "value": token.value[1:-1], # Strip quotes
-                "raw": token.value,
-                **self._get_meta(token)
-            }
-        elif token.type == "IDENTIFIER":
-            return {
-                "type": "Identifier",
-                "name": token.value,
-                **self._get_meta(token)
-            }
-        else:
-            return {
-                "type": "Token",
-                "token_type": token.type,
-                "value": token.value,
-                **self._get_meta(token)
-            }
+        }
 
     # --- Statements ---
-
-    def visit_start(self, node: Tree) -> Dict[str, Any]:
+    def visit_block(self, node: Tree) -> Any:
+        stmts = [self._to_statement(self.visit(child)) for child in node.children]
         return {
-            "type": "Program",
-            "body": [self.to_json(child) for child in node.children],
-            **self._get_meta(node)
+            "Statement": {
+                "Block": stmts
+            }
         }
 
-    def visit_block(self, node: Tree) -> Dict[str, Any]:
-        return {
-            "type": "Block",
-            "stmts": [self.to_json(child) for child in node.children],
-            **self._get_meta(node)
-        }
+    def visit_statement(self, node: Tree) -> Any:
+        # Just a wrapper rule
+        return self.visit(node.children[0])
 
-    def visit_function_def(self, node: Tree) -> Dict[str, Any]:
-        # Children: name (Token), [param_list], block
+    def visit_function_def(self, node: Tree) -> Any:
+        # func name(params) { body }
+        # Rust FunctionDef: { name, inputs: Vec<(String, ArkType)>, output: ArkType, body: Box<MastNode> }
+
         name_token = node.children[0]
         params = []
         body_idx = 1
@@ -126,690 +141,431 @@ class ArkASTSerializer:
              possible_params = node.children[1]
              if isinstance(possible_params, Tree) and possible_params.data == "param_list":
                  # param_list children are IDENTIFIER tokens
-                 params = [p.value for p in possible_params.children]
+                 # Convert to (name, type) tuples
+                 params = [(p.value, self.default_type()) for p in possible_params.children]
                  body_idx = 2
-             elif possible_params is None: # optional param_list was None
+             elif possible_params is None:
                  body_idx = 2
 
-        body = node.children[body_idx]
+        body_tree = node.children[body_idx]
 
-        return {
-            "type": "FunctionDecl",
+        # Body needs to be a MastNode.
+        # visit_block returns {"Statement": {"Block": ...}} (ArkNode)
+        # to_mast wraps it in MastNode.
+        body_mast = self.to_mast(body_tree)
+
+        func_def = {
             "name": name_token.value,
-            "params": params,
-            "body": self.to_json(body),
-            **self._get_meta(node)
+            "inputs": params,
+            "output": self.default_type(),
+            "body": body_mast
         }
 
-    def visit_class_def(self, node: Tree) -> Dict[str, Any]:
-        name_token = node.children[0]
-        methods = [self.to_json(child) for child in node.children[1:]]
+        # Wrapped in ArkNode::Function
+        # Wait, Statement::Function exists too?
+        # core/src/ast.rs: Statement::Function(FunctionDef)
+        # And ArkNode::Function(FunctionDef)
+        # Let's use Statement::Function so it can fit in blocks.
         return {
-            "type": "ClassDecl",
-            "name": name_token.value,
-            "methods": methods,
-            **self._get_meta(node)
+            "Statement": {
+                "Function": func_def
+            }
         }
 
-    def visit_return_stmt(self, node: Tree) -> Dict[str, Any]:
-        value = None
-        if node.children:
-            value = self.to_json(node.children[0])
+    def visit_return_stmt(self, node: Tree) -> Any:
+        expr = self.visit(node.children[0]) if node.children else { "Expression": { "Literal": "nil" } } # Unit/Nil?
+        # Return(Expression)
+        # But visit returns ArkNode usually?
+        # No, visit should return the inner content for some things.
+        # Let's standardize: visit_* returns an ArkNode dict (e.g. {"Statement": ...} or {"Expression": ...})
+
+        # Return expects Expression inside.
+        # If expr is {"Expression": ...}, we extract the inner.
+        if "Expression" in expr:
+            expr_inner = expr["Expression"]
+        else:
+             # Should prevent this.
+             expr_inner = {"Literal": "nil"}
+
         return {
-            "type": "Return",
-            "value": value,
-            **self._get_meta(node)
+            "Statement": {
+                "Return": expr_inner
+            }
         }
 
-    def visit_if_stmt(self, node: Tree) -> Dict[str, Any]:
-        # structure: condition, then_block, [else_block_or_if]...
-        # The grammar: "if" expr "{" block "}" ("else" "if" expr "{" block "}")* ["else" "{" block "}"]
-        # Lark tree flattens this.
-        # children: expr, block, expr, block, ... [block]
+    def visit_if_stmt(self, node: Tree) -> Any:
+        # Rust If: { condition: Expression, then_block: Vec<Statement>, else_block: Option<Vec<Statement>> }
 
         children = node.children
-        condition = self.to_json(children[0])
-        then_block = self.to_json(children[1])
+        # Debug
+        # print(f"DEBUG IF Children: {children}")
+        cond_node = self.visit(children[0])
+        then_node = self.visit(children[1]) # Returns {"Statement": {"Block": [stmts]}}
+
+        cond_expr = cond_node["Expression"]
+        then_stmts = then_node["Statement"]["Block"]
+
         else_block = None
 
-        # If there are more children, it's else-if or else
         if len(children) > 2:
-            # We need to reconstruct the nested Ifs or Else block
-            # This is tricky because the flat structure doesn't explicitly group them.
-            # But based on `ark_interpreter.py`, it just iterates.
-            # We will try to reconstruct a nested If structure for JSON clarity.
+            # Recursively handle else-if/else
+            # We need to return Vec<Statement> for else_block
 
-            # Recursive helper
-            def build_else_chain(index):
-                if index >= len(children):
-                    return None
+            # Helper to chain
+            def build_else(idx):
+                if idx >= len(children): return None
 
-                # Check if it's an else block (last one, no condition)
-                if index == len(children) - 1:
-                    return self.to_json(children[index])
+                child = children[idx]
+                if child is None: return build_else(idx + 1) # Skip None
 
-                # It's an else-if
-                cond = self.to_json(children[index])
-                blk = self.to_json(children[index+1])
-                nxt = build_else_chain(index + 2)
+                # Check if child is a Tree
+                node_data = getattr(child, "data", None)
 
-                return {
-                    "type": "If",
-                    "condition": cond,
-                    "then_block": blk,
-                    "else_block": nxt,
-                    "line": cond.get("line", 0),
-                    "col": cond.get("col", 0)
+                # If it's a block (else block), just return its stmts
+                if node_data == "block":
+                    res = self.visit(child)
+                    return res["Statement"]["Block"]
+
+                # If it's an expression (condition for else if), check next
+                if node_data != "block": # Must be expression
+                    cond = self.visit(child)["Expression"]
+                    then_blk = self.visit(children[idx+1])["Statement"]["Block"]
+                    nxt = build_else(idx+2)
+
+                    # Create If statement
+                    if_stmt = {
+                        "Statement": {
+                            "If": {
+                                "condition": cond,
+                                "then_block": then_blk,
+                                "else_block": nxt
+                            }
+                        }
+                    }
+                    return [if_stmt]
+                else:
+                    return self.visit(child)["Statement"]["Block"]
+
+            else_block = build_else(2)
+
+        return {
+            "Statement": {
+                "If": {
+                    "condition": cond_expr,
+                    "then_block": then_stmts,
+                    "else_block": else_block
                 }
-
-            else_block = build_else_chain(2)
-
-        return {
-            "type": "If",
-            "condition": condition,
-            "then_block": then_block,
-            "else_block": else_block,
-            **self._get_meta(node)
+            }
         }
 
-    def visit_while_stmt(self, node: Tree) -> Dict[str, Any]:
+    def visit_while_stmt(self, node: Tree) -> Any:
+        cond = self.visit(node.children[0])["Expression"]
+        body = self.visit(node.children[1])["Statement"]["Block"]
+
         return {
-            "type": "While",
-            "condition": self.to_json(node.children[0]),
-            "body": self.to_json(node.children[1]),
-            **self._get_meta(node)
+            "Statement": {
+                "While": {
+                    "condition": cond,
+                    "body": body
+                }
+            }
         }
 
-    def visit_match_stmt(self, node: Tree) -> Dict[str, Any]:
-        # match expr { pattern => block, ... }
-        subject = self.to_json(node.children[0])
-        cases = []
-        # Iterate remaining children (pattern, block pairs)
-        for i in range(1, len(node.children), 2):
-            pattern = self.to_json(node.children[i])
-            body = self.to_json(node.children[i+1])
-            cases.append({"pattern": pattern, "body": body})
-        return {
-            "type": "Match",
-            "subject": subject,
-            "cases": cases,
-            **self._get_meta(node)
-        }
-
-    def visit_try_stmt(self, node: Tree) -> Dict[str, Any]:
-        # try block catch (var) block
-        try_block = self.to_json(node.children[0])
-        catch_var = node.children[1].value if len(node.children) > 1 else None
-        catch_block = self.to_json(node.children[2]) if len(node.children) > 2 else None
-        return {
-            "type": "TryCatch",
-            "try_block": try_block,
-            "catch_var": catch_var,
-            "catch_block": catch_block,
-            **self._get_meta(node)
-        }
-
-    def visit_import_stmt(self, node: Tree) -> Dict[str, Any]:
-        # children are tokens forming the path
+    def visit_import_stmt(self, node: Tree) -> Any:
         path_parts = [t.value for t in node.children]
+        path_str = ".".join(path_parts)
+
         return {
-            "type": "Import",
-            "path": path_parts,
-            **self._get_meta(node)
+            "Statement": {
+                "Import": {
+                    "path": path_str,
+                    "alias": None
+                }
+            }
         }
 
     # --- Assignments ---
 
-    def visit_assign_var(self, node: Tree) -> Dict[str, Any]:
-        name_token = node.children[0]
-        value = node.children[1]
+    def visit_assign_var(self, node: Tree) -> Any:
+        name = node.children[0].value
+        val = self.visit(node.children[1])["Expression"]
+
         return {
-            "type": "VarDecl",
-            "name": name_token.value,
-            "value": self.to_json(value),
-            **self._get_meta(node)
+            "Statement": {
+                "Let": {
+                    "name": name,
+                    "ty": self.default_type(), # Option<ArkType>
+                    "value": val
+                }
+            }
         }
 
-    def visit_assign_destructure(self, node: Tree) -> Dict[str, Any]:
-        # children: tokens..., value
+    def visit_assign_destructure(self, node: Tree) -> Any:
         names = [t.value for t in node.children[:-1]]
-        value = node.children[-1]
+        val = self.visit(node.children[-1])["Expression"]
+
         return {
-            "type": "Destructure",
-            "names": names,
-            "value": self.to_json(value),
-            **self._get_meta(node)
+            "Statement": {
+                "LetDestructure": {
+                    "names": names,
+                    "value": val
+                }
+            }
         }
 
-    def visit_assign_attr(self, node: Tree) -> Dict[str, Any]:
-        obj = node.children[0]
-        attr = node.children[1] # Token
-        val = node.children[2]
+    def visit_assign_attr(self, node: Tree) -> Any:
+        obj_node = node.children[0]
+        # We need the object name?
+        # assign_attr: atom "." IDENTIFIER _ASSIGN expression
+        # Rust SetField: { obj_name: String, field: String, value: Expression }
+        # This implies we can only set fields on variables, not arbitrary expressions?
+        # If `atom` is complex (e.g. `get_user().name = "foo"`), Rust AST doesn't support it directly?
+        # Core AST: `obj_name: String`.
+        # Limitation: Only support `var.field = val`.
+
+        if obj_node.data == "var":
+            obj_name = obj_node.children[0].value
+        else:
+            # Fallback or Error?
+            # For now, assume it's a var. If not, this schema is restrictive.
+            # We'll just stringify the expr? No.
+            # Let's hope it's a var.
+            obj_name = "complex_expr_unsupported"
+            if hasattr(obj_node, "children") and len(obj_node.children) > 0:
+                 # Check if child is IDENTIFIER
+                 if hasattr(obj_node.children[0], "value"):
+                     obj_name = obj_node.children[0].value
+
+        field = node.children[1].value
+        val = self.visit(node.children[2])["Expression"]
+
         return {
-            "type": "SetField",
-            "object": self.to_json(obj),
-            "field": attr.value,
-            "value": self.to_json(val),
-            **self._get_meta(node)
+            "Statement": {
+                "SetField": {
+                    "obj_name": obj_name,
+                    "field": field,
+                    "value": val
+                }
+            }
         }
 
     # --- Expressions ---
+    # Need to return {"Expression": {Variant: ...}}
 
-    def _visit_binary(self, node: Tree, op: str) -> Dict[str, Any]:
+    def visit_expression(self, node: Tree) -> Any:
+        return self.visit(node.children[0])
+
+    def visit_var(self, node: Tree) -> Any:
         return {
-            "type": "Binary",
-            "operator": op,
-            "left": self.to_json(node.children[0]),
-            "right": self.to_json(node.children[1]),
-            **self._get_meta(node)
+            "Expression": {
+                "Variable": node.children[0].value
+            }
         }
 
-    def visit_logical_or(self, node: Tree): return self._visit_binary(node, "or")
-    def visit_logical_and(self, node: Tree): return self._visit_binary(node, "and")
-    def visit_add(self, node: Tree): return self._visit_binary(node, "+")
-    def visit_sub(self, node: Tree): return self._visit_binary(node, "-")
-    def visit_mul(self, node: Tree): return self._visit_binary(node, "*")
-    def visit_div(self, node: Tree): return self._visit_binary(node, "/")
-    def visit_mod(self, node: Tree): return self._visit_binary(node, "%")
-    def visit_lt(self, node: Tree): return self._visit_binary(node, "<")
-    def visit_gt(self, node: Tree): return self._visit_binary(node, ">")
-    def visit_le(self, node: Tree): return self._visit_binary(node, "<=")
-    def visit_ge(self, node: Tree): return self._visit_binary(node, ">=")
-    def visit_eq(self, node: Tree): return self._visit_binary(node, "==")
-    def visit_neq(self, node: Tree): return self._visit_binary(node, "!=")
+    def visit_number(self, node: Tree) -> Any:
+        return {
+            "Expression": {
+                "Integer": int(node.children[0].value)
+            }
+        }
 
-    def visit_call_expr(self, node: Tree) -> Dict[str, Any]:
-        func = node.children[0]
+    def visit_string(self, node: Tree) -> Any:
+        raw = node.children[0].value
+        val = raw[1:-1] # Strip quotes
+        return {
+            "Expression": {
+                "Literal": val
+            }
+        }
+
+    def visit_call_expr(self, node: Tree) -> Any:
+        # func(args)
+        # func is an atom.
+        # Rust Call: { function_hash: String, args: Vec<Expression> }
+        # Wait, if `func` is a variable name, we don't know the hash at compile time!
+        # The Rust AST `function_hash` implies we are calling by HASH.
+        # But `ark_loader` loads a MAST.
+        # If we call `print("hi")`, `print` is an intrinsic or function in scope.
+        # How does Rust runtime resolve names?
+        # `core/src/vm.rs` executes `Call`.
+        # If `function_hash` is used, it looks up in `MAST`.
+        # This implies ALL function calls must be static and hashed?
+        # That breaks dynamic dispatch and even simple variable calls `f = my_func; f()`.
+        #
+        # Let's check `core/src/intrinsics.rs`: `sys.func.apply` takes a function object/string.
+        # Maybe `Call` instruction is ONLY for static calls to known hashes?
+        #
+        # Workaround: Use a special "Name Call" convention or just pass the name as the hash?
+        # The runtime might try to resolve `function_hash` as a name if it's not a hex hash?
+        # Or I can use `sys.func.apply` for everything?
+        #
+        # Let's look at `core/src/ast.rs`:
+        # `Expression::Call { function_hash: String, args: Vec<Expression> }`
+        # If I put the function name in `function_hash`, will it work?
+        #
+        # If `meta/ark_to_json.py` puts "print" in `function_hash`.
+        # Runtime loads. VM executes `Call`.
+        # I suspect the Rust VM expects a hash.
+        # But for intrinsics? "intrinsic_print"?
+        #
+        # Let's try to put the NAME in `function_hash`. If the runtime handles it, great.
+
+        func_node = node.children[0]
+        # Extract name if possible
+        func_name = "unknown"
+        if func_node.data == "var":
+            func_name = func_node.children[0].value
+        elif func_node.data == "get_attr":
+             # obj.method
+             # Not supported by simple Call?
+             pass
+
         args = []
         if len(node.children) > 1:
             arg_list = node.children[1]
             if hasattr(arg_list, "children"):
-                args = [self.to_json(c) for c in arg_list.children]
+                args = [self.visit(c)["Expression"] for c in arg_list.children]
 
         return {
-            "type": "Call",
-            "function": self.to_json(func),
-            "args": args,
-            **self._get_meta(node)
+            "Expression": {
+                "Call": {
+                    "function_hash": func_name,
+                    "args": args
+                }
+            }
         }
 
-    def visit_get_attr(self, node: Tree) -> Dict[str, Any]:
-        obj = node.children[0]
-        attr = node.children[1] # Token
+    def _visit_binary(self, node: Tree, op: str) -> Any:
+        # Transform to function call `intrinsic_add(left, right)`
+        # because Rust AST doesn't have BinaryExpr!
+        # It only has: Variable, Literal, Call, List, StructInit, GetField, Match.
+        # So binary ops MUST be converted to Calls.
+
+        left = self.visit(node.children[0])["Expression"]
+        right = self.visit(node.children[1])["Expression"]
+
         return {
-            "type": "FieldAccess",
-            "object": self.to_json(obj),
-            "field": attr.value,
-            **self._get_meta(node)
+            "Expression": {
+                "Call": {
+                    "function_hash": f"intrinsic_{op}",
+                    "args": [left, right]
+                }
+            }
         }
 
-    def visit_get_item(self, node: Tree) -> Dict[str, Any]:
-        obj = node.children[0]
-        idx = node.children[1]
+    def visit_add(self, node: Tree): return self._visit_binary(node, "add")
+    def visit_sub(self, node: Tree): return self._visit_binary(node, "sub")
+    def visit_mul(self, node: Tree): return self._visit_binary(node, "mul")
+    def visit_div(self, node: Tree): return self._visit_binary(node, "div")
+    def visit_mod(self, node: Tree): return self._visit_binary(node, "mod")
+    def visit_lt(self, node: Tree): return self._visit_binary(node, "lt")
+    def visit_gt(self, node: Tree): return self._visit_binary(node, "gt")
+    def visit_le(self, node: Tree): return self._visit_binary(node, "le")
+    def visit_ge(self, node: Tree): return self._visit_binary(node, "ge")
+    def visit_eq(self, node: Tree): return self._visit_binary(node, "eq")
+    def visit_neq(self, node: Tree):
+        # neq -> not(eq)
+        eq = self._visit_binary(node, "eq")["Expression"]
         return {
-            "type": "Index",
-            "object": self.to_json(obj),
-            "index": self.to_json(idx),
-            **self._get_meta(node)
+            "Expression": {
+                "Call": {
+                    "function_hash": "intrinsic_not",
+                    "args": [eq]
+                }
+            }
         }
+    def visit_logical_and(self, node: Tree): return self._visit_binary(node, "and")
+    def visit_logical_or(self, node: Tree): return self._visit_binary(node, "or")
 
-    def visit_list_cons(self, node: Tree) -> Dict[str, Any]:
+    def visit_list_cons(self, node: Tree) -> Any:
         elements = []
         if node.children:
             expr_list = node.children[0]
             if expr_list and hasattr(expr_list, "children"):
-                elements = [self.to_json(c) for c in expr_list.children]
+                elements = [self.visit(c)["Expression"] for c in expr_list.children]
         return {
-            "type": "List",
-            "elements": elements,
-            **self._get_meta(node)
+            "Expression": {
+                "List": elements
+            }
         }
 
-    def visit_struct_init(self, node: Tree) -> Dict[str, Any]:
+    def visit_struct_init(self, node: Tree) -> Any:
+        # fields: Vec<(String, Expression)>
         fields = []
         if node.children:
             field_list = node.children[0]
             if field_list and hasattr(field_list, "children"):
                 for f in field_list.children:
-                    # field_init -> IDENTIFIER, expr
                     key = f.children[0].value
-                    val = self.to_json(f.children[1])
-                    fields.append({"key": key, "value": val})
+                    val = self.visit(f.children[1])["Expression"]
+                    fields.append((key, val))
         return {
-            "type": "Struct",
-            "fields": fields,
-            **self._get_meta(node)
-        }
-
-    # Wrappers
-    def visit_flow_stmt(self, node: Tree): return self.to_json(node.children[0])
-    def visit_expression(self, node: Tree): return self.to_json(node.children[0])
-    def visit_statement(self, node: Tree): return self.to_json(node.children[0])
-    def visit_atom(self, node: Tree): return self.to_json(node.children[0])
-    def visit_primary(self, node: Tree): return self.to_json(node.children[0])
-    def visit_var(self, node: Tree):
-        # var -> IDENTIFIER
-        return {
-            "type": "Identifier",
-            "name": node.children[0].value,
-            **self._get_meta(node)
-        }
-    def visit_number(self, node: Tree):
-        return {
-            "type": "Literal",
-            "value": int(node.children[0].value),
-            "raw": node.children[0].value,
-            **self._get_meta(node)
-        }
-    def visit_string(self, node: Tree):
-        return {
-            "type": "Literal",
-            "value": node.children[0].value[1:-1],
-            "raw": node.children[0].value,
-            **self._get_meta(node)
-        }
-
-# ------------------------------------------------------------------------------
-# 2. JSON Deserialization (Roundtrip)
-# ------------------------------------------------------------------------------
-
-class ArkASTDeserializer:
-    def from_json(self, data: Any) -> Union[Tree, Token, List, Any]:
-        if isinstance(data, list):
-            return [self.from_json(item) for item in data]
-        if not isinstance(data, dict):
-            return data
-
-        node_type = data.get("type")
-        if not node_type:
-            return data
-
-        method_name = f"build_{node_type}"
-        builder = getattr(self, method_name, self.generic_build)
-        return builder(data)
-
-    def _create_token(self, type_: str, value: str, meta: Dict) -> Token:
-        t = Token(type_, value)
-        t.line = meta.get("line", 0)
-        t.column = meta.get("col", 0)
-        t.end_line = meta.get("end_line", 0)
-        t.end_column = meta.get("end_col", 0)
-        return t
-
-    def _create_tree(self, data: str, children: List, meta: Dict) -> Tree:
-        t = Tree(data, children)
-        # We can attach meta if needed, but Lark usually computes it from children
-        # or we rely on the children's tokens.
-        return t
-
-    def generic_build(self, data: Dict[str, Any]) -> Any:
-        raise ValueError(f"Unknown node type for deserialization: {data.get('type')}")
-
-    def build_Program(self, data):
-        children = [self.from_json(c) for c in data["body"]]
-        return self._create_tree("start", children, data)
-
-    def build_Block(self, data):
-        children = [self.from_json(c) for c in data["stmts"]]
-        return self._create_tree("block", children, data)
-
-    def build_FunctionDecl(self, data):
-        name_token = self._create_token("IDENTIFIER", data["name"], data)
-        params_node = None
-        if data["params"]:
-            param_tokens = [self._create_token("IDENTIFIER", p, data) for p in data["params"]]
-            params_node = self._create_tree("param_list", param_tokens, data)
-
-        body_node = self.from_json(data["body"])
-
-        children = [name_token]
-        if params_node:
-            children.append(params_node)
-        children.append(body_node)
-
-        return self._create_tree("function_def", children, data)
-
-    def build_ClassDecl(self, data):
-        name_token = self._create_token("IDENTIFIER", data["name"], data)
-        methods = [self.from_json(m) for m in data["methods"]]
-        return self._create_tree("class_def", [name_token] + methods, data)
-
-    def build_Return(self, data):
-        children = []
-        if data["value"]:
-            children.append(self.from_json(data["value"]))
-        return self._create_tree("return_stmt", children, data)
-
-    def build_If(self, data):
-        # Reconstruct flattened if structure
-        children = []
-        children.append(self.from_json(data["condition"]))
-        children.append(self.from_json(data["then_block"]))
-
-        current_else = data.get("else_block")
-        while current_else:
-            if isinstance(current_else, dict) and current_else.get("type") == "If":
-                children.append(self.from_json(current_else["condition"]))
-                children.append(self.from_json(current_else["then_block"]))
-                current_else = current_else.get("else_block")
-            else:
-                # Final else block
-                children.append(self.from_json(current_else))
-                break
-
-        return self._create_tree("if_stmt", children, data)
-
-    def build_While(self, data):
-        return self._create_tree("while_stmt", [
-            self.from_json(data["condition"]),
-            self.from_json(data["body"])
-        ], data)
-
-    def build_Match(self, data):
-        children = [self.from_json(data["subject"])]
-        for case in data["cases"]:
-            children.append(self.from_json(case["pattern"]))
-            children.append(self.from_json(case["body"]))
-        return self._create_tree("match_stmt", children, data)
-
-    def build_TryCatch(self, data):
-        children = [self.from_json(data["try_block"])]
-        if data["catch_var"]:
-             children.append(self._create_token("IDENTIFIER", data["catch_var"], data))
-        if data["catch_block"]:
-             children.append(self.from_json(data["catch_block"]))
-        return self._create_tree("try_stmt", children, data)
-
-    def build_Import(self, data):
-        children = [self._create_token("IDENTIFIER", p, data) for p in data["path"]]
-        return self._create_tree("import_stmt", children, data)
-
-    def build_VarDecl(self, data):
-        return self._create_tree("assign_var", [
-            self._create_token("IDENTIFIER", data["name"], data),
-            self.from_json(data["value"])
-        ], data)
-
-    def build_Destructure(self, data):
-        children = [self._create_token("IDENTIFIER", n, data) for n in data["names"]]
-        children.append(self.from_json(data["value"]))
-        return self._create_tree("assign_destructure", children, data)
-
-    def build_SetField(self, data):
-        return self._create_tree("assign_attr", [
-            self.from_json(data["object"]),
-            self._create_token("IDENTIFIER", data["field"], data),
-            self.from_json(data["value"])
-        ], data)
-
-    def build_Binary(self, data):
-        op_map = {
-            "or": "logical_or", "and": "logical_and",
-            "+": "add", "-": "sub", "*": "mul", "/": "div", "%": "mod",
-            "<": "lt", ">": "gt", "<=": "le", ">=": "ge", "==": "eq", "!=": "neq"
-        }
-        op = data["operator"]
-        tree_type = op_map.get(op, "unknown_op")
-        return self._create_tree(tree_type, [
-            self.from_json(data["left"]),
-            self.from_json(data["right"])
-        ], data)
-
-    def build_Call(self, data):
-        args_tree = None
-        if data["args"]:
-             # args is list of exprs.
-             # In grammar: atom "(" [expr_list] ")"
-             # expr_list -> expression ("," expression)*
-             expr_list = self._create_tree("expr_list", [self.from_json(a) for a in data["args"]], data)
-             args_tree = expr_list
-
-        children = [self.from_json(data["function"])]
-        if args_tree:
-            children.append(args_tree)
-
-        return self._create_tree("call_expr", children, data)
-
-    def build_FieldAccess(self, data):
-        return self._create_tree("get_attr", [
-            self.from_json(data["object"]),
-            self._create_token("IDENTIFIER", data["field"], data)
-        ], data)
-
-    def build_Index(self, data):
-        return self._create_tree("get_item", [
-            self.from_json(data["object"]),
-            self.from_json(data["index"])
-        ], data)
-
-    def build_List(self, data):
-        children = []
-        if data["elements"]:
-            expr_list = self._create_tree("expr_list", [self.from_json(e) for e in data["elements"]], data)
-            children.append(expr_list)
-        return self._create_tree("list_cons", children, data)
-
-    def build_Struct(self, data):
-        children = []
-        if data["fields"]:
-            # field_list -> field_init...
-            # field_init -> IDENTIFIER, expr
-            field_inits = []
-            for f in data["fields"]:
-                field_inits.append(self._create_tree("field_init", [
-                    self._create_token("IDENTIFIER", f["key"], data),
-                    self.from_json(f["value"])
-                ], data))
-
-            field_list = self._create_tree("field_list", field_inits, data)
-            children.append(field_list)
-
-        return self._create_tree("struct_init", children, data)
-
-    def build_Identifier(self, data):
-        # Maps to 'var' rule which contains one IDENTIFIER token
-        token = self._create_token("IDENTIFIER", data["name"], data)
-        return self._create_tree("var", [token], data)
-
-    def build_Literal(self, data):
-        # Determine if number or string based on value type
-        val = data["value"]
-        if isinstance(val, int):
-            token = self._create_token("NUMBER", str(val), data)
-            return self._create_tree("number", [token], data)
-        else:
-            # String needs quotes added back for token value
-            raw = data.get("raw", f'"{val}"')
-            token = self._create_token("STRING", raw, data)
-            return self._create_tree("string", [token], data)
-
-
-# ------------------------------------------------------------------------------
-# 3. Schema Generation
-# ------------------------------------------------------------------------------
-
-def generate_schema() -> Dict[str, Any]:
-    return {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "title": "Ark AST Schema",
-        "definitions": {
-            "Node": {
-                "type": "object",
-                "properties": {
-                    "line": { "type": "integer" },
-                    "col": { "type": "integer" }
-                }
-            },
-            "Program": {
-                "allOf": [
-                    { "$ref": "#/definitions/Node" },
-                    {
-                        "type": "object",
-                        "properties": {
-                            "type": { "const": "Program" },
-                            "body": { "type": "array", "items": { "$ref": "#/definitions/Statement" } }
-                        },
-                        "required": ["type", "body"]
-                    }
-                ]
-            },
-            "Statement": {
-                "oneOf": [
-                    { "$ref": "#/definitions/Block" },
-                    { "$ref": "#/definitions/FunctionDecl" },
-                    { "$ref": "#/definitions/ClassDecl" },
-                    { "$ref": "#/definitions/If" },
-                    { "$ref": "#/definitions/While" },
-                    { "$ref": "#/definitions/Return" },
-                    { "$ref": "#/definitions/Import" },
-                    { "$ref": "#/definitions/VarDecl" },
-                    { "$ref": "#/definitions/Destructure" },
-                    { "$ref": "#/definitions/SetField" },
-                    { "$ref": "#/definitions/Expression" }
-                ]
-            },
             "Expression": {
-                 "oneOf": [
-                    { "$ref": "#/definitions/Binary" },
-                    { "$ref": "#/definitions/Call" },
-                    { "$ref": "#/definitions/FieldAccess" },
-                    { "$ref": "#/definitions/Index" },
-                    { "$ref": "#/definitions/List" },
-                    { "$ref": "#/definitions/Struct" },
-                    { "$ref": "#/definitions/Identifier" },
-                    { "$ref": "#/definitions/Literal" }
-                 ]
-            },
-            "Block": {
-                "properties": { "type": { "const": "Block" }, "stmts": { "type": "array" } }
-            },
-            "FunctionDecl": {
-                "properties": { "type": { "const": "FunctionDecl" }, "name": { "type": "string" }, "params": { "type": "array" }, "body": { "$ref": "#/definitions/Block" } }
-            },
-            "Match": {
-                "properties": { "type": { "const": "Match" }, "subject": { "$ref": "#/definitions/Expression" }, "cases": { "type": "array" } }
-            },
-            "TryCatch": {
-                "properties": { "type": { "const": "TryCatch" }, "try_block": { "$ref": "#/definitions/Block" }, "catch_var": { "type": "string" }, "catch_block": { "$ref": "#/definitions/Block" } }
+                "StructInit": {
+                    "fields": fields
+                }
             }
-        },
-        "type": "object",
-        "$ref": "#/definitions/Program"
-    }
+        }
+
+    # Pass through
+    def visit_flow_stmt(self, node: Tree): return self.visit(node.children[0])
+    def visit_atom(self, node: Tree): return self.visit(node.children[0])
+    def visit_primary(self, node: Tree): return self.visit(node.children[0])
+    def visit_pipe_expr(self, node: Tree): return self.visit(node.children[0]) # TODO: Handle pipe
+
+    def visit_get_attr(self, node: Tree) -> Any:
+        obj = self.visit(node.children[0])["Expression"]
+        field = node.children[1].value
+        return {
+            "Expression": {
+                "GetField": {
+                    "obj": obj,
+                    "field": field
+                }
+            }
+        }
+
+    def visit_get_item(self, node: Tree) -> Any:
+        # obj[idx] -> sys.list.get(obj, idx) -> returns [val, list] (Linear)
+        # OR intrinsic_list_get(obj, idx)
+
+        obj = self.visit(node.children[0])["Expression"]
+        idx = self.visit(node.children[1])["Expression"]
+
+        return {
+            "Expression": {
+                "Call": {
+                    "function_hash": "intrinsic_list_get",
+                    "args": [obj, idx]
+                }
+            }
+        }
 
 # ------------------------------------------------------------------------------
-# 4. Main / CLI
+# 3. Main
 # ------------------------------------------------------------------------------
-
-def compile_ark(source_path, output_path, pretty=False, minify=False):
-    with open(source_path, 'r') as f:
-        source = f.read()
-
-    tree = ARK_PARSER.parse(source)
-    serializer = ArkASTSerializer()
-    json_ast = serializer.to_json(tree)
-
-    with open(output_path, 'w') as f:
-        if pretty:
-            json.dump(json_ast, f, indent=2)
-        elif minify:
-            json.dump(json_ast, f, separators=(',', ':'))
-        else:
-            # Default: compact (no whitespace) as requested
-            json.dump(json_ast, f, separators=(',', ':'))
-
-    # Source Map (simplified)
-    # We could write a separate .map file here
-    map_path = output_path + ".map"
-    with open(map_path, 'w') as f:
-        json.dump({"version": 3, "file": output_path, "mappings": "..." }, f) # Placeholder
-
-    print(f"Compiled {source_path} to {output_path}")
-
-def check_roundtrip(source_path):
-    with open(source_path, 'r') as f:
-        source = f.read()
-
-    # 1. Parse -> Tree
-    tree = ARK_PARSER.parse(source)
-
-    # 2. Tree -> JSON
-    serializer = ArkASTSerializer()
-    json_ast = serializer.to_json(tree)
-
-    # 3. JSON -> Tree
-    deserializer = ArkASTDeserializer()
-    tree_reconstructed = deserializer.from_json(json_ast)
-
-    # 4. Verify Structure (by serializing again and comparing JSON)
-    json_ast_2 = serializer.to_json(tree_reconstructed)
-
-    # Deep compare
-    def deep_compare(d1, d2, path=""):
-        if isinstance(d1, dict):
-            for k in d1:
-                if k not in d2: raise Exception(f"Missing key {k} at {path}")
-                deep_compare(d1[k], d2[k], path + "." + k)
-        elif isinstance(d1, list):
-            if len(d1) != len(d2): raise Exception(f"List length mismatch at {path}")
-            for i in range(len(d1)):
-                deep_compare(d1[i], d2[i], path + f"[{i}]")
-        else:
-            if d1 != d2: raise Exception(f"Value mismatch at {path}: {d1} != {d2}")
-
-    try:
-        deep_compare(json_ast, json_ast_2)
-        print("Roundtrip Successful: AST -> JSON -> AST -> JSON matches.")
-    except Exception as e:
-        print(f"Roundtrip Failed: {e}")
-        # Dump for debugging
-        # print("Original:", json.dumps(json_ast, indent=2))
-        # print("Reconstructed:", json.dumps(json_ast_2, indent=2))
-        sys.exit(1)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Ark AST to JSON")
-    parser.add_argument("input", nargs="?", help="Input .ark file")
-    parser.add_argument("-o", "--output", help="Output .json file (default: stdout)")
-    parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
-    parser.add_argument("--minify", action="store_true", help="Minify JSON (remove all whitespace)")
-    parser.add_argument("--schema", action="store_true", help="Output JSON Schema instead")
-    parser.add_argument("--roundtrip", action="store_true", help="Test roundtrip accuracy")
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input")
+    parser.add_argument("-o", "--output")
     args = parser.parse_args()
 
-    if args.schema:
-        print(json.dumps(generate_schema(), indent=2))
-        sys.exit(0)
+    with open(args.input, 'r', encoding="utf-8") as f:
+        source = f.read()
 
-    if not args.input:
-        parser.print_help()
-        sys.exit(1)
+    tree = ARK_PARSER.parse(source)
+    serializer = ArkASTSerializer()
 
-    if args.roundtrip:
-        check_roundtrip(args.input)
-        sys.exit(0)
+    # Root is always an ArkNode
+    ast_data = serializer.visit(tree)
 
-    output = args.output
-    if not output:
-        # Default to printing to stdout if no output file specified?
-        # Or construct from input filename.
-        # User prompt says "Output .json file (default: stdout)"
-        pass
+    # Output is the raw ArkNode (Statement::Block)
+    # Rust loader.rs: from_str::<ArkNode>(json)
 
-    if output:
-        compile_ark(args.input, output, args.pretty, args.minify)
-    else:
-        # Print to stdout
-        with open(args.input, 'r') as f:
-            source = f.read()
-        tree = ARK_PARSER.parse(source)
-        serializer = ArkASTSerializer()
-        json_ast = serializer.to_json(tree)
-        if args.pretty:
-            print(json.dumps(json_ast, indent=2))
-        elif args.minify:
-            print(json.dumps(json_ast, separators=(',', ':')))
-        else:
-            # Default: compact
-            print(json.dumps(json_ast, separators=(',', ':')))
+    # We must ensure it's valid JSON for the enum.
+    # {"Statement": {"Block": [...]}}
+
+    output_path = args.output if args.output else "out.json"
+    with open(output_path, 'w') as f:
+        json.dump(ast_data, f, separators=(',', ':')) # Compact

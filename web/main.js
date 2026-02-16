@@ -139,7 +139,7 @@ async function runCode() {
     const outputDiv = document.getElementById("console-output");
 
     // Add "Running..." marker
-    logToConsole("Running...", "info", true);
+    logToConsole("Running on Sovereign Runtime...", "info", true);
 
     try {
         const controller = new AbortController();
