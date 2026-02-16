@@ -54,7 +54,7 @@ fn main() {
 
             match VM::new(chunk, &mast.hash, security_level) {
                 Ok(mut vm) => {
-                     // 3. Inject Args into Global Scope (Scope 0)
+                    // 3. Inject Args into Global Scope (Scope 0)
                     if let Some(scope) = vm.scopes.get_mut(0) {
                         scope.set(
                             "sys_args".to_string(),

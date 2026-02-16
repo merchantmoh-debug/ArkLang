@@ -178,11 +178,7 @@ pub fn verify_transaction(tx: &SignedTransaction) -> bool {
     verify_signature(&tx.data, &tx.signature, &tx.public_key).unwrap_or(false)
 }
 
-pub fn verify_signature(
-    msg: &[u8],
-    sig_bytes: &[u8],
-    pubkey_bytes: &[u8],
-) -> Result<bool, String> {
+pub fn verify_signature(msg: &[u8], sig_bytes: &[u8], pubkey_bytes: &[u8]) -> Result<bool, String> {
     if sig_bytes.len() != 64 {
         return Err(format!(
             "Invalid signature length: expected 64, got {}",
@@ -254,10 +250,7 @@ pub fn merkle_root(leaves: &[String]) -> String {
     }
 
     // Hash leaves first
-    let mut current_level: Vec<String> = leaves
-        .iter()
-        .map(|s| hash(s.as_bytes()))
-        .collect();
+    let mut current_level: Vec<String> = leaves.iter().map(|s| hash(s.as_bytes())).collect();
 
     while current_level.len() > 1 {
         let mut next_level = Vec::new();

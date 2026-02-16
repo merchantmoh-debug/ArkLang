@@ -22,7 +22,10 @@ mod tests {
 
         let total_duration = start.elapsed();
 
-        println!("Benchmark: {} iterations took {:?}", iterations, total_duration);
+        println!(
+            "Benchmark: {} iterations took {:?}",
+            iterations, total_duration
+        );
         println!("Average per op: {:?}", total_duration / iterations as u32);
     }
 }
