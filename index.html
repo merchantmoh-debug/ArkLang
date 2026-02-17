@@ -207,7 +207,7 @@
             if (!gameState) return;
 
             if (!isPaused && timestamp - lastTime > TICK_RATE) {
-                if (!gameState.game_over) {
+                if (!Number(gameState.game_over)) {
                     const newState = callWasmJson(wasm.ark_call, "update", [gameState, lastInput]);
                     if (newState && !newState.error) {
                         gameState = newState;
@@ -252,7 +252,7 @@
             ctx.font = '14px monospace';
             ctx.fillText(`Score: ${gameState.score || 0}`, 10, 20);
 
-            if (gameState.game_over) {
+            if (Number(gameState.game_over)) {
                 ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = '#fff';
