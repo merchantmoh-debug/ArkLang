@@ -16,9 +16,12 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
+#![allow(unexpected_cfgs)]
+
 pub mod ast;
 pub mod blockchain;
 #[cfg(feature = "ipc")]
+#[allow(dead_code)]
 pub mod bridge;
 pub mod bytecode;
 pub mod checker;

@@ -1782,7 +1782,7 @@ pub fn intrinsic_list_append(args: Vec<Value>) -> Result<Value, RuntimeError> {
 }
 
 pub fn intrinsic_list_pop(args: Vec<Value>) -> Result<Value, RuntimeError> {
-    if args.len() < 1 || args.len() > 2 {
+    if args.is_empty() || args.len() > 2 {
         return Err(RuntimeError::NotExecutable);
     }
     let mut args = args;
@@ -2188,7 +2188,7 @@ pub fn intrinsic_math_asin(args: Vec<Value>) -> Result<Value, RuntimeError> {
     match &args[0] {
         Value::Integer(n) => {
             let val = (*n as f64) / 10000.0;
-            if val < -1.0 || val > 1.0 {
+            if !(-1.0..=1.0).contains(&val) {
                 return Err(RuntimeError::InvalidOperation(
                     "asin out of domain".to_string(),
                 ));
@@ -2210,7 +2210,7 @@ pub fn intrinsic_math_acos(args: Vec<Value>) -> Result<Value, RuntimeError> {
     match &args[0] {
         Value::Integer(n) => {
             let val = (*n as f64) / 10000.0;
-            if val < -1.0 || val > 1.0 {
+            if !(-1.0..=1.0).contains(&val) {
                 return Err(RuntimeError::InvalidOperation(
                     "acos out of domain".to_string(),
                 ));
@@ -2905,7 +2905,7 @@ pub fn intrinsic_socket_recv(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        if args.len() < 1 {
+        if args.is_empty() {
             return Err(RuntimeError::NotExecutable);
         }
         let id = match &args[0] {
@@ -3360,7 +3360,7 @@ fn value_to_json(val: &Value) -> String {
         }
         Value::Unit => "null".into(),
         Value::List(items) => {
-            let parts: Vec<String> = items.iter().map(|v| value_to_json(v)).collect();
+            let parts: Vec<String> = items.iter().map(value_to_json).collect();
             format!("[{}]", parts.join(","))
         }
         Value::Struct(map) => {

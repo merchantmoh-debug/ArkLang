@@ -29,8 +29,16 @@ use thiserror::Error;
 
 // --- Resource Tracker ---
 
+type ResourceEntry = (String, Box<dyn FnOnce() + Send>);
+
 pub struct ResourceTracker {
-    resources: Mutex<HashMap<usize, (String, Box<dyn FnOnce() + Send>)>>,
+    resources: Mutex<HashMap<usize, ResourceEntry>>,
+}
+
+impl Default for ResourceTracker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ResourceTracker {
@@ -61,7 +69,7 @@ impl ResourceTracker {
     pub fn cleanup_all(&self) {
         // Fix: Drain while holding lock, but run callbacks AFTER lock is released.
         // This prevents deadlock if callback tries to access RESOURCE_TRACKER.
-        let resources_to_clean: Vec<(usize, (String, Box<dyn FnOnce() + Send>))> = {
+        let resources_to_clean: Vec<(usize, ResourceEntry)> = {
             let mut map = self.resources.lock().unwrap();
             map.drain().collect()
         };
@@ -97,7 +105,7 @@ thread_local! {
 impl ValuePool {
     /// Returns a Value::Integer. Uses cached instance if within [-128, 127].
     pub fn pool_int(i: i64) -> Value {
-        if i >= -128 && i < 128 {
+        if (-128..128).contains(&i) {
             INT_POOL.with(|pool| pool[(i + 128) as usize].clone())
         } else {
             Value::Integer(i)
@@ -175,6 +183,12 @@ pub struct RuntimeStats {
     pub total_instructions: AtomicUsize,
     pub total_allocations: AtomicUsize,
     pub peak_memory_bytes: AtomicUsize,
+}
+
+impl Default for RuntimeStats {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RuntimeStats {
@@ -291,6 +305,12 @@ impl Value {
 pub struct Scope<'a> {
     variables: HashMap<String, Value>,
     parent: Option<&'a Scope<'a>>,
+}
+
+impl<'a> Default for Scope<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<'a> Scope<'a> {

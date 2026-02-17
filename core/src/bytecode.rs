@@ -56,6 +56,12 @@ pub struct Chunk {
     pub constants: Vec<Value>, // Using OpCode::Push(Value) directly for now, optimization later
 }
 
+impl Default for Chunk {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Chunk {
     pub fn new() -> Self {
         Self {

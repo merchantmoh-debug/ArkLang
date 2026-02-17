@@ -31,6 +31,12 @@ pub struct GraphArena {
     pub free_list: Vec<usize>,
 }
 
+impl Default for GraphArena {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GraphArena {
     pub fn new() -> Self {
         Self {
@@ -111,10 +117,8 @@ pub struct VM<'a> {
 impl<'a> VM<'a> {
     pub fn new(chunk: Chunk, hash: &str, security_level: u8) -> Result<Self, RuntimeError> {
         // Security Check: Verify Code Hash on Blockchain
-        if security_level > 0 {
-            if !crate::blockchain::verify_code_hash(hash) {
-                return Err(RuntimeError::UntrustedCode);
-            }
+        if security_level > 0 && !crate::blockchain::verify_code_hash(hash) {
+            return Err(RuntimeError::UntrustedCode);
         }
 
         let mut global_scope = Scope::new();
