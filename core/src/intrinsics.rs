@@ -647,6 +647,9 @@ fn check_path_security(path: &str) -> Result<(), RuntimeError> {
         use std::path::Path;
 
         let cwd = env::current_dir().map_err(|_| RuntimeError::NotExecutable)?;
+        // Canonicalize CWD too — on Windows, canonicalize returns UNC paths (\\?\C:\...)
+        // but current_dir() returns normal paths. Both must match for starts_with.
+        let cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
         let path_obj = Path::new(path);
 
         // Construct absolute path
