@@ -222,7 +222,7 @@ pub fn secure_random_bytes(count: usize) -> Vec<u8> {
         let mut buf = vec![0u8; count];
         file.read_exact(&mut buf)
             .expect("Failed to read from /dev/urandom");
-        return buf;
+        buf
     }
 
     #[cfg(not(unix))]
