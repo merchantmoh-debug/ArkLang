@@ -174,9 +174,20 @@ jobs:
         run: cargo build --target wasm32-unknown-unknown --release --lib
         working-directory: core
 
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli --version 0.2.108
+
+      - name: Generate WASM bindings
+        run: |
+          wasm-bindgen core/target/wasm32-unknown-unknown/release/ark_0_zheng.wasm \
+            --out-dir site/wasm/pkg \
+            --target web \
+            --no-typescript
+
       - name: Copy WASM to test harness
         run: |
-          cp core/target/wasm32-unknown-unknown/release/*.wasm site/wasm/ark.wasm || true
+          cp site/wasm/pkg/ark_0_zheng_bg.wasm site/wasm/ark.wasm
+          cp site/wasm/pkg/ark_0_zheng.js site/wasm/ark_bindings.js
           ls -la site/wasm/
 
       - name: Install Node.js
