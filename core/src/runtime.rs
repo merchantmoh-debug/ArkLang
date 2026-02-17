@@ -94,8 +94,8 @@ pub struct ValuePool;
 
 thread_local! {
     static INT_POOL: Vec<Value> = {
-        let mut pool = Vec::with_capacity(256);
-        for i in -128..128 {
+        let mut pool = Vec::with_capacity(513);
+        for i in -256..=256 {
             pool.push(Value::Integer(i));
         }
         pool
@@ -103,10 +103,10 @@ thread_local! {
 }
 
 impl ValuePool {
-    /// Returns a Value::Integer. Uses cached instance if within [-128, 127].
+    /// Returns a Value::Integer. Uses cached instance if within [-256, 256].
     pub fn pool_int(i: i64) -> Value {
-        if (-128..128).contains(&i) {
-            INT_POOL.with(|pool| pool[(i + 128) as usize].clone())
+        if (-256..=256).contains(&i) {
+            INT_POOL.with(|pool| pool[(i + 256) as usize].clone())
         } else {
             Value::Integer(i)
         }
@@ -447,6 +447,11 @@ mod tests {
         } else {
             panic!("Expected Integer");
         }
+
+        // Test expanded range (e.g., 200 was previously uncached)
+        let v_cached = ValuePool::pool_int(200);
+        let v_cached_2 = ValuePool::pool_int(200);
+        assert_eq!(v_cached, v_cached_2);
 
         let v3 = ValuePool::pool_int(1000); // Outside cache
         if let Value::Integer(i) = v3 {

@@ -6,3 +6,4 @@ lark
 prompt_toolkit
 pygments
 requests
+psutil
