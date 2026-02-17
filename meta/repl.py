@@ -303,6 +303,10 @@ Type :help for commands, :quit to exit
                 print("\nGoodbye!")
                 break
 
-if __name__ == "__main__":
+def run_repl():
+    """Top-level entrypoint for the REPL, used by ark.py."""
     repl = REPL()
     repl.run()
+
+if __name__ == "__main__":
+    run_repl()
