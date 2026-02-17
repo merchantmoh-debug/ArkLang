@@ -203,18 +203,49 @@ def sys_fs_write_buffer(args: List[ArkValue]):
 
 # ─── Blockchain (Mock) ───────────────────────────────────────────────────────
 
+def _chain_rpc_call(method: str, params: list):
+    """Internal: sends a JSON-RPC 2.0 request to the configured Ethereum RPC endpoint."""
+    import os, json
+    rpc_url = os.environ.get("ARK_RPC_URL", "")
+    if not rpc_url:
+        return None  # No RPC configured — fallback to stubs
+    import urllib.request
+    payload = json.dumps({"jsonrpc": "2.0", "method": method, "params": params, "id": 1}).encode()
+    req = urllib.request.Request(rpc_url, data=payload, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        result = json.loads(resp.read().decode())
+    if "error" in result:
+        raise Exception(f"RPC error: {result['error']}")
+    return result.get("result")
+
 def sys_chain_height(args: List[ArkValue]):
-    return ArkValue(1, "Integer")
+    result = _chain_rpc_call("eth_blockNumber", [])
+    if result is not None:
+        return ArkValue(int(result, 16), "Integer")
+    return ArkValue(1, "Integer")  # stub fallback
 
 def sys_chain_get_balance(args: List[ArkValue]):
-    return ArkValue(100, "Integer")
+    if len(args) != 1: raise Exception("sys.chain.get_balance expects address")
+    addr = args[0].val
+    result = _chain_rpc_call("eth_getBalance", [addr, "latest"])
+    if result is not None:
+        return ArkValue(int(result, 16), "Integer")
+    return ArkValue(100, "Integer")  # stub fallback
 
 def sys_chain_submit_tx(args: List[ArkValue]):
-    return ArkValue("tx_hash_mock", "String")
+    if len(args) != 1: raise Exception("sys.chain.submit_tx expects signed tx hex")
+    result = _chain_rpc_call("eth_sendRawTransaction", [args[0].val])
+    if result is not None:
+        return ArkValue(result, "String")
+    return ArkValue("tx_hash_mock", "String")  # stub fallback
 
 def sys_chain_verify_tx(args: List[ArkValue]):
-    if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx")
-    return ArkValue(True, "Boolean")
+    if len(args) != 1: raise Exception("sys.chain.verify_tx expects tx hash")
+    result = _chain_rpc_call("eth_getTransactionReceipt", [args[0].val])
+    if result is not None:
+        status = result.get("status", "0x0") if isinstance(result, dict) else "0x0"
+        return ArkValue(status == "0x1", "Boolean")
+    return ArkValue(True, "Boolean")  # stub fallback
 
 
 # ─── Math (Scaled Integer) ───────────────────────────────────────────────────
@@ -1125,6 +1156,9 @@ def sys_z3_verify(args: List[ArkValue]):
         if item.type != "String":
             raise Exception("sys.z3.verify constraints list must contain Strings")
         constraints.append(item.val)
+    from z3_bridge import verify_contract
+    result = verify_contract(constraints)
+    return ArkValue(result, "Bool")
 
 
 # ─── Late Intrinsics (depend on interpreter) ──────────────────────────────────
@@ -1311,6 +1345,7 @@ INTRINSICS = {
     "sys.chain.get_balance": sys_chain_get_balance,
     "sys.chain.submit_tx": sys_chain_submit_tx,
     "sys.chain.verify_tx": sys_chain_verify_tx,
+    "sys.z3.verify": sys_z3_verify,
     "sys.time.now": sys_time_now,
     "sys.time.sleep": sys_time_sleep,
     "sys.str.from_code": sys_str_from_code,

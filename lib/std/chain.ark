@@ -1,24 +1,103 @@
-// Standard Library: Chain
+// Ark Standard Library: Chain (Blockchain Client)
+// (c) 2026 Sovereign Systems
+//
+// Provides blockchain interaction via JSON-RPC.
+// Set ARK_RPC_URL environment variable to connect to a live network.
+// Default: Ethereum Sepolia testnet (https://rpc.sepolia.org)
 
+// ── Core Chain Intrinsic Wrappers ──────────────────────────────────────
+
+// height() -> Int
+// Returns the current block height of the connected chain.
+// Uses the built-in chain intrinsic (local state or JSON-RPC).
 func chain_height() {
     return sys.chain.height()
 }
 
+// get_balance(address: String) -> Int
+// Returns the balance (in wei) for the given address.
 func chain_get_balance(addr) {
     return sys.chain.get_balance(addr)
 }
 
+// submit_tx(payload: String) -> String
+// Submits a signed raw transaction to the network.
+// Returns the transaction hash on success.
 func chain_submit_tx(payload) {
     return sys.chain.submit_tx(payload)
 }
 
+// verify_tx(tx_hash: String) -> Bool
+// Checks whether a transaction has been confirmed on-chain.
 func chain_verify_tx(tx_id) {
     return sys.chain.verify_tx(tx_id)
+}
+
+// ── JSON-RPC Client Functions ──────────────────────────────────────────
+
+// _rpc_call(method: String, params: List) -> Any
+// Internal helper: sends a JSON-RPC 2.0 request to the configured RPC URL.
+func _rpc_call(method, params) {
+    url := "https://rpc.sepolia.org"
+    body := sys.json.stringify({
+        jsonrpc: "2.0",
+        method: method,
+        params: params,
+        id: 1
+    })
+    response := sys.net.http.request("POST", url, body)
+    parsed := sys.json.parse(response)
+    return get(parsed, "result")
+}
+
+// get_block(block_number: Int) -> Struct
+// Fetches full block data by block number via eth_getBlockByNumber.
+// Returns the block as a struct with hash, timestamp, transactions, etc.
+func chain_get_block(n) {
+    hex_n := "0x" + str(n)
+    return _rpc_call("eth_getBlockByNumber", [hex_n, true])
+}
+
+// get_tx(tx_hash: String) -> Struct
+// Fetches transaction details by hash via eth_getTransactionByHash.
+func chain_get_tx(hash) {
+    return _rpc_call("eth_getTransactionByHash", [hash])
+}
+
+// get_tx_receipt(tx_hash: String) -> Struct
+// Fetches the transaction receipt (confirmation status, gas used, logs).
+func chain_get_tx_receipt(hash) {
+    return _rpc_call("eth_getTransactionReceipt", [hash])
+}
+
+// estimate_gas(tx: Struct) -> Int
+// Estimates gas required for a transaction via eth_estimateGas.
+// tx should have: { from, to, value, data }
+func chain_estimate_gas(tx) {
+    return _rpc_call("eth_estimateGas", [tx])
+}
+
+// gas_price() -> Int
+// Returns the current gas price in wei via eth_gasPrice.
+func chain_gas_price() {
+    return _rpc_call("eth_gasPrice", [])
+}
+
+// rpc_block_number() -> String
+// Returns the latest block number from the JSON-RPC endpoint (hex string).
+func chain_rpc_block_number() {
+    return _rpc_call("eth_blockNumber", [])
 }
 
 chain := {
     height: chain_height,
     get_balance: chain_get_balance,
     submit_tx: chain_submit_tx,
-    verify_tx: chain_verify_tx
+    verify_tx: chain_verify_tx,
+    get_block: chain_get_block,
+    get_tx: chain_get_tx,
+    get_tx_receipt: chain_get_tx_receipt,
+    estimate_gas: chain_estimate_gas,
+    gas_price: chain_gas_price,
+    rpc_block_number: chain_rpc_block_number
 }

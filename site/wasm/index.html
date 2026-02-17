@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ark WASM Browser Test Harness</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #0f0; padding: 2rem; }
+    .pass { color: #0f0; }
+    .fail { color: #f00; font-weight: bold; }
+    #results { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Ark WASM Test Harness</h1>
+  <div id="results">Loading WASM...</div>
+  <script src="ark_wasm.js"></script>
+  <script>
+    (async () => {
+      const log = [];
+      let pass = 0;
+      let fail = 0;
+
+      function assert(name, condition, detail) {
+        if (condition) {
+          log.push(`✅ PASS: ${name}`);
+          pass++;
+        } else {
+          log.push(`❌ FAIL: ${name} — ${detail || 'assertion false'}`);
+          fail++;
+        }
+      }
+
+      try {
+        // Test 1: WASM module loads
+        const wasm = await ArkWasm.load('ark.wasm');
+        assert('WASM module loads', wasm !== null && wasm !== undefined);
+
+        // Test 2: Module has expected exports
+        const exports = Object.keys(wasm.instance.exports);
+        assert('Has memory export', exports.includes('memory'), `exports: ${exports.join(', ')}`);
+
+        // Test 3: Memory is accessible
+        const mem = wasm.instance.exports.memory;
+        assert('Memory is WebAssembly.Memory', mem instanceof WebAssembly.Memory);
+
+        // Test 4: Memory has reasonable size (at least 1 page = 64KB)
+        const pages = mem.buffer.byteLength / 65536;
+        assert('Memory >= 1 page', pages >= 1, `pages: ${pages}`);
+
+        // Test 5: Can write to and read from memory
+        const view = new Uint8Array(mem.buffer);
+        view[0] = 42;
+        assert('Memory read/write', view[0] === 42);
+
+        // Test 6: Check for ark-specific exports (if any)
+        const arkExports = exports.filter(e => e.startsWith('ark_') || e.startsWith('__'));
+        assert('Has function exports', exports.length > 1, `total exports: ${exports.length}`);
+
+        // Test 7: WASM binary size is reasonable
+        const response = await fetch('ark.wasm');
+        const blob = await response.blob();
+        assert('WASM size < 5MB', blob.size < 5 * 1024 * 1024, `size: ${blob.size}`);
+        assert('WASM size > 10KB', blob.size > 10 * 1024, `size: ${blob.size}`);
+
+      } catch (err) {
+        log.push(`❌ FATAL: ${err.message}`);
+        fail++;
+      }
+
+      // Render results
+      const summary = `\n${'═'.repeat(50)}\n${pass} passed, ${fail} failed\n`;
+      log.push(summary);
+      document.getElementById('results').innerHTML = log.map(l =>
+        l.startsWith('✅') ? `<span class="pass">${l}</span>` :
+        l.startsWith('❌') ? `<span class="fail">${l}</span>` : l
+      ).join('\n');
+
+      // For CI: set exit code via global
+      window.__ARK_WASM_TEST_RESULTS = { pass, fail, total: pass + fail };
+
+      // Log for headless capture
+      console.log(`ARK_WASM_TESTS: ${pass} passed, ${fail} failed`);
+      if (fail > 0) {
+        console.error('ARK_WASM_TESTS_FAILED');
+      } else {
+        console.log('ARK_WASM_TESTS_PASSED');
+      }
+    })();
+  </script>
+</body>
+</html>

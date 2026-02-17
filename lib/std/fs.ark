@@ -1,18 +1,70 @@
 // Ark Standard Library: Filesystem
 // (c) 2026 Sovereign Systems
+//
+// File I/O operations. Requires `fs_read` and/or `fs_write` capabilities.
 
-func read_file(path) {
+// read(path: String) -> String
+// Reads the entire contents of a file as a UTF-8 string.
+// Requires: fs_read capability.
+func fs_read(path) {
     return sys_fs_read(path)
 }
 
-func write_file(path, content) {
+// write(path: String, content: String) -> Nil
+// Writes content to a file, creating it if it doesn't exist.
+// Overwrites existing content.
+// Requires: fs_write capability.
+func fs_write(path, content) {
     sys_fs_write(path, content)
 }
 
-func append_file(path, content) {
-    // Read, Append, Write
-    // Note: Inefficient but functional for v1
+// append(path: String, content: String) -> Nil
+// Appends content to the end of a file.
+// Requires: fs_read + fs_write capabilities.
+func fs_append(path, content) {
     current := sys_fs_read(path)
     new_content := current + content
     sys_fs_write(path, new_content)
+}
+
+// read_bytes(path: String) -> List[Int]
+// Reads a file as raw bytes, returning a list of byte values (0-255).
+// Requires: fs_read capability.
+func fs_read_bytes(path) {
+    return sys.fs.read_buffer(path)
+}
+
+// write_bytes(path: String, bytes: List[Int]) -> Nil
+// Writes raw bytes to a file.
+// Requires: fs_write capability.
+func fs_write_bytes(path, bytes) {
+    sys.fs.write_buffer(path, bytes)
+}
+
+// exists(path: String) -> Bool
+// Returns true if the file at path exists and is readable.
+// Implements existence check via try-read (no native stat intrinsic yet).
+func fs_exists(path) {
+    result := sys_fs_read(path)
+    if result == nil {
+        return false
+    }
+    return true
+}
+
+// size(path: String) -> Int
+// Returns the size of a file in bytes (approximate: counts UTF-8 string length).
+func fs_size(path) {
+    content := sys_fs_read(path)
+    return sys.len(content)
+}
+
+fs := {
+    read: fs_read,
+    write: fs_write,
+    append: fs_append,
+    read_bytes: fs_read_bytes,
+    write_bytes: fs_write_bytes,
+    exists: fs_exists,
+    size: fs_size
 }

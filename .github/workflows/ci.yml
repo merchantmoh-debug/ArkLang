@@ -149,6 +149,80 @@ jobs:
         if: runner.os == 'Linux'
         run: bash tests/golden_demo.sh
 
+  # ─── WASM Browser Test ──────────────────────────────────────────────────
+  wasm-browser-test:
+    name: WASM Browser Test
+    needs: [rust-ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ark-core-ubuntu-latest
+          path: dist
+
+      - name: Install Rust & Build WASM
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build WASM Binary
+        run: cargo build --target wasm32-unknown-unknown --release --lib
+        working-directory: core
+
+      - name: Copy WASM to test harness
+        run: |
+          cp core/target/wasm32-unknown-unknown/release/*.wasm site/wasm/ark.wasm || true
+          ls -la site/wasm/
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: npx -y playwright install chromium
+
+      - name: Serve & Test WASM in Browser
+        run: |
+          # Start a local HTTP server
+          cd site/wasm
+          python3 -m http.server 8099 &
+          SERVER_PID=$!
+          sleep 2
+
+          # Run headless browser test
+          node -e "
+            const { chromium } = require('playwright');
+            (async () => {
+              const browser = await chromium.launch();
+              const page = await browser.newPage();
+              const logs = [];
+              page.on('console', msg => {
+                logs.push(msg.text());
+                console.log('[browser]', msg.text());
+              });
+              await page.goto('http://localhost:8099/index.html');
+              await page.waitForTimeout(5000);
+              await browser.close();
+
+              const passed = logs.some(l => l.includes('ARK_WASM_TESTS_PASSED'));
+              const failed = logs.some(l => l.includes('ARK_WASM_TESTS_FAILED'));
+
+              if (failed || !passed) {
+                console.error('WASM browser tests FAILED');
+                process.exit(1);
+              }
+              console.log('WASM browser tests PASSED');
+            })();
+          "
+
+          kill $SERVER_PID || true
+
   # ─── Docker CI ─────────────────────────────────────────────────────────
   docker-ci:
     name: Docker Smoke Test

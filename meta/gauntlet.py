@@ -46,7 +46,6 @@ INTERACTIVE_SKIP = {
     "tests/test_net_http.ark",     # Binds port 8087, times out on macOS CI
     "tests/test_broken.ark",       # Intentionally broken syntax test — expected to fail
     "tests/agi_genesis.ark",        # Calls intrinsic_ask_ai — requires live AI provider (not available in CI)
-    "tests/test_z3.ark",            # Calls sys.z3.verify — namespace resolution bug (z3 bridge tracked separately)
 }
 
 @dataclass

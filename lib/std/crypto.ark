@@ -1,10 +1,61 @@
-// Standard Library: Crypto
+// Ark Standard Library: Crypto
+// (c) 2026 Sovereign Systems
+//
+// Sovereign cryptographic primitives — zero external dependencies.
+// All operations use pure implementations compiled into the Ark runtime.
+
+// hash(data: String) -> String
+// SHA-256 hash of the input string. Returns hex-encoded digest.
+func crypto_hash(data) { return sys.crypto.hash(data) }
+
+// sha512(data: String) -> String
+// SHA-512 hash. Returns hex-encoded 128-char digest.
+func crypto_sha512(data) { return sys.crypto.sha512(data) }
+
+// hmac_sha512(key: String, data: String) -> String
+// HMAC-SHA512 message authentication code. Returns hex digest.
+func crypto_hmac_sha512(key, data) { return sys.crypto.hmac_sha512(key, data) }
+
+// pbkdf2(password: String, salt: String, rounds: Int) -> String
+// PBKDF2-HMAC-SHA512 key derivation. Returns hex-encoded derived key.
+func crypto_pbkdf2(password, salt, rounds) {
+    return sys.crypto.pbkdf2_hmac_sha512(password, salt, rounds)
+}
+
+// aes_gcm_encrypt(plaintext: String, key: String) -> String
+// AES-256-GCM authenticated encryption. Returns hex-encoded ciphertext+tag.
+func crypto_aes_gcm_encrypt(plaintext, key) {
+    return sys.crypto.aes_gcm_encrypt(plaintext, key)
+}
+
+// aes_gcm_decrypt(ciphertext: String, key: String) -> String
+// AES-256-GCM authenticated decryption. Returns plaintext.
+func crypto_aes_gcm_decrypt(ciphertext, key) {
+    return sys.crypto.aes_gcm_decrypt(ciphertext, key)
+}
+
+// random_bytes(n: Int) -> List[Int]
+// Cryptographically secure random bytes. Returns list of n byte values (0-255).
+func crypto_random_bytes(n) { return sys.crypto.random_bytes(n) }
+
+// merkle_root(leaves: List[String]) -> String
+// Computes the Merkle root hash of a list of hex-encoded leaf hashes.
+func crypto_merkle_root(leaves) { return sys.crypto.merkle_root(leaves) }
+
 crypto := {
-    hash: (s) => sys.crypto.hash(s),
-    merkle_root: (l) => sys.crypto.merkle_root(l),
+    hash: crypto_hash,
+    sha512: crypto_sha512,
+    hmac_sha512: crypto_hmac_sha512,
+    pbkdf2: crypto_pbkdf2,
+    aes_gcm: {
+        encrypt: crypto_aes_gcm_encrypt,
+        decrypt: crypto_aes_gcm_decrypt
+    },
+    random_bytes: crypto_random_bytes,
+    merkle_root: crypto_merkle_root,
     ed25519: {
         gen: () => sys.crypto.ed25519.gen(),
-        sign: (m, k) => sys.crypto.ed25519.sign(m, k),
-        verify: (s, m, p) => sys.crypto.ed25519.verify(s, m, p)
+        sign: (msg, key) => sys.crypto.ed25519.sign(msg, key),
+        verify: (sig, msg, pubkey) => sys.crypto.ed25519.verify(sig, msg, pubkey)
     }
 }

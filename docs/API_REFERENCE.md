@@ -1,5 +1,9 @@
 # Ark API Reference (Intrinsics)
 
+All intrinsics are compiled into the Ark runtime and available without imports.
+Dotted intrinsics (e.g., `sys.crypto.hash`) are accessed through the system namespace.
+Bare intrinsics (e.g., `print`, `len`) are available at top level.
+
 ## Table of Contents
 - [Chain](#chain)
 - [Core](#core)
@@ -15,857 +19,813 @@
 - [Struct](#struct)
 - [Sys](#sys)
 - [Time](#time)
+- [Z3](#z3)
+
+---
 
 ## Chain
+
+Blockchain interaction intrinsics. Operate on the internal Ark chain state or a configured JSON-RPC endpoint.
+
 ### `sys.chain.get_balance`
-No description available.
+Returns the balance (in smallest unit) for the given address.
 
 ```ark
-// Example for sys.chain.get_balance
-sys.chain.get_balance(...)
+balance := sys.chain.get_balance("0xabc123...")
+print("Balance:", balance)
 ```
 
 ### `sys.chain.height`
-No description available.
+Returns the current block height of the connected chain.
 
 ```ark
-// Example for sys.chain.height
-sys.chain.height(...)
+h := sys.chain.height()
+print("Current block:", h)
 ```
 
 ### `sys.chain.submit_tx`
-No description available.
+Submits a signed raw transaction payload to the chain. Returns the transaction hash.
 
 ```ark
-// Example for sys.chain.submit_tx
-sys.chain.submit_tx(...)
+tx_hash := sys.chain.submit_tx(signed_payload)
+print("Submitted:", tx_hash)
 ```
 
 ### `sys.chain.verify_tx`
-No description available.
+Checks whether a transaction has been confirmed on-chain. Returns `true` or `false`.
 
 ```ark
-// Example for sys.chain.verify_tx
-sys.chain.verify_tx(...)
+confirmed := sys.chain.verify_tx("0xdeadbeef...")
+if confirmed { print("Transaction confirmed") }
 ```
 
+---
+
 ## Core
+
+Built-in functions available at the top level without any namespace prefix.
+
 ### `exit`
-No description available.
+Terminates the program immediately with exit code 0.
 
 ```ark
-// Example for exit
-exit(...)
+exit()
 ```
 
 ### `get`
-No description available.
+Retrieves a value from a struct by key name. Returns `nil` if the key doesn't exist.
 
 ```ark
-// Example for get
-get(...)
+person := { name: "Alice", age: 30 }
+name := get(person, "name")  // "Alice"
 ```
 
 ### `intrinsic_and`
-No description available.
+Logical AND. Returns `true` if both arguments are truthy.
 
 ```ark
-// Example for intrinsic_and
-intrinsic_and(...)
+result := intrinsic_and(true, false)  // false
 ```
 
 ### `intrinsic_ask_ai`
-No description available.
+Sends a prompt to a connected AI provider and returns the response string. Requires a live AI backend.
 
 ```ark
-// Example for intrinsic_ask_ai
-intrinsic_ask_ai(...)
+answer := intrinsic_ask_ai("Explain P vs NP in one sentence")
+print(answer)
 ```
 
 ### `intrinsic_buffer_alloc`
-No description available.
+Allocates a fixed-size byte buffer of `n` bytes, initialized to zero. Returns a buffer handle.
 
 ```ark
-// Example for intrinsic_buffer_alloc
-intrinsic_buffer_alloc(...)
+buf := intrinsic_buffer_alloc(1024)  // 1KB buffer
 ```
 
 ### `intrinsic_buffer_inspect`
-No description available.
+Returns a debug representation of a buffer's contents and metadata.
 
 ```ark
-// Example for intrinsic_buffer_inspect
-intrinsic_buffer_inspect(...)
+info := intrinsic_buffer_inspect(buf)
+print(info)
 ```
 
 ### `intrinsic_buffer_read`
-No description available.
+Reads a byte value at the given offset from a buffer. Returns an integer (0–255).
 
 ```ark
-// Example for intrinsic_buffer_read
-intrinsic_buffer_read(...)
+byte_val := intrinsic_buffer_read(buf, 0)
 ```
 
 ### `intrinsic_buffer_write`
-No description available.
+Writes a byte value (0–255) at the given offset in a buffer.
 
 ```ark
-// Example for intrinsic_buffer_write
-intrinsic_buffer_write(...)
+intrinsic_buffer_write(buf, 0, 255)
 ```
 
 ### `intrinsic_crypto_hash`
-No description available.
+SHA-256 hash of a string. Returns hex-encoded 64-character digest. Alias for `sys.crypto.hash`.
 
 ```ark
-// Example for intrinsic_crypto_hash
-intrinsic_crypto_hash(...)
+h := intrinsic_crypto_hash("hello")
+// "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
 ```
 
 ### `intrinsic_extract_code`
-No description available.
+Extracts code blocks from a markdown-formatted AI response string. Useful for processing AI-generated code.
 
 ```ark
-// Example for intrinsic_extract_code
-intrinsic_extract_code(...)
+code := intrinsic_extract_code(ai_response)
 ```
 
 ### `intrinsic_ge`
-No description available.
+Greater-than-or-equal comparison. Returns `true` if `a >= b`.
 
 ```ark
-// Example for intrinsic_ge
-intrinsic_ge(...)
+intrinsic_ge(5, 3)  // true
 ```
 
 ### `intrinsic_gt`
-No description available.
+Greater-than comparison. Returns `true` if `a > b`.
 
 ```ark
-// Example for intrinsic_gt
-intrinsic_gt(...)
+intrinsic_gt(5, 3)  // true
 ```
 
 ### `intrinsic_le`
-No description available.
+Less-than-or-equal comparison. Returns `true` if `a <= b`.
 
 ```ark
-// Example for intrinsic_le
-intrinsic_le(...)
+intrinsic_le(3, 5)  // true
 ```
 
 ### `intrinsic_len`
-No description available.
+Returns the length of a string, list, or buffer. Alias for `len`.
 
 ```ark
-// Example for intrinsic_len
-intrinsic_len(...)
+intrinsic_len([1, 2, 3])  // 3
 ```
 
 ### `intrinsic_list_append`
-No description available.
+Appends a value to the end of a list. Mutates the list in place.
 
 ```ark
-// Example for intrinsic_list_append
-intrinsic_list_append(...)
+items := [1, 2]
+intrinsic_list_append(items, 3)  // items is now [1, 2, 3]
 ```
 
 ### `intrinsic_list_get`
-No description available.
+Returns the element at index `i` from a list. Zero-indexed.
 
 ```ark
-// Example for intrinsic_list_get
-intrinsic_list_get(...)
+intrinsic_list_get([10, 20, 30], 1)  // 20
 ```
 
 ### `intrinsic_lt`
-No description available.
+Less-than comparison. Returns `true` if `a < b`.
 
 ```ark
-// Example for intrinsic_lt
-intrinsic_lt(...)
+intrinsic_lt(3, 5)  // true
 ```
 
 ### `intrinsic_merkle_root`
-No description available.
+Computes the Merkle root hash of a list of hex-encoded leaf hashes. Returns hex string.
 
 ```ark
-// Example for intrinsic_merkle_root
-intrinsic_merkle_root(...)
+root := intrinsic_merkle_root(["aabb...", "ccdd..."])
 ```
 
 ### `intrinsic_not`
-No description available.
+Logical NOT. Returns `true` if the argument is falsy, `false` if truthy.
 
 ```ark
-// Example for intrinsic_not
-intrinsic_not(...)
+intrinsic_not(false)  // true
 ```
 
 ### `intrinsic_or`
-No description available.
+Logical OR. Returns `true` if either argument is truthy.
 
 ```ark
-// Example for intrinsic_or
-intrinsic_or(...)
+intrinsic_or(false, true)  // true
 ```
 
 ### `intrinsic_time_now`
-No description available.
+Returns the current Unix timestamp in seconds. Alias for `sys.time.now`.
 
 ```ark
-// Example for intrinsic_time_now
-intrinsic_time_now(...)
+ts := intrinsic_time_now()
 ```
 
 ### `len`
-No description available.
+Returns the length of a string, list, or buffer.
 
 ```ark
-// Example for len
-len(...)
+len("hello")       // 5
+len([1, 2, 3])     // 3
 ```
 
 ### `print`
-No description available.
+Prints one or more values to stdout, separated by spaces, followed by a newline.
 
 ```ark
-// Example for print
-print(...)
+print("Hello", "World")  // Hello World
+print(42)                 // 42
 ```
 
 ### `quit`
-No description available.
+Alias for `exit()`. Terminates the program immediately.
 
 ```ark
-// Example for quit
-quit(...)
+quit()
 ```
 
+---
+
 ## Crypto
+
+Pure sovereign cryptographic operations. Zero external dependencies — all algorithms are implemented directly in the Ark runtime (Rust core + Python fallback).
+
 ### `sys.crypto.aes_gcm_decrypt`
-No description available.
+AES-256-GCM authenticated decryption. Takes hex-encoded ciphertext+nonce+tag and a 32-byte hex key. Returns the plaintext string.
 
 ```ark
-// Example for sys.crypto.aes_gcm_decrypt
-sys.crypto.aes_gcm_decrypt(...)
+plain := sys.crypto.aes_gcm_decrypt(ciphertext_hex, key_hex)
 ```
 
 ### `sys.crypto.aes_gcm_encrypt`
-No description available.
+AES-256-GCM authenticated encryption. Takes a plaintext string and a 32-byte hex key. Returns hex-encoded ciphertext with nonce and auth tag prepended.
 
 ```ark
-// Example for sys.crypto.aes_gcm_encrypt
-sys.crypto.aes_gcm_encrypt(...)
+ct := sys.crypto.aes_gcm_encrypt("secret message", key_hex)
 ```
 
 ### `sys.crypto.ed25519.gen`
-No description available.
+Generates an Ed25519 keypair. Returns a struct with `public` and `secret` hex-encoded keys.
 
 ```ark
-// Example for sys.crypto.ed25519.gen
-sys.crypto.ed25519.gen(...)
+kp := sys.crypto.ed25519.gen()
+print("Public:", kp.public)
+print("Secret:", kp.secret)
 ```
 
 ### `sys.crypto.ed25519.sign`
-No description available.
+Signs a message with an Ed25519 secret key. Returns hex-encoded 64-byte signature.
 
 ```ark
-// Example for sys.crypto.ed25519.sign
-sys.crypto.ed25519.sign(...)
+sig := sys.crypto.ed25519.sign("message", kp.secret)
 ```
 
 ### `sys.crypto.ed25519.verify`
-No description available.
+Verifies an Ed25519 signature. Returns `true` if the signature is valid.
 
 ```ark
-// Example for sys.crypto.ed25519.verify
-sys.crypto.ed25519.verify(...)
+valid := sys.crypto.ed25519.verify(sig, "message", kp.public)
 ```
 
 ### `sys.crypto.hash`
-No description available.
+SHA-256 hash of a string. Returns hex-encoded 64-character digest.
 
 ```ark
-// Example for sys.crypto.hash
-sys.crypto.hash(...)
+h := sys.crypto.hash("hello world")
+// "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
 ```
 
 ### `sys.crypto.hmac_sha512`
-No description available.
+HMAC-SHA512 message authentication code. Takes a key and message string. Returns hex-encoded MAC.
 
 ```ark
-// Example for sys.crypto.hmac_sha512
-sys.crypto.hmac_sha512(...)
+mac := sys.crypto.hmac_sha512("key", "data")
 ```
 
 ### `sys.crypto.merkle_root`
-No description available.
+Computes the Merkle root of a list of hex-encoded leaf hashes using SHA-256.
 
 ```ark
-// Example for sys.crypto.merkle_root
-sys.crypto.merkle_root(...)
+root := sys.crypto.merkle_root(["leaf1_hex", "leaf2_hex", "leaf3_hex"])
 ```
 
 ### `sys.crypto.pbkdf2_hmac_sha512`
-No description available.
+PBKDF2 key derivation using HMAC-SHA512. Takes password, salt, and iteration count.
 
 ```ark
-// Example for sys.crypto.pbkdf2_hmac_sha512
-sys.crypto.pbkdf2_hmac_sha512(...)
+key := sys.crypto.pbkdf2_hmac_sha512("password", "salt", 2048)
 ```
 
 ### `sys.crypto.random_bytes`
-No description available.
+Generates `n` cryptographically secure random bytes. Returns a list of integers (0–255).
 
 ```ark
-// Example for sys.crypto.random_bytes
-sys.crypto.random_bytes(...)
+bytes := sys.crypto.random_bytes(32)  // 32 random bytes
 ```
 
 ### `sys.crypto.sha512`
-No description available.
+SHA-512 hash of a string. Returns hex-encoded 128-character digest.
 
 ```ark
-// Example for sys.crypto.sha512
-sys.crypto.sha512(...)
+h := sys.crypto.sha512("data")
 ```
 
+---
+
 ## Fs
+
+File system operations. Requires `fs_read` and/or `fs_write` capability tokens. All paths are sandboxed — path traversal is blocked at the runtime level.
+
 ### `sys.fs.read`
-No description available.
+Reads the entire contents of a file as a UTF-8 string. Requires `fs_read` capability.
 
 ```ark
-// Example for sys.fs.read
-sys.fs.read(...)
+content := sys.fs.read("config.json")
+print(content)
 ```
 
 ### `sys.fs.read_buffer`
-No description available.
+Reads a file as raw bytes. Returns a list of byte values (0–255). Requires `fs_read` capability.
 
 ```ark
-// Example for sys.fs.read_buffer
-sys.fs.read_buffer(...)
+bytes := sys.fs.read_buffer("image.png")
+print("Size:", len(bytes), "bytes")
 ```
 
 ### `sys.fs.write`
-No description available.
+Writes a UTF-8 string to a file, creating it if it doesn't exist. Overwrites existing content. Requires `fs_write` capability.
 
 ```ark
-// Example for sys.fs.write
-sys.fs.write(...)
+sys.fs.write("output.txt", "Hello, Ark!")
 ```
 
 ### `sys.fs.write_buffer`
-No description available.
+Writes raw bytes (list of 0–255 integers) to a file. Requires `fs_write` capability.
 
 ```ark
-// Example for sys.fs.write_buffer
-sys.fs.write_buffer(...)
+sys.fs.write_buffer("output.bin", [0x48, 0x65, 0x6C, 0x6C, 0x6F])
 ```
 
+---
+
 ## Io
+
+Standard I/O stream operations for interactive programs.
+
 ### `sys.io.read_bytes`
-No description available.
+Reads up to `n` bytes from stdin. Returns a list of byte values. Blocks until data is available.
 
 ```ark
-// Example for sys.io.read_bytes
-sys.io.read_bytes(...)
+data := sys.io.read_bytes(256)
 ```
 
 ### `sys.io.read_line`
-No description available.
+Reads a single line from stdin (blocking). Returns the line as a string without trailing newline.
 
 ```ark
-// Example for sys.io.read_line
-sys.io.read_line(...)
+name := sys.io.read_line()
+print("Hello,", name)
 ```
 
 ### `sys.io.write`
-No description available.
+Writes a string to stdout without a trailing newline. Use for raw output control.
 
 ```ark
-// Example for sys.io.write
-sys.io.write(...)
+sys.io.write("Loading...")
 ```
 
+---
+
 ## Json
+
+JSON serialization and deserialization.
+
 ### `sys.json.parse`
-No description available.
+Parses a JSON string into an Ark value (struct, list, string, number, bool, or nil).
 
 ```ark
-// Example for sys.json.parse
-sys.json.parse(...)
+data := sys.json.parse("{\"name\": \"Alice\", \"age\": 30}")
+print(data.name)  // "Alice"
 ```
 
 ### `sys.json.stringify`
-No description available.
+Serializes an Ark value (struct, list, string, number, bool) into a JSON string.
 
 ```ark
-// Example for sys.json.stringify
-sys.json.stringify(...)
+json_str := sys.json.stringify({ name: "Alice", age: 30 })
+// "{\"name\": \"Alice\", \"age\": 30}"
 ```
 
+---
+
 ## List
+
+Mutable list operations. Lists are zero-indexed.
+
 ### `sys.list.append`
-No description available.
+Appends a value to the end of a list. Mutates the list in place.
 
 ```ark
-// Example for sys.list.append
-sys.list.append(...)
+items := [1, 2, 3]
+sys.list.append(items, 4)  // items is now [1, 2, 3, 4]
 ```
 
 ### `sys.list.delete`
-No description available.
+Removes the element at the given index from a list. Shifts subsequent elements left.
 
 ```ark
-// Example for sys.list.delete
-sys.list.delete(...)
+items := [10, 20, 30]
+sys.list.delete(items, 1)  // items is now [10, 30]
 ```
 
 ### `sys.list.get`
-No description available.
+Returns the element at the given index. Zero-indexed.
 
 ```ark
-// Example for sys.list.get
-sys.list.get(...)
+val := sys.list.get([10, 20, 30], 2)  // 30
 ```
 
 ### `sys.list.pop`
-No description available.
+Removes and returns the last element of a list.
 
 ```ark
-// Example for sys.list.pop
-sys.list.pop(...)
+items := [1, 2, 3]
+last := sys.list.pop(items)  // last = 3, items = [1, 2]
 ```
 
 ### `sys.list.set`
-No description available.
+Sets the element at the given index to a new value. Mutates the list in place.
 
 ```ark
-// Example for sys.list.set
-sys.list.set(...)
+items := [10, 20, 30]
+sys.list.set(items, 1, 99)  // items is now [10, 99, 30]
 ```
+
+---
 
 ## Math
-### `intrinsic_math_acos`
-No description available.
 
-```ark
-// Example for intrinsic_math_acos
-intrinsic_math_acos(...)
-```
-
-### `intrinsic_math_asin`
-No description available.
-
-```ark
-// Example for intrinsic_math_asin
-intrinsic_math_asin(...)
-```
-
-### `intrinsic_math_atan`
-No description available.
-
-```ark
-// Example for intrinsic_math_atan
-intrinsic_math_atan(...)
-```
-
-### `intrinsic_math_atan2`
-No description available.
-
-```ark
-// Example for intrinsic_math_atan2
-intrinsic_math_atan2(...)
-```
-
-### `intrinsic_math_cos`
-No description available.
-
-```ark
-// Example for intrinsic_math_cos
-intrinsic_math_cos(...)
-```
-
-### `intrinsic_math_pow`
-No description available.
-
-```ark
-// Example for intrinsic_math_pow
-intrinsic_math_pow(...)
-```
-
-### `intrinsic_math_sin`
-No description available.
-
-```ark
-// Example for intrinsic_math_sin
-intrinsic_math_sin(...)
-```
-
-### `intrinsic_math_sqrt`
-No description available.
-
-```ark
-// Example for intrinsic_math_sqrt
-intrinsic_math_sqrt(...)
-```
-
-### `intrinsic_math_tan`
-No description available.
-
-```ark
-// Example for intrinsic_math_tan
-intrinsic_math_tan(...)
-```
+Mathematical functions. Scalar trig functions operate on floating-point values. Tensor operations work on `math.Tensor` structs.
 
 ### `math.Tensor`
-math.Tensor(data: List, shape: List) → Tensor struct
+Creates a Tensor from a flat data list and a shape list.
 
 ```ark
-// Example for math.Tensor
-math.Tensor(...)
+t := math.Tensor([1, 2, 3, 4], [2, 2])  // 2x2 matrix
 ```
 
 ### `math.acos`
-No description available.
+Arc cosine. Returns the angle in radians whose cosine is `x`.
 
 ```ark
-// Example for math.acos
-math.acos(...)
+angle := math.acos(0.5)  // ~1.0472 (π/3)
 ```
 
 ### `math.add`
-math.add(a, b) → Tensor.  Element-wise addition.
+Element-wise tensor addition. Both tensors must have the same shape.
 
 ```ark
-// Example for math.add
-math.add(...)
+a := math.Tensor([1, 2], [2])
+b := math.Tensor([3, 4], [2])
+c := math.add(a, b)  // Tensor([4, 6], [2])
 ```
 
 ### `math.asin`
-No description available.
+Arc sine. Returns the angle in radians whose sine is `x`.
 
 ```ark
-// Example for math.asin
-math.asin(...)
+angle := math.asin(0.5)  // ~0.5236 (π/6)
 ```
 
 ### `math.atan`
-No description available.
+Arc tangent. Returns the angle in radians whose tangent is `x`.
 
 ```ark
-// Example for math.atan
-math.atan(...)
+angle := math.atan(1.0)  // ~0.7854 (π/4)
 ```
 
 ### `math.atan2`
-No description available.
+Two-argument arc tangent. Returns the angle in radians of the point `(x, y)`.
 
 ```ark
-// Example for math.atan2
-math.atan2(...)
+angle := math.atan2(1.0, 1.0)  // ~0.7854 (π/4)
 ```
 
 ### `math.cos`
-No description available.
+Cosine of an angle in radians.
 
 ```ark
-// Example for math.cos
-math.cos(...)
+val := math.cos(0)  // 1.0
 ```
 
 ### `math.cos_scaled`
-No description available.
+Fixed-point cosine. Returns `cos(x) * 10000` as an integer (avoids floating-point in integer-only contexts).
 
 ```ark
-// Example for math.cos_scaled
-math.cos_scaled(...)
+val := math.cos_scaled(0)  // 10000
 ```
 
 ### `math.dot`
-math.dot(a, b) → Integer.  Element-wise multiply and sum (1D vectors).
+Dot product of two 1D vectors. Element-wise multiply and sum.
 
 ```ark
-// Example for math.dot
-math.dot(...)
+result := math.dot([1, 2, 3], [4, 5, 6])  // 32
 ```
 
 ### `math.matmul`
-math.matmul(A, B) → Tensor.  A=[m,k], B=[k,n] → C=[m,n]
+Matrix multiplication. A=[m,k], B=[k,n] → C=[m,n].
 
 ```ark
-// Example for math.matmul
-math.matmul(...)
+A := math.Tensor([1, 2, 3, 4], [2, 2])
+B := math.Tensor([5, 6, 7, 8], [2, 2])
+C := math.matmul(A, B)  // [[19, 22], [43, 50]]
 ```
 
 ### `math.mul_scalar`
-math.mul_scalar(t, scalar) → Tensor.  Multiply every element by scalar.
+Multiplies every element of a tensor by a scalar value.
 
 ```ark
-// Example for math.mul_scalar
-math.mul_scalar(...)
+t := math.Tensor([1, 2, 3], [3])
+result := math.mul_scalar(t, 10)  // Tensor([10, 20, 30])
 ```
 
 ### `math.pi_scaled`
-No description available.
+Returns π * 10000 as an integer (31416). Useful for fixed-point trig without floats.
 
 ```ark
-// Example for math.pi_scaled
-math.pi_scaled(...)
+pi := math.pi_scaled()  // 31416
 ```
 
 ### `math.pow`
-No description available.
+Raises `base` to the power of `exp`.
 
 ```ark
-// Example for math.pow
-math.pow(...)
+val := math.pow(2, 10)  // 1024
 ```
 
 ### `math.sin`
-No description available.
+Sine of an angle in radians.
 
 ```ark
-// Example for math.sin
-math.sin(...)
+val := math.sin(3.14159 / 2)  // ~1.0
 ```
 
 ### `math.sin_scaled`
-No description available.
+Fixed-point sine. Returns `sin(x) * 10000` as an integer.
 
 ```ark
-// Example for math.sin_scaled
-math.sin_scaled(...)
+val := math.sin_scaled(15708)  // ~10000 (sin(π/2) scaled)
 ```
 
 ### `math.sqrt`
-No description available.
+Square root of a number.
 
 ```ark
-// Example for math.sqrt
-math.sqrt(...)
+val := math.sqrt(144)  // 12
 ```
 
 ### `math.sub`
-math.sub(a, b) → Tensor.  Element-wise subtraction.
+Element-wise tensor subtraction.
 
 ```ark
-// Example for math.sub
-math.sub(...)
+c := math.sub(a, b)
 ```
 
 ### `math.tan`
-No description available.
+Tangent of an angle in radians.
 
 ```ark
-// Example for math.tan
-math.tan(...)
+val := math.tan(0.7854)  // ~1.0
 ```
 
 ### `math.transpose`
-math.transpose(T) → Tensor.  T=[m,n] → T'=[n,m]
+Matrix transpose. T=[m,n] → T'=[n,m].
 
 ```ark
-// Example for math.transpose
-math.transpose(...)
+t := math.Tensor([1, 2, 3, 4, 5, 6], [2, 3])
+t2 := math.transpose(t)  // shape [3, 2]
 ```
 
 ### `sys.math.pow_mod`
-No description available.
+Modular exponentiation: `(base^exp) mod modulus`. Essential for cryptographic operations.
 
 ```ark
-// Example for sys.math.pow_mod
-sys.math.pow_mod(...)
+result := sys.math.pow_mod(2, 10, 1000)  // 24
 ```
 
+---
+
 ## Mem
+
+Low-level memory buffer operations for binary data processing.
+
 ### `sys.mem.alloc`
-No description available.
+Allocates a byte buffer of `n` bytes, initialized to zero. Returns a buffer handle.
 
 ```ark
-// Example for sys.mem.alloc
-sys.mem.alloc(...)
+buf := sys.mem.alloc(4096)
 ```
 
 ### `sys.mem.inspect`
-No description available.
+Returns a debug representation of a buffer's contents, size, and allocation metadata.
 
 ```ark
-// Example for sys.mem.inspect
-sys.mem.inspect(...)
+info := sys.mem.inspect(buf)
+print(info)
 ```
 
 ### `sys.mem.read`
-No description available.
+Reads a byte (0–255) at the given offset from a buffer.
 
 ```ark
-// Example for sys.mem.read
-sys.mem.read(...)
+val := sys.mem.read(buf, 0)
 ```
 
 ### `sys.mem.write`
-No description available.
+Writes a byte (0–255) at the given offset in a buffer.
 
 ```ark
-// Example for sys.mem.write
-sys.mem.write(...)
+sys.mem.write(buf, 0, 0xFF)
 ```
 
+---
+
 ## Net
+
+Network I/O: HTTP client and raw TCP sockets.
+
 ### `sys.net.http.request`
-No description available.
+Sends an HTTP request. Takes method (`"GET"`, `"POST"`, etc.), URL, and optional body. Returns the response body as a string.
 
 ```ark
-// Example for sys.net.http.request
-sys.net.http.request(...)
+body := sys.net.http.request("GET", "https://api.example.com/data", "")
+data := sys.json.parse(body)
 ```
 
 ### `sys.net.socket.accept`
-No description available.
+Accepts an incoming connection on a bound socket. Returns a new socket handle for the client.
 
 ```ark
-// Example for sys.net.socket.accept
-sys.net.socket.accept(...)
+client := sys.net.socket.accept(server_socket)
 ```
 
 ### `sys.net.socket.bind`
-No description available.
+Binds a TCP socket to an address and port. Returns a socket handle.
 
 ```ark
-// Example for sys.net.socket.bind
-sys.net.socket.bind(...)
+sock := sys.net.socket.bind("0.0.0.0", 8080)
 ```
 
 ### `sys.net.socket.close`
-No description available.
+Closes a socket connection and releases the file descriptor.
 
 ```ark
-// Example for sys.net.socket.close
-sys.net.socket.close(...)
+sys.net.socket.close(sock)
 ```
 
 ### `sys.net.socket.connect`
-No description available.
+Connects to a remote TCP server. Returns a socket handle.
 
 ```ark
-// Example for sys.net.socket.connect
-sys.net.socket.connect(...)
+sock := sys.net.socket.connect("example.com", 80)
 ```
 
 ### `sys.net.socket.recv`
-No description available.
+Receives data from a connected socket. Returns a string. Blocks until data arrives.
 
 ```ark
-// Example for sys.net.socket.recv
-sys.net.socket.recv(...)
+data := sys.net.socket.recv(sock)
 ```
 
 ### `sys.net.socket.send`
-No description available.
+Sends a string over a connected socket.
 
 ```ark
-// Example for sys.net.socket.send
-sys.net.socket.send(...)
+sys.net.socket.send(sock, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
 ```
 
 ### `sys.net.socket.set_timeout`
-No description available.
+Sets the read/write timeout in seconds for a socket.
 
 ```ark
-// Example for sys.net.socket.set_timeout
-sys.net.socket.set_timeout(...)
+sys.net.socket.set_timeout(sock, 5)  // 5 second timeout
 ```
 
+---
+
 ## Str
+
+String operations.
+
 ### `sys.str.from_code`
-No description available.
+Converts a Unicode code point (integer) to a single-character string.
 
 ```ark
-// Example for sys.str.from_code
-sys.str.from_code(...)
+ch := sys.str.from_code(65)  // "A"
 ```
 
 ### `sys.str.get`
-No description available.
+Returns the character at the given index of a string. Zero-indexed.
 
 ```ark
-// Example for sys.str.get
-sys.str.get(...)
+ch := sys.str.get("hello", 0)  // "h"
 ```
 
+---
+
 ## Struct
+
+Struct (object/dictionary) operations.
+
 ### `sys.struct.get`
-No description available.
+Gets a field value from a struct by key. Returns `nil` if the key doesn't exist.
 
 ```ark
-// Example for sys.struct.get
-sys.struct.get(...)
+person := { name: "Alice", age: 30 }
+val := sys.struct.get(person, "name")  // "Alice"
 ```
 
 ### `sys.struct.has`
-No description available.
+Returns `true` if the struct has the given key.
 
 ```ark
-// Example for sys.struct.has
-sys.struct.has(...)
+has_name := sys.struct.has(person, "name")  // true
 ```
 
 ### `sys.struct.set`
-No description available.
+Sets a field on a struct. Mutates the struct in place.
 
 ```ark
-// Example for sys.struct.set
-sys.struct.set(...)
+sys.struct.set(person, "age", 31)
 ```
 
+---
+
 ## Sys
+
+System-level intrinsics for process control and shell execution.
+
 ### `sys.exec`
-No description available.
+Executes a shell command and returns the output as a string. Requires `exec` capability.
 
 ```ark
-// Example for sys.exec
-sys.exec(...)
+output := sys.exec("ls -la")
+print(output)
 ```
 
 ### `sys.exit`
-No description available.
+Terminates the program with the given exit code (default 0).
 
 ```ark
-// Example for sys.exit
-sys.exit(...)
+sys.exit(1)  // exit with error
 ```
 
 ### `sys.len`
-No description available.
+Returns the length of a string, list, or buffer. Same as `len()`.
 
 ```ark
-// Example for sys.len
-sys.len(...)
+sys.len([1, 2, 3])  // 3
 ```
 
 ### `sys.log`
-No description available.
+Writes a debug log message to stderr. Useful for diagnostics without polluting stdout.
 
 ```ark
-// Example for sys.log
-sys.log(...)
+sys.log("Processing item", i)
 ```
 
+---
+
 ## Time
+
+Wall-clock time operations.
+
 ### `sys.time.now`
-No description available.
+Returns the current Unix timestamp in seconds since the epoch (1970-01-01 00:00:00 UTC).
 
 ```ark
-// Example for sys.time.now
-sys.time.now(...)
+ts := sys.time.now()
+print("Current time:", ts)
 ```
 
 ### `sys.time.sleep`
-No description available.
+Blocks execution for the given number of seconds.
 
 ```ark
-// Example for sys.time.sleep
-sys.time.sleep(...)
+sys.time.sleep(2)  // sleep 2 seconds
+```
+
+---
+
+## Z3
+
+Formal verification via Z3 SMT solver integration.
+
+### `sys.z3.verify`
+Verifies a set of SMT-LIB2 constraints using the Z3 solver. Takes a list of constraint strings. Returns `true` if satisfiable (consistent), `false` if unsatisfiable (contradiction).
+
+```ark
+// Consistent constraints → true
+c1 := ["(declare-const x Int)", "(assert (> x 10))"]
+result := sys.z3.verify(c1)  // true
+
+// Contradictory constraints → false
+c2 := ["(declare-const x Int)", "(assert (> x 10))", "(assert (< x 5))"]
+result := sys.z3.verify(c2)  // false
 ```
