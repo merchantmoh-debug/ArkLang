@@ -52,17 +52,21 @@ jobs:
         working-directory: core
 
       - name: Run Tests
+        id: tests
         run: cargo test --release
         working-directory: core
+        continue-on-error: true
 
       - name: Build Release Binary
+        id: build
         run: cargo build --release --bin ark_loader
         working-directory: core
 
       - name: Prepare Artifacts
+        if: steps.build.outcome == 'success'
         shell: bash
         run: |
-          mkdir dist
+          mkdir -p dist
           if [ "${{ runner.os }}" == "Windows" ]; then
             cp core/target/release/ark_loader.exe dist/ark-core.exe
           else
@@ -70,11 +74,16 @@ jobs:
           fi
 
       - name: Upload Artifact
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ark-core-${{ matrix.os }}
           path: dist/*
           if-no-files-found: error
+
+      - name: Fail if tests failed
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
 
   # ─── Python CI ────────────────────────────────────────────────────────
   python-ci:
