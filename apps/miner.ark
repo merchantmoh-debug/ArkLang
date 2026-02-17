@@ -28,7 +28,6 @@ func string_split_lines(buffer) {
 }
 
 func parse_json(s) {
-    // Wrapper for sys.json.parse to handle errors if any (though Ark crashes on error currently)
     return sys.json.parse(s)
 }
 
@@ -58,7 +57,7 @@ func run_miner(ip, port) {
     prevhash := ""
     coinb1 := ""
     coinb2 := ""
-    // merkle_branch := [] // Not used in this simplified PoW
+    // merkle_branch := []
     version := ""
     nbits := ""
     ntime := ""
@@ -68,16 +67,12 @@ func run_miner(ip, port) {
     extranonce2_size := 4
 
     // Target (Start with Max Difficulty / Easy)
-    // We'll just use a hardcoded target for the simulation that matches the Mock Pool
-    // Mock Pool Target implied by nbits "207fffff" is very easy.
-    // Let's assume target is "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
     target := "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 
     // Nonce
     nonce := 0
 
-    // Set Socket Timeout (Non-blocking mode for loop)
-    // If we have no job, we can wait longer.
+    // Set Socket Timeout
     timeout := 10
     if job_id == "" {
         timeout := 1000
@@ -114,29 +109,13 @@ func run_miner(ip, port) {
 
             while j < num_lines {
                 line := sys.list.get(lines, j)[0]
-                // Parse JSON
-                // print(">> [Miner] Recv:", line)
                 msg := parse_json(line)
-
-                // Check Message Type
-                // If it has "result", it's a response.
-                // If it has "method", it's a notification.
-
-                // Helper to check fields safely would be nice, but we assume valid Stratum
-
-                // Check if 'result' exists (it might be null, but key exists?)
-                // sys.struct.get throws if key missing.
-                // We use try-like logic? No.
-                // We inspect keys via `sys.struct.has` (if available?)
-                // I recall `sys.struct.has` in `meta/ark.py`. Yes.
 
                 if sys.struct.has(msg, "result") {
                      res := sys.struct.get(msg, "result")[0]
                      id := sys.struct.get(msg, "id")[0]
 
                      if id == 1 {
-                         // Subscribe Response
-                         // [[["mining.notify", "id"]], "extra1", size]
                          extranonce1 := sys.list.get(res, 1)[0]
                          subscribed := true
                          print(">> [Miner] Subscribed. Extranonce1:", extranonce1)
@@ -154,7 +133,6 @@ func run_miner(ip, port) {
 
                      if id == 4 {
                          print(">> [Miner] Share Accepted!")
-                         // Exit after success for the test
                          return 1
                      }
                 }
@@ -163,7 +141,6 @@ func run_miner(ip, port) {
                     method := sys.struct.get(msg, "method")[0]
                     if method == "mining.notify" {
                         params := sys.struct.get(msg, "params")[0]
-                        // [job_id, prevhash, coinb1, coinb2, merkle_branch, version, nbits, ntime, clean_jobs]
                         job_id := sys.list.get(params, 0)[0]
                         prevhash := sys.list.get(params, 1)[0]
                         ntime := sys.list.get(params, 7)[0]
@@ -183,50 +160,29 @@ func run_miner(ip, port) {
         // --- 2. Mining ---
         if subscribed {
              if authorized {
-                  // Only mine if we have a job
                   if job_id != "" {
                        // Proof of Work
-                       // Construct Header: prevhash + job_id + nonce
-                       // (Simplified for simulation)
                        header := prevhash + job_id + nonce
-
                        hash := sys.crypto.hash(header)
 
-                       // Check Target
-                       // String comparison "0000..." < "0000ffff..."
                        if hash < target {
                            print(">> [Miner] FOUND BLOCK! Hash:", hash)
                            print(">> [Miner] Submitting...")
 
-                           // Submit
-                           // params: [user, job_id, extranonce2, ntime, nonce]
-                           // We need to json stringify params.
-                           // Manual stringify for speed/simplicity
-
-                           // nonce is int, need string
                            nonce_str := "" + nonce
-
                            payload := "{\"id\": 4, \"method\": \"mining.submit\", \"params\": [\"user\", \"" + job_id + "\", \"00000000\", \"" + ntime + "\", \"" + nonce_str + "\"]}\n"
                            sys.net.socket.send(socket, payload)
-
-                           // Reset nonce or keep going?
-                           // For test, we wait for response.
                        }
 
                        nonce := nonce + 1
-
-                       // Rate limit for simulation
-                       // sys.time.sleep(0.01)
                   }
              }
         }
-
-        // Prevent 100% CPU in tight loop if no job
-        // sys.time.sleep not needed as recv blocks for timeout
     }
 }
 
 // Check execution mode
+// Prevent execution if imported without arguments
 args_len_info := sys.len(sys_args)
 if args_len_info[0] > 0 {
     script_name := sys_args[0]

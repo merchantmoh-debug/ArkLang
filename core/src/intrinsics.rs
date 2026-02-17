@@ -376,21 +376,6 @@ impl IntrinsicRegistry {
             "sys.extract_code".to_string(),
             Value::NativeFunction(intrinsic_extract_code),
         );
-        /*
-        scope.set(
-            "sys.net.http.request".to_string(),
-            Value::NativeFunction(intrinsic_http_request),
-        );
-        // Audio Intrinsics (PR-69)
-        scope.set(
-            "sys.audio.play_wav".to_string(),
-            Value::NativeFunction(intrinsic_audio_play_wav),
-        );
-        scope.set(
-            "sys.audio.synth_tone".to_string(),
-            Value::NativeFunction(intrinsic_audio_synth_tone),
-        );
-        */
     }
 }
 
