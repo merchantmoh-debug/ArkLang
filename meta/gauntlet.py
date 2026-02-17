@@ -34,6 +34,8 @@ INTERACTIVE_SKIP = {
     "apps/build.ark",         # Build tool — runs cargo build (>10s)
     "apps/iron_hand.ark",     # AI workflow — needs live AI provider + fs_write
     "apps/miner.ark",         # Miner — connects to external node (connection refused in CI)
+    "apps/miner_broken.ark",  # Intentional syntax error artifact — not a real test
+    "apps/market_maker.ark",  # HFT event loop demo — exceeds 30s timeout in CI
     "examples/server.ark",    # HTTP server — sys.net.http.serve blocks
     "examples/snake.ark",     # HTTP game  — sys.net.http.serve blocks
 }
