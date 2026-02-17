@@ -284,9 +284,66 @@ function setupUI() {
     });
 }
 
+// --- System Monitor ---
+function initSystemMonitor() {
+    const pollInterval = 2000;
+
+    async function updateStats() {
+        try {
+            const response = await fetch('/api/stats');
+            if (!response.ok) return;
+            const stats = await response.json();
+
+            updateVal('stat-cpu', stats.cpu + '%', stats.cpu > 80);
+            updateVal('stat-mem', stats.memory + '%', stats.memory > 80);
+            updateVal('stat-disk', stats.disk + '%', stats.disk > 90);
+            updateVal('stat-neural', stats.neural, false);
+
+            // Adjust pulse speed based on neural activity
+            const pulse = document.getElementById('monitor-pulse');
+            if (pulse) {
+                const duration = Math.max(0.5, 2 - (stats.neural / 100));
+                pulse.style.animationDuration = `${duration}s`;
+            }
+
+        } catch (e) {
+            // Silent fail
+        }
+    }
+
+    function updateVal(id, text, isHigh) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = text;
+            if (isHigh) el.classList.add('high');
+            else el.classList.remove('high');
+        }
+    }
+
+    setInterval(updateStats, pollInterval);
+    updateStats(); // Initial call
+}
+
 // Initialize
 window.addEventListener("DOMContentLoaded", () => {
-    initEditor();
-    setupUI();
+    try {
+        initEditor();
+    } catch (e) {
+        console.error("Editor initialization failed:", e);
+        logToConsole("Editor failed to load. Please refresh.", "error");
+    }
+
+    try {
+        setupUI();
+    } catch (e) {
+        console.error("UI setup failed:", e);
+    }
+
+    try {
+        initSystemMonitor();
+    } catch (e) {
+        console.error("System Monitor initialization failed:", e);
+    }
+
     logToConsole("Ark Environment Ready.", "success");
 });

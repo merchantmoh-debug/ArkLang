@@ -74,13 +74,21 @@ def check_path_security(path, is_write=False):
     if has_capability("all"):
         return
 
-    # Path Traversal Check
-    abs_path = os.path.realpath(path)
+    # Path Traversal Check (Hardened)
+    # 1. Normalize without resolving symlinks first to catch '..'
+    norm_path = os.path.normpath(path)
+    if norm_path.startswith("..") or (os.sep + ".." + os.sep) in norm_path:
+         raise SandboxViolation(f"Path traversal detected: {path}")
+
+    # 2. Resolve absolute path
+    abs_path = os.path.abspath(path)
+    real_path = os.path.realpath(path) # Follow symlinks
     cwd = os.getcwd()
 
-    # Check if path is within CWD (or is CWD itself)
-    if os.path.commonpath([cwd, abs_path]) != cwd:
-        raise SandboxViolation(f"Access outside working directory is forbidden: {path} (Resolved to: {abs_path})")
+    # 3. Check if path is within CWD (allow CWD itself)
+    # Using commonpath on real_path ensures we don't escape via symlinks
+    if os.path.commonpath([cwd, real_path]) != cwd:
+        raise SandboxViolation(f"Access outside working directory is forbidden: {path} (Resolved to: {real_path})")
 
     if is_write:
         # Require fs_write capability
@@ -148,7 +156,9 @@ def validate_url_security(url):
             continue
 
         if ip.is_loopback:
-            continue  # Allow localhost for local testing/dev
+            if not has_capability("net"):
+                 raise SandboxViolation(f"Access to loopback address '{ip_str}' is forbidden without 'net' capability.")
+            continue
 
         if ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
             raise SandboxViolation(f"Access to private/local/reserved IP '{ip_str}' is forbidden")
