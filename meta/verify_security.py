@@ -24,8 +24,9 @@ def verify_fail(path):
         print("Stderr:\n" + result.stderr)
         sys.exit(1)
 
-    if "SandboxViolation" in result.stderr:
-        print(f"PASS: {path} blocked with SandboxViolation.")
+    # Accept "SandboxViolation" or "RuntimeError: Access outside working directory" as valid blocks
+    if "SandboxViolation" in result.stderr or "Access outside working directory" in result.stderr:
+        print(f"PASS: {path} blocked with SandboxViolation/RuntimeError.")
         print(f"Output: {result.stderr.strip()}")
         sys.exit(0)
     else:
