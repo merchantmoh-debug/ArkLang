@@ -212,7 +212,8 @@ pub fn verify_signature(msg: &[u8], sig_bytes: &[u8], pubkey_bytes: &[u8]) -> Re
 // SECURE RANDOM
 // ============================================================================
 
-pub fn secure_random_bytes(_count: usize) -> Vec<u8> {
+#[allow(unused_variables)]
+pub fn secure_random_bytes(count: usize) -> Vec<u8> {
     #[cfg(unix)]
     {
         use std::fs::File;
