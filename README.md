@@ -78,6 +78,58 @@ A 1000+ line Recursive Descent Parser and Lexer for the Ark language, written in
 
 ---
 
+## 🤖 Ark Agent Framework (`src/`)
+
+**No other programming language ships with a built-in multi-agent AI system.** Ark does.
+
+The Agent Framework is a full-stack orchestration layer that lets Ark programs spawn, coordinate, and sandbox AI agents — with zero external dependencies beyond an LLM backend.
+
+### Architecture
+
+```text
+Task → RouterAgent → [CoderAgent | ResearcherAgent | ReviewerAgent] → Review → Result
+```
+
+| Component | What It Does |
+| :--- | :--- |
+| **AgentOrchestrator** | Pipeline executor: route tasks to specialists, auto-review code changes |
+| **SwarmOrchestrator** | Multi-agent coordination with 4 strategies: `router`, `broadcast`, `consensus`, `pipeline` |
+| **MCP Client** | [Model Context Protocol](https://modelcontextprotocol.io/) — JSON-RPC 2.0 over Stdio/HTTP/SSE. Connect any MCP-compatible tool server. |
+| **Encrypted Memory** | Fernet-encrypted namespaced storage + TF-IDF vector search for semantic recall |
+| **Local Sandbox** | AST-level security analysis — bans dangerous imports, functions, and attributes before execution |
+| **Docker Sandbox** | Container-isolated code execution for untrusted workloads |
+
+### Specialist Agents
+
+| Agent | Role |
+| :--- | :--- |
+| `RouterAgent` | Classifies tasks and delegates to the right specialist |
+| `CoderAgent` | Generates, modifies, and refactors code |
+| `ResearcherAgent` | Analyzes codebases and gathers context |
+| `ReviewerAgent` | Audits code changes for bugs, security issues, and style |
+
+### LLM Backend Support
+
+The framework is backend-agnostic. Configure via environment variables:
+
+* **Google Gemini:** `ARK_GOOGLE_API_KEY`
+* **OpenAI / Compatible:** `ARK_OPENAI_BASE_URL` + `ARK_OPENAI_API_KEY`
+* **Ollama (Local):** Point `ARK_OPENAI_BASE_URL` to `http://localhost:11434`
+
+### Quick Start
+
+```bash
+# Run the agent orchestrator
+python -m src.agent "Write a Python script that sorts a CSV by the second column"
+
+# Run the swarm (multi-agent)
+python -m src.swarm_demo
+```
+
+> **Full Agent Framework guide:** [User Manual — Agent Framework](docs/USER_MANUAL.md#17-agent-framework)
+
+---
+
 ## 🛠️ Quick Start
 
 ### Installation
@@ -153,6 +205,7 @@ New to Ark? Start here:
 | `lib/wallet_lib.ark` | **Crypto Library.** Secp256k1/BIP39 implementation. | 🟢 STABLE |
 | `apps/lsp.ark` | **Language Server.** Self-hosted Parser/Lexer. | 🟡 BETA |
 | `apps/server.ark` | **HTTP Server.** Functional web server. | 🟡 BETA |
+| `src/` | **Agent Framework.** Multi-agent orchestration, MCP client, sandboxed execution, encrypted memory. | 🟡 BETA |
 | `meta/` | **Tooling.** Python-based JIT, Security Scanner, Gauntlet runner. | 🟡 BETA |
 | `docs/` | **Documentation.** API Reference, Stdlib Reference, Manifesto. | 🟢 STABLE |
 | `site/` | **Web Assets.** Landing page, WASM test harness. | 🟡 BETA |

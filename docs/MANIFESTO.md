@@ -179,6 +179,41 @@ We solve the "Control Problem" not by asking the AI to be nice (RLHF), but by gi
 
 ---
 
+## 🤖 BOOK IV½: THE AUTONOMOUS WORKFORCE (AGENTS)
+
+**"The End of the Prompt. The Beginning of the Colleague."**
+
+### 1. The Problem: The Human Bottleneck
+We built powerful AI models in 2025 — but they are *deaf, blind, and paralyzed*.
+A GPT can write code, but it cannot run it. It cannot test it. It cannot review it. It cannot remember what it did yesterday.
+*   **The Loop:** Human writes prompt → AI generates code → Human reviews code → Human tests code → Human deploys code.
+*   **The Bottleneck:** The human is still in the loop for every step. AI did not eliminate the Engineer; it merely gave the Engineer a faster typewriter.
+
+### 2. The Ark Solution: The Agent Swarm
+Ark is the first programming language that ships with **built-in agents** — not as an afterthought, but as a core compiler feature.
+*   **The Orchestrator:** A task enters the system. A `RouterAgent` classifies it. A `CoderAgent` writes the code. A `ReviewerAgent` audits the code for bugs and security holes. The result is returned — no human in the loop.
+*   **The Swarm:** Multiple agents coordinate via strategies: **broadcast** (ask everyone), **consensus** (let them vote), **pipeline** (chain them sequentially).
+*   **The Memory:** Agents remember. Encrypted, namespaced, searchable memory — with vector similarity recall for context retrieval.
+
+### 3. The Nervous System: MCP
+The [Model Context Protocol](https://modelcontextprotocol.io/) is the TCP/IP of the AI Age.
+Ark's MCP client speaks JSON-RPC 2.0 over Stdio, HTTP, and Server-Sent Events.
+*   **Significance:** Any tool — file systems, databases, APIs, browsers — becomes a native sense for the Agent. The Agent is no longer trapped in a text box. It can *see*, *touch*, and *act* on the real world.
+*   **Sovereignty:** You run the MCP servers. You own the tools. No cloud vendor decides what your AI can touch.
+
+### 4. The Body Again: Sandbox-First Execution
+We solved the Control Problem in Book IV. Now we apply it to Agents:
+*   Every line of code an Agent writes is parsed by an **AST Security Visitor** before execution.
+*   Dangerous imports (`os`, `subprocess`, `socket`) are blocked.
+*   Dangerous functions (`exec`, `eval`, `__import__`) are blocked.
+*   If the Agent is untrusted, its code runs inside a **Docker container** with no network, no disk, no escape.
+
+### 5. The "OMG" Conclusion
+**Ark programs can write, review, and fix themselves.**
+The `sys.ask_ai` intrinsic is not just a wrapper around ChatGPT — it is the gateway to a self-improving codebase. A program that detects a bug, spawns a `CoderAgent` to fix it, routes the patch through a `ReviewerAgent`, and deploys the fix — all within the sandbox — is not science fiction. It is `python -m src.agent`.
+
+---
+
 ## 🖥️ BOOK V: THE DEATH OF THE OS (INFRASTRUCTURE)
 
 **"The End of the Interface. The Beginning of the Monolith."**

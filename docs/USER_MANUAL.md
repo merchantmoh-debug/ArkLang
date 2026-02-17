@@ -28,11 +28,12 @@
 15. [Cryptography](#15-cryptography)
 16. [Blockchain](#16-blockchain)
 17. [AI Integration](#17-ai-integration)
-18. [Error Handling](#18-error-handling)
-19. [Configuration & Security](#19-configuration--security)
-20. [Running Programs](#20-running-programs)
-21. [REPL](#21-repl)
-22. [FAQ](#22-faq)
+18. [Agent Framework](#18-agent-framework)
+19. [Error Handling](#19-error-handling)
+20. [Configuration & Security](#20-configuration--security)
+21. [Running Programs](#21-running-programs)
+22. [REPL](#22-repl)
+23. [FAQ](#23-faq)
 
 ---
 
@@ -526,7 +527,170 @@ code := intrinsic_extract_code(answer)  // Extract code blocks from AI response
 
 ---
 
-## 18. Error Handling
+## 18. Agent Framework
+
+Ark ships with a **built-in multi-agent AI framework** (`src/`). This is not an add-on — it is a core part of the language: programs that can reason, write code, review their own output, and learn from execution.
+
+### Overview
+
+* **Task Orchestration** — Route tasks to specialist AI agents automatically
+* **Multi-Agent Swarm** — Coordinate agents with router, broadcast, consensus, and pipeline strategies
+* **MCP Protocol** — Connect to any Model Context Protocol server for tool access
+* **Sandboxed Execution** — Run generated code in secure, isolated environments
+* **Encrypted Memory** — Persistent agent memory with Fernet encryption and vector search
+
+### Running the Orchestrator
+
+The `AgentOrchestrator` executes a pipeline: **Route → Specialist → Review → Result**.
+
+```bash
+python -m src.agent "Write a Python script that reads a CSV and outputs JSON"
+python -m src.agent "Analyze the security of apps/server.ark"
+```
+
+### Specialist Agents
+
+| Agent | Role | When It's Called |
+| --- | --- | --- |
+| `RouterAgent` | Classifies the task and picks the right specialist | Always (first step) |
+| `CoderAgent` | Writes, modifies, and refactors code | Code generation tasks |
+| `ResearcherAgent` | Analyzes codebases, gathers context | Research/analysis tasks |
+| `ReviewerAgent` | Audits code for bugs, security, and style | Post-execution review |
+
+### Swarm Mode
+
+The `SwarmOrchestrator` coordinates multiple agents:
+
+```python
+from src.swarm import SwarmOrchestrator
+
+swarm = SwarmOrchestrator()
+
+# Router: RouterAgent picks the best specialist
+result = await swarm.execute("Optimize the sort algorithm", strategy="router")
+
+# Broadcast: send to ALL agents, collect all responses
+result = await swarm.execute("Review this function", strategy="broadcast")
+
+# Consensus: multiple agents answer independently
+result = await swarm.execute("Is this code secure?", strategy="consensus")
+
+# Pipeline: chain agents sequentially
+result = await swarm.execute_pipeline("Build a REST API", ["coder", "reviewer"])
+
+# Parallel: run multiple tasks concurrently
+results = await swarm.execute_parallel([
+    "Write unit tests", "Refactor queries", "Update docs"
+])
+```
+
+### Configuring LLM Backends
+
+The framework is backend-agnostic. It tries backends in order: Gemini → OpenAI → Ollama.
+
+**Google Gemini:**
+
+```bash
+export ARK_GOOGLE_API_KEY="your-api-key"
+```
+
+**OpenAI / Compatible:**
+
+```bash
+export ARK_OPENAI_BASE_URL="https://api.openai.com/v1"
+export ARK_OPENAI_API_KEY="sk-..."
+export ARK_OPENAI_MODEL="gpt-4o"
+```
+
+**Ollama (Local, Free):**
+
+```bash
+export ARK_OPENAI_BASE_URL="http://localhost:11434/v1"
+export ARK_OPENAI_API_KEY="ollama"
+export ARK_OPENAI_MODEL="llama3"
+```
+
+### MCP Server Integration
+
+The framework includes a full [Model Context Protocol](https://modelcontextprotocol.io/) client supporting Stdio, HTTP, and SSE transports.
+
+Create `mcp_servers.json`:
+
+```json
+{
+  "servers": [
+    {
+      "name": "filesystem",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"],
+      "transport": "stdio",
+      "enabled": true
+    }
+  ]
+}
+```
+
+Enable MCP:
+
+```bash
+export ARK_MCP_ENABLED=true
+export ARK_MCP_SERVERS_CONFIG="mcp_servers.json"
+python -m src.agent "List all Python files in the project"
+```
+
+### Sandbox Security
+
+All agent-generated code runs in a sandbox:
+
+**Local Sandbox** (default):
+
+* AST-level static analysis before execution
+* Blocks dangerous imports (`os`, `sys`, `subprocess`, `socket`, etc.)
+* Blocks dangerous functions (`exec`, `eval`, `compile`, `__import__`)
+* Blocks dangerous attributes (`__subclasses__`, `__globals__`, `__code__`)
+* Supports Python, Ark, JavaScript, and Rust
+
+**Docker Sandbox** (for untrusted code):
+
+* Full container isolation, network-disabled by default
+* CPU/memory/disk resource limits
+
+```bash
+export ARK_SANDBOX_TYPE="auto"    # auto, local, or docker
+```
+
+### Encrypted Agent Memory
+
+```python
+from src.memory import MemoryManager, VectorMemory
+
+mem = MemoryManager()  # Uses ARK_MEMORY_KEY for encryption
+mem.store("api_response", {"status": 200})
+result = mem.recall("api_response")
+matches = mem.search("api")  # Fuzzy search
+
+# Vector similarity search (TF-IDF)
+vmem = VectorMemory()
+vmem.store_embedding("doc1", "How to configure the sandbox")
+results = vmem.search_similar("sandbox setup", top_k=3)
+```
+
+### Agent Framework Environment Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ARK_MODEL` | `gpt-4` | Default LLM model |
+| `ARK_TEMPERATURE` | `0.7` | LLM temperature |
+| `ARK_MAX_TOKENS` | `4096` | Max output tokens |
+| `ARK_SANDBOX_TYPE` | `auto` | Sandbox: `auto`, `docker`, `local` |
+| `ARK_MEMORY_KEY` | (none) | Master encryption key for agent memory |
+| `ARK_MCP_ENABLED` | `false` | Enable MCP integration |
+| `ARK_MCP_SERVERS_CONFIG` | `mcp_servers.json` | Path to MCP server config |
+| `ARK_DEBUG` | `false` | Enable debug logging |
+
+---
+
+## 19. Error Handling
 
 Use the `result` standard library module for structured error handling:
 
@@ -557,7 +721,7 @@ assert(x > 0)  // Crashes with error if false
 
 ---
 
-## 19. Configuration & Security
+## 20. Configuration & Security
 
 Ark uses environment variables for security controls. **By default, the runtime is sandboxed** — no network, no file writes, no shell access.
 
@@ -587,7 +751,7 @@ ARK_CAPABILITIES=* ALLOW_DANGEROUS_LOCAL_EXECUTION=true python meta/ark.py run m
 
 ---
 
-## 20. Running Programs
+## 21. Running Programs
 
 ### Execute a Script
 
@@ -619,7 +783,7 @@ python meta/gauntlet.py
 
 ---
 
-## 21. REPL
+## 22. REPL
 
 Launch the interactive Read-Eval-Print Loop:
 
@@ -639,7 +803,7 @@ Hello from REPL!
 
 ---
 
-## 22. FAQ
+## 23. FAQ
 
 **Q: Why does Ark use both Rust and Python?**
 Python provides a flexible bootstrap compiler ("The Brain"), while Rust provides a secure, high-performance execution engine ("The Engine"). This dual-runtime lets us iterate fast without sacrificing production safety.
