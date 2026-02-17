@@ -96,9 +96,9 @@ mod tests {
 
     #[test]
     fn test_ark_eval_string() {
-        // Return a literal string: "Hello FFI"
-        // JSON structure: {"Statement": {"Return": {"Literal": "Hello FFI"}}}
-        let json = r#"{"Statement": {"Return": {"Literal": "Hello FFI"}}}"#;
+        // Evaluate a literal string: "Hello FFI" as a top-level expression (implicit return)
+        // JSON structure: {"Statement": {"Expression": {"Literal": "Hello FFI"}}}
+        let json = r#"{"Statement": {"Expression": {"Literal": "Hello FFI"}}}"#;
         let c_json = CString::new(json).unwrap();
 
         let result_ptr = ark_eval_string(c_json.as_ptr());
@@ -107,8 +107,27 @@ mod tests {
         let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
         let result_str = result_cstr.to_str().unwrap();
 
-        // VM correctly returns the value for top-level returns.
+        // VM correctly returns the evaluated value.
         assert_eq!(result_str, "String(\"Hello FFI\")");
+
+        ark_free_string(result_ptr);
+    }
+
+    #[test]
+    fn test_ark_eval_expression() {
+        // Evaluate an expression: 10 + 20 -> 30
+        // JSON structure: {"Statement": {"Expression": {"Call": {"function_hash": "add", "args": [{"Integer": 10}, {"Integer": 20}]}}}}
+        let json = r#"{"Statement": {"Expression": {"Call": {"function_hash": "add", "args": [{"Integer": 10}, {"Integer": 20}]}}}}"#;
+        let c_json = CString::new(json).unwrap();
+
+        let result_ptr = ark_eval_string(c_json.as_ptr());
+        assert!(!result_ptr.is_null());
+
+        let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
+        let result_str = result_cstr.to_str().unwrap();
+
+        // VM should return the result of the expression
+        assert_eq!(result_str, "Integer(30)");
 
         ark_free_string(result_ptr);
     }

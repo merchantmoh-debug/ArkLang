@@ -394,35 +394,45 @@ impl Compiler {
     }
 
     pub fn compile_safe(&mut self, node: &ArkNode) -> Result<(), CompileError> {
-        self.visit(node)
+        self.visit(node, true)
     }
 
-    fn visit(&mut self, node: &ArkNode) -> Result<(), CompileError> {
+    fn visit(&mut self, node: &ArkNode, preserve: bool) -> Result<(), CompileError> {
         match node {
-            ArkNode::Statement(s) => self.visit_stmt(s),
+            ArkNode::Statement(s) => self.visit_stmt(s, preserve),
             ArkNode::Expression(e) => {
                 self.visit_expr(e)?;
+                if !preserve {
+                    self.chunk.write(OpCode::Pop);
+                }
                 Ok(())
             }
             ArkNode::Function(f) => {
                 // Compile function definition
-                self.visit_stmt(&Statement::Function(f.clone()))
+                self.visit_stmt(&Statement::Function(f.clone()), preserve)
             }
             _ => Ok(()),
         }
     }
 
-    fn visit_stmt(&mut self, stmt: &Statement) -> Result<(), CompileError> {
+    fn visit_stmt(&mut self, stmt: &Statement, preserve: bool) -> Result<(), CompileError> {
         match stmt {
             Statement::Expression(e) => {
                 self.visit_expr(e)?;
-                self.chunk.write(OpCode::Pop);
+                if !preserve {
+                    self.chunk.write(OpCode::Pop);
+                }
                 Ok(())
             }
             Statement::Block(stmts) => {
                 self.scopes.push(HashSet::new());
-                for s in stmts {
-                    self.visit_stmt(s)?;
+                let len = stmts.len();
+                if len == 0 && preserve {
+                    self.chunk.write(OpCode::Push(Value::Unit));
+                }
+                for (i, s) in stmts.iter().enumerate() {
+                    let is_last = i == len - 1;
+                    self.visit_stmt(s, preserve && is_last)?;
                 }
                 self.scopes.pop();
                 Ok(())
@@ -457,9 +467,8 @@ impl Compiler {
                     }
                 }
 
-                func_compiler.visit(&func_def.body.content)?;
+                func_compiler.visit(&func_def.body.content, true)?;
 
-                func_compiler.chunk.write(OpCode::Push(Value::Unit));
                 func_compiler.chunk.write(OpCode::Ret);
 
                 let compiled_chunk = func_compiler.chunk;
@@ -486,13 +495,19 @@ impl Compiler {
                 self.chunk.write(OpCode::JmpIfFalse(0));
 
                 self.scopes.push(HashSet::new());
-                for s in then_block {
-                    self.visit_stmt(s)?;
+                let then_len = then_block.len();
+                if then_len == 0 && preserve {
+                    self.chunk.write(OpCode::Push(Value::Unit));
+                }
+                for (i, s) in then_block.iter().enumerate() {
+                    let is_last = i == then_len - 1;
+                    self.visit_stmt(s, preserve && is_last)?;
                 }
                 self.scopes.pop();
 
                 let else_jump_idx = self.chunk.code.len();
-                if else_block.is_some() {
+                // Jump over the else block if it exists OR if we are synthesizing one
+                if else_block.is_some() || preserve {
                     self.chunk.write(OpCode::Jmp(0));
                 }
 
@@ -505,11 +520,21 @@ impl Compiler {
 
                 if let Some(stmts) = else_block {
                     self.scopes.push(HashSet::new());
-                    for s in stmts {
-                        self.visit_stmt(s)?;
+                    let else_len = stmts.len();
+                    if else_len == 0 && preserve {
+                        self.chunk.write(OpCode::Push(Value::Unit));
+                    }
+                    for (i, s) in stmts.iter().enumerate() {
+                        let is_last = i == else_len - 1;
+                        self.visit_stmt(s, preserve && is_last)?;
                     }
                     self.scopes.pop();
 
+                    let end_idx = self.chunk.code.len();
+                    self.chunk.code[else_jump_idx] = OpCode::Jmp(end_idx);
+                } else if preserve {
+                    // Implicit else { Unit }
+                    self.chunk.write(OpCode::Push(Value::Unit));
                     let end_idx = self.chunk.code.len();
                     self.chunk.code[else_jump_idx] = OpCode::Jmp(end_idx);
                 }
@@ -523,13 +548,17 @@ impl Compiler {
 
                 self.scopes.push(HashSet::new());
                 for s in body {
-                    self.visit_stmt(s)?;
+                    self.visit_stmt(s, false)?;
                 }
                 self.scopes.pop();
 
                 self.chunk.write(OpCode::Jmp(loop_start_idx));
                 let end_idx = self.chunk.code.len();
                 self.chunk.code[jump_idx] = OpCode::JmpIfFalse(end_idx);
+
+                if preserve {
+                    self.chunk.write(OpCode::Push(Value::Unit));
+                }
                 Ok(())
             }
             Statement::Return(expr) => {
