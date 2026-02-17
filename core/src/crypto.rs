@@ -83,12 +83,12 @@ fn hmac_sha512(key: &[u8], data: &[u8]) -> [u8; 64] {
     }
 
     let mut hasher_inner = Sha512::new();
-    hasher_inner.update(&ipad);
+    hasher_inner.update(ipad);
     hasher_inner.update(data);
     let inner_hash = hasher_inner.finalize();
 
     let mut hasher_outer = Sha512::new();
-    hasher_outer.update(&opad);
+    hasher_outer.update(opad);
     hasher_outer.update(inner_hash);
 
     hasher_outer.finalize().into()
@@ -212,7 +212,7 @@ pub fn verify_signature(msg: &[u8], sig_bytes: &[u8], pubkey_bytes: &[u8]) -> Re
 // SECURE RANDOM
 // ============================================================================
 
-pub fn secure_random_bytes(count: usize) -> Vec<u8> {
+pub fn secure_random_bytes(_count: usize) -> Vec<u8> {
     #[cfg(unix)]
     {
         use std::fs::File;

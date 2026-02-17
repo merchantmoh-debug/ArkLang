@@ -18,9 +18,7 @@
 
 use crate::compiler::Compiler;
 use crate::loader::load_ark_program;
-use crate::runtime::Value as ArkValue;
 use crate::vm::VM;
-use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 
@@ -47,12 +45,14 @@ fn safe_cstring(s: String) -> *mut c_char {
 /// This function is unsafe because it dereferences a raw pointer.
 /// The caller must ensure `json_ptr` is a valid pointer to a null-terminated C string.
 #[no_mangle]
-pub extern "C" fn ark_eval_string(json_ptr: *const c_char) -> *mut c_char {
+/// # Safety
+/// The caller must ensure `json_ptr` is a valid, non-null pointer to a null-terminated C string.
+pub unsafe extern "C" fn ark_eval_string(json_ptr: *const c_char) -> *mut c_char {
     if json_ptr.is_null() {
         return std::ptr::null_mut();
     }
 
-    let c_str = unsafe { CStr::from_ptr(json_ptr) };
+    let c_str = CStr::from_ptr(json_ptr);
     let json_str = match c_str.to_str() {
         Ok(s) => s,
         Err(e) => return safe_cstring(format!("Error: Invalid UTF-8: {}", e)),
@@ -81,11 +81,11 @@ pub extern "C" fn ark_eval_string(json_ptr: *const c_char) -> *mut c_char {
 
 /// Frees a string returned by `ark_eval_string`.
 #[no_mangle]
-pub extern "C" fn ark_free_string(ptr: *mut c_char) {
+/// # Safety
+/// The caller must ensure `ptr` was returned by `ark_eval_string` and has not been freed already.
+pub unsafe extern "C" fn ark_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
-        unsafe {
-            let _ = CString::from_raw(ptr);
-        }
+        let _ = CString::from_raw(ptr);
     }
 }
 
@@ -96,55 +96,47 @@ mod tests {
 
     #[test]
     fn test_ark_eval_string() {
-        // Evaluate a literal string: "Hello FFI" as a top-level expression (implicit return)
-        // JSON structure: {"Statement": {"Expression": {"Literal": "Hello FFI"}}}
         let json = r#"{"Statement": {"Expression": {"Literal": "Hello FFI"}}}"#;
         let c_json = CString::new(json).unwrap();
 
-        let result_ptr = ark_eval_string(c_json.as_ptr());
+        let result_ptr = unsafe { ark_eval_string(c_json.as_ptr()) };
         assert!(!result_ptr.is_null());
 
         let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
         let result_str = result_cstr.to_str().unwrap();
 
-        // VM correctly returns the evaluated value.
         assert_eq!(result_str, "String(\"Hello FFI\")");
 
-        ark_free_string(result_ptr);
+        unsafe { ark_free_string(result_ptr) };
     }
 
     #[test]
     fn test_ark_eval_expression() {
-        // Evaluate an expression: 10 + 20 -> 30
-        // JSON structure: {"Statement": {"Expression": {"Call": {"function_hash": "add", "args": [{"Integer": 10}, {"Integer": 20}]}}}}
         let json = r#"{"Statement": {"Expression": {"Call": {"function_hash": "add", "args": [{"Integer": 10}, {"Integer": 20}]}}}}"#;
         let c_json = CString::new(json).unwrap();
 
-        let result_ptr = ark_eval_string(c_json.as_ptr());
+        let result_ptr = unsafe { ark_eval_string(c_json.as_ptr()) };
         assert!(!result_ptr.is_null());
 
         let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
         let result_str = result_cstr.to_str().unwrap();
 
-        // VM should return the result of the expression
         assert_eq!(result_str, "Integer(30)");
 
-        ark_free_string(result_ptr);
+        unsafe { ark_free_string(result_ptr) };
     }
 
     #[test]
     fn test_safe_cstring_interior_null() {
-        // String with interior null
         let s = String::from("Hello\0World");
         let ptr = safe_cstring(s);
 
         let c_str = unsafe { CStr::from_ptr(ptr) };
         let str_slice = c_str.to_str().unwrap();
 
-        // It should return the safe error message
         assert_eq!(str_slice, "Error: String contained null byte");
 
-        ark_free_string(ptr);
+        unsafe { ark_free_string(ptr) };
     }
 
     // --- FFI Tests (Disabled: Implementation moved/removed) ---
