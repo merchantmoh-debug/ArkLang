@@ -981,19 +981,19 @@ func read_header() {
              // Length 15
              prefix := "Content-Length:"
              let (len_line, _) := sys.len(line)
-             match := true
-             if len_line < 15 { match := false }
+             is_match := true
+             if len_line < 15 { is_match := false }
              else {
                  k := 0
                  while k < 15 {
                      let (c1, _) := sys.str.get(line, k)
                      let (c2, _) := sys.str.get(prefix, k)
-                     if c1 != c2 { match := false }
+                     if c1 != c2 { is_match := false }
                      k := k + 1
                  }
              }
 
-             if match {
+             if is_match {
                  // Extract number
                  j := 15
                  num_str := ""

@@ -1147,12 +1147,10 @@ mod tests {
         let mut checker = LinearChecker::new();
         checker.check_function(&func).unwrap();
 
-        assert!(
-            checker
-                .warnings
-                .iter()
-                .any(|w| w.contains("Unused variable: x"))
-        );
+        assert!(checker
+            .warnings
+            .iter()
+            .any(|w| w.contains("Unused variable: x")));
     }
 
     #[test]
@@ -1172,12 +1170,10 @@ mod tests {
         let mut checker = LinearChecker::new();
         checker.check_function(&func).unwrap();
 
-        assert!(
-            checker
-                .warnings
-                .iter()
-                .any(|w| w.contains("Unreachable code detected"))
-        );
+        assert!(checker
+            .warnings
+            .iter()
+            .any(|w| w.contains("Unreachable code detected")));
     }
 
     #[test]
@@ -1206,11 +1202,9 @@ mod tests {
         let mut checker = LinearChecker::new();
         checker.check_expression(&expr).unwrap();
 
-        assert!(
-            checker
-                .warnings
-                .iter()
-                .any(|w| w.contains("Argument type mismatch"))
-        );
+        assert!(checker
+            .warnings
+            .iter()
+            .any(|w| w.contains("Argument type mismatch")));
     }
 }

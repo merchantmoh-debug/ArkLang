@@ -16,17 +16,17 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
-use wasm_bindgen::prelude::*;
+use crate::checker::LinearChecker;
 use crate::compiler::Compiler;
 use crate::loader::{load_ark_program, LoadError};
 use crate::runtime::Value;
 use crate::vm::VM;
-use crate::checker::LinearChecker;
+use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-use std::panic;
-#[cfg(target_arch = "wasm32")]
 use js_sys::{Array, Object, Reflect};
+#[cfg(target_arch = "wasm32")]
+use std::panic;
 
 /// Initialize panic hook for WASM environment.
 /// This ensures panics are logged to the browser console.
@@ -58,9 +58,7 @@ pub fn ark_eval(source: &str) -> String {
             // One-shot VM: new VM, run, drop.
             match VM::new(chunk, &mast.hash, 0) {
                 Ok(mut vm) => match vm.run() {
-                    Ok(val) => {
-                         value_to_json_string(&val)
-                    },
+                    Ok(val) => value_to_json_string(&val),
                     Err(e) => make_error_json(&format!("Runtime Error: {:?}", e)),
                 },
                 Err(e) => make_error_json(&format!("VM Init Error: {:?}", e)),
@@ -82,24 +80,19 @@ pub fn ark_eval(source: &str) -> String {
 #[wasm_bindgen]
 pub fn ark_parse(source: &str) -> String {
     match load_ark_program(source) {
-        Ok(mast) => {
-             match serde_json::to_string_pretty(&mast.content) {
-                 Ok(s) => s,
-                 Err(e) => make_error_json(&format!("Serialization Error: {}", e)),
-             }
-        }
-        Err(e) => {
-             match e {
-                 LoadError::ParseError(err) => {
-                     serde_json::json!({
-                         "error": format!("{}", err),
-                         "line": err.line(),
-                         "column": err.column()
-                     }).to_string()
-                 }
-                 _ => make_error_json(&format!("{}", e)),
-            }
-        }
+        Ok(mast) => match serde_json::to_string_pretty(&mast.content) {
+            Ok(s) => s,
+            Err(e) => make_error_json(&format!("Serialization Error: {}", e)),
+        },
+        Err(e) => match e {
+            LoadError::ParseError(err) => serde_json::json!({
+                "error": format!("{}", err),
+                "line": err.line(),
+                "column": err.column()
+            })
+            .to_string(),
+            _ => make_error_json(&format!("{}", e)),
+        },
     }
 }
 
@@ -117,11 +110,12 @@ pub fn ark_check(source: &str) -> String {
             match LinearChecker::check(&mast.content) {
                 Ok(_) => "[]".to_string(), // No errors
                 Err(e) => {
-                     let err_obj = serde_json::json!({
-                         "error": format!("{}", e),
-                         "type": "LinearError"
-                     });
-                     serde_json::to_string_pretty(&vec![err_obj]).unwrap_or_else(|_| "[]".to_string())
+                    let err_obj = serde_json::json!({
+                        "error": format!("{}", e),
+                        "type": "LinearError"
+                    });
+                    serde_json::to_string_pretty(&vec![err_obj])
+                        .unwrap_or_else(|_| "[]".to_string())
                 }
             }
         }
@@ -139,9 +133,8 @@ pub fn ark_check(source: &str) -> String {
 #[wasm_bindgen]
 pub fn ark_format(source: &str) -> String {
     match serde_json::from_str::<serde_json::Value>(source) {
-        Ok(v) => {
-            serde_json::to_string_pretty(&v).unwrap_or_else(|e| make_error_json(&format!("Format Error: {}", e)))
-        }
+        Ok(v) => serde_json::to_string_pretty(&v)
+            .unwrap_or_else(|e| make_error_json(&format!("Format Error: {}", e))),
         Err(e) => make_error_json(&format!("JSON Parse Error: {}", e)),
     }
 }
@@ -169,12 +162,13 @@ fn value_to_json(v: &Value) -> serde_json::Value {
         Value::Boolean(b) => serde_json::Value::Bool(*b),
         Value::Integer(i) => serde_json::Value::Number((*i).into()),
         Value::String(s) => serde_json::Value::String(s.clone()),
-        Value::List(l) => {
-             serde_json::Value::Array(l.iter().map(value_to_json).collect())
-        }
+        Value::List(l) => serde_json::Value::Array(l.iter().map(value_to_json).collect()),
         Value::Struct(m) => {
-             let map = m.iter().map(|(k, v)| (k.clone(), value_to_json(v))).collect();
-             serde_json::Value::Object(map)
+            let map = m
+                .iter()
+                .map(|(k, v)| (k.clone(), value_to_json(v)))
+                .collect();
+            serde_json::Value::Object(map)
         }
         _ => serde_json::Value::String(format!("{:?}", v)),
     }
@@ -204,7 +198,7 @@ impl From<Value> for JsValue {
                 }
                 obj.into()
             }
-             _ => JsValue::from_str(&format!("{:?}", val)),
+            _ => JsValue::from_str(&format!("{:?}", val)),
         }
     }
 }

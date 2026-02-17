@@ -26,14 +26,14 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aes_gcm::{
-    Aes256Gcm, Nonce,
     aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
 };
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2;
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
 use sha2::{Digest, Sha512};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -3282,7 +3282,7 @@ fn json_to_value(s: &str) -> Result<Value, String> {
             }
             let key = kv[0].trim();
             let val_str = kv[1..].join(":"); // rejoin in case value contains colons
-            // Strip quotes from key
+                                             // Strip quotes from key
             let key = if key.starts_with('"') && key.ends_with('"') && key.len() >= 2 {
                 &key[1..key.len() - 1]
             } else {
@@ -3662,7 +3662,9 @@ fn intrinsic_math_transpose(args: Vec<Value>) -> Result<Value, RuntimeError> {
 /// math.dot(a, b) → Integer. Element-wise multiply and sum.
 fn intrinsic_math_dot(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 2 {
-        return Err(RuntimeError::InvalidOperation("math.dot expects 2 tensors".into()));
+        return Err(RuntimeError::InvalidOperation(
+            "math.dot expects 2 tensors".into(),
+        ));
     }
     let (a_data, _) = extract_tensor(&args[0])?;
     let (b_data, _) = extract_tensor(&args[1])?;
@@ -3680,7 +3682,9 @@ fn intrinsic_math_dot(args: Vec<Value>) -> Result<Value, RuntimeError> {
 /// math.add(a, b) → Tensor. Element-wise addition.
 fn intrinsic_math_tensor_add(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 2 {
-        return Err(RuntimeError::InvalidOperation("math.add expects 2 tensors".into()));
+        return Err(RuntimeError::InvalidOperation(
+            "math.add expects 2 tensors".into(),
+        ));
     }
     let (a_data, a_shape) = extract_tensor(&args[0])?;
     let (b_data, b_shape) = extract_tensor(&args[1])?;
@@ -3701,7 +3705,9 @@ fn intrinsic_math_tensor_add(args: Vec<Value>) -> Result<Value, RuntimeError> {
 /// math.sub(a, b) → Tensor. Element-wise subtraction.
 fn intrinsic_math_tensor_sub(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 2 {
-        return Err(RuntimeError::InvalidOperation("math.sub expects 2 tensors".into()));
+        return Err(RuntimeError::InvalidOperation(
+            "math.sub expects 2 tensors".into(),
+        ));
     }
     let (a_data, a_shape) = extract_tensor(&args[0])?;
     let (b_data, b_shape) = extract_tensor(&args[1])?;
@@ -3844,7 +3850,7 @@ mod tests {
 
         // sin(PI/2) approx 10000 (PI/2 = 1.5707... * 10000 = 15707)
         let args = vec![Value::Integer(15708)]; // 1.5708
-        // sin(1.5708) is close to 1
+                                                // sin(1.5708) is close to 1
         let res = intrinsic_math_sin(args).unwrap();
         if let Value::Integer(v) = res {
             assert!(v >= 9999 && v <= 10000);
@@ -4174,7 +4180,7 @@ mod tests {
         match res {
             Value::String(s) => {
                 assert_eq!(s.len(), 32); // 16 bytes = 32 hex chars
-                // Verify hex
+                                         // Verify hex
                 assert!(hex::decode(&s).is_ok());
             }
             _ => panic!("Expected String"),

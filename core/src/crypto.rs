@@ -219,7 +219,8 @@ pub fn secure_random_bytes(count: usize) -> Vec<u8> {
         use std::io::Read;
         let mut file = File::open("/dev/urandom").expect("Failed to open /dev/urandom");
         let mut buf = vec![0u8; count];
-        file.read_exact(&mut buf).expect("Failed to read from /dev/urandom");
+        file.read_exact(&mut buf)
+            .expect("Failed to read from /dev/urandom");
         return buf;
     }
 

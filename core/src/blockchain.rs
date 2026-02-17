@@ -1,7 +1,7 @@
+use crate::consensus::{adjust_difficulty, calculate_hash, proof_of_work};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::{Mutex, OnceLock};
-use crate::consensus::{proof_of_work, adjust_difficulty, calculate_hash};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Transaction {
@@ -59,11 +59,7 @@ pub fn merkle_root(transactions: &[Transaction]) -> String {
         let len = hashes.len();
         for i in (0..len).step_by(2) {
             let left = &hashes[i];
-            let right = if i + 1 < len {
-                &hashes[i + 1]
-            } else {
-                left
-            };
+            let right = if i + 1 < len { &hashes[i + 1] } else { left };
             let combined = format!("{}{}", left, right);
             new_hashes.push(format!("{:x}", Sha256::digest(combined.as_bytes())));
         }
@@ -105,7 +101,10 @@ impl Blockchain {
     pub fn new() -> Self {
         let genesis = Block {
             index: 0,
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
             data: vec![],
             previous_hash: "0".to_string(),
             hash: String::new(),
@@ -123,7 +122,7 @@ impl Blockchain {
 
     pub fn add_transaction(&mut self, tx: Transaction) -> bool {
         if tx.sender.is_empty() || tx.receiver.is_empty() {
-             return false;
+            return false;
         }
         self.pending_tx.push(tx);
         true
@@ -167,7 +166,7 @@ impl Blockchain {
 
         for i in 1..self.chain.len() {
             let current = &self.chain[i];
-            let previous = &self.chain[i-1];
+            let previous = &self.chain[i - 1];
 
             current_difficulty = adjust_difficulty(&self.chain[0..i], current_difficulty);
 
@@ -218,7 +217,6 @@ pub fn submit_code(code: &str) -> String {
 
     hash
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -323,7 +321,7 @@ mod tests {
 
     #[test]
     fn test_merkle_root_multiple_tx() {
-         let tx1 = Transaction {
+        let tx1 = Transaction {
             sender: "A".to_string(),
             receiver: "B".to_string(),
             amount: 10,
@@ -340,8 +338,14 @@ mod tests {
 
         let root = merkle_root(&[tx1.clone(), tx2.clone()]);
 
-        let h1 = format!("{:x}", Sha256::digest(serde_json::to_string(&tx1).unwrap().as_bytes()));
-        let h2 = format!("{:x}", Sha256::digest(serde_json::to_string(&tx2).unwrap().as_bytes()));
+        let h1 = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_string(&tx1).unwrap().as_bytes())
+        );
+        let h2 = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_string(&tx2).unwrap().as_bytes())
+        );
         let expected = format!("{:x}", Sha256::digest(format!("{}{}", h1, h2).as_bytes()));
 
         assert_eq!(root, expected);

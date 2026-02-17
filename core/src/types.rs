@@ -31,14 +31,14 @@ pub enum ArkType {
     Float,
     String,
     Boolean,
-    List(Box<ArkType>),       // List<T>
-    Map(Box<ArkType>, Box<ArkType>),  // Map<K, V>
-    Struct(String, Vec<(String, ArkType)>),  // Named struct with fields
-    Function(Vec<ArkType>, Box<ArkType>),    // (params) -> return
-    Optional(Box<ArkType>),   // T?
-    Unit,                     // void/nil
-    Any,                      // dynamic type
-    Unknown,                  // not yet inferred
+    List(Box<ArkType>),                     // List<T>
+    Map(Box<ArkType>, Box<ArkType>),        // Map<K, V>
+    Struct(String, Vec<(String, ArkType)>), // Named struct with fields
+    Function(Vec<ArkType>, Box<ArkType>),   // (params) -> return
+    Optional(Box<ArkType>),                 // T?
+    Unit,                                   // void/nil
+    Any,                                    // dynamic type
+    Unknown,                                // not yet inferred
 }
 
 impl ArkType {
@@ -174,14 +174,20 @@ mod tests {
             "List<Int>"
         );
         assert_eq!(
-            format!("{}", ArkType::Map(Box::new(ArkType::String), Box::new(ArkType::Any))),
+            format!(
+                "{}",
+                ArkType::Map(Box::new(ArkType::String), Box::new(ArkType::Any))
+            ),
             "Map<Str, Any>"
         );
         assert_eq!(
-            format!("{}", ArkType::Function(
-                vec![ArkType::Integer, ArkType::Boolean],
-                Box::new(ArkType::Unit)
-            )),
+            format!(
+                "{}",
+                ArkType::Function(
+                    vec![ArkType::Integer, ArkType::Boolean],
+                    Box::new(ArkType::Unit)
+                )
+            ),
             "(Int, Bool) -> Unit"
         );
     }
