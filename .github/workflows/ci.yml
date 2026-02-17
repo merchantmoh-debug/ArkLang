@@ -179,7 +179,7 @@ jobs:
 
       - name: Generate WASM bindings
         run: |
-          wasm-bindgen core/target/wasm32-unknown-unknown/release/ark_0_zheng.wasm \
+          wasm-bindgen target/wasm32-unknown-unknown/release/ark_0_zheng.wasm \
             --out-dir site/wasm/pkg \
             --target web \
             --no-typescript
