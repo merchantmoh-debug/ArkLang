@@ -18,9 +18,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
