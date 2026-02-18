@@ -25,14 +25,14 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aes_gcm::{
-    Aes256Gcm, Nonce,
     aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
 };
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2;
-use rand::RngCore;
 use rand::rngs::OsRng;
+use rand::RngCore;
 use sha2::{Digest, Sha512};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -767,7 +767,13 @@ fn check_path_security(path: &str, is_write: bool) -> Result<(), RuntimeError> {
             if let Ok(rel_path) = canonical_path.strip_prefix(&cwd) {
                 let rel_str = rel_path.to_string_lossy();
                 let protected_prefixes = ["core", "meta", "src", "web", ".git", "target"];
-                let protected_files = ["Cargo.toml", "Cargo.lock", "Dockerfile", "README.md", "LICENSE"];
+                let protected_files = [
+                    "Cargo.toml",
+                    "Cargo.lock",
+                    "Dockerfile",
+                    "README.md",
+                    "LICENSE",
+                ];
 
                 for prefix in protected_prefixes {
                     if rel_str.starts_with(prefix) {
@@ -777,7 +783,10 @@ fn check_path_security(path: &str, is_write: bool) -> Result<(), RuntimeError> {
                 }
                 for file in protected_files {
                     if rel_str == file {
-                        println!("[Ark:FS] Security Violation: Write to protected file '{}' denied.", file);
+                        println!(
+                            "[Ark:FS] Security Violation: Write to protected file '{}' denied.",
+                            file
+                        );
                         return Err(RuntimeError::NotExecutable);
                     }
                 }
@@ -963,13 +972,14 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
     {
         // Sovereign Security: Command Whitelist
         // Unless ARK_UNSAFE_EXEC=true is strictly set, we block arbitrary execution.
-        let allow_unsafe = std::env::var("ARK_UNSAFE_EXEC").unwrap_or_else(|_| "false".to_string()) == "true";
+        let allow_unsafe =
+            std::env::var("ARK_UNSAFE_EXEC").unwrap_or_else(|_| "false".to_string()) == "true";
 
         if !allow_unsafe {
             // Allowed binaries (safe-ish subset)
             let whitelist = [
-                "ls", "grep", "cat", "echo", "date", "whoami", "clear",
-                "python3", "python", "cargo", "rustc", "node", "git"
+                "ls", "grep", "cat", "echo", "date", "whoami", "clear", "python3", "python",
+                "cargo", "rustc", "node", "git",
             ];
 
             // Check strictly against whitelist (exact match on binary name)
@@ -978,7 +988,10 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
             let prog_name = prog_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             if !whitelist.contains(&prog_name) {
-                println!("[Ark:Exec] Security Violation: Command '{}' is not in the whitelist.", program);
+                println!(
+                    "[Ark:Exec] Security Violation: Command '{}' is not in the whitelist.",
+                    program
+                );
                 println!("[Ark:Exec] To bypass, set ARK_UNSAFE_EXEC=true (NOT RECOMMENDED).");
                 return Err(RuntimeError::NotExecutable);
             }
@@ -3426,7 +3439,7 @@ fn json_to_value(s: &str) -> Result<Value, String> {
             }
             let key = kv[0].trim();
             let val_str = kv[1..].join(":"); // rejoin in case value contains colons
-            // Strip quotes from key
+                                             // Strip quotes from key
             let key = if key.starts_with('"') && key.ends_with('"') && key.len() >= 2 {
                 &key[1..key.len() - 1]
             } else {
@@ -4364,7 +4377,7 @@ mod tests {
 
         // sin(PI/2) approx 10000 (PI/2 = 1.5707... * 10000 = 15707)
         let args = vec![Value::Integer(15708)]; // 1.5708
-        // sin(1.5708) is close to 1
+                                                // sin(1.5708) is close to 1
         let res = intrinsic_math_sin(args).unwrap();
         if let Value::Integer(v) = res {
             assert!(v >= 9999 && v <= 10000);
@@ -4694,7 +4707,7 @@ mod tests {
         match res {
             Value::String(s) => {
                 assert_eq!(s.len(), 32); // 16 bytes = 32 hex chars
-                // Verify hex
+                                         // Verify hex
                 assert!(hex::decode(&s).is_ok());
             }
             _ => panic!("Expected String"),

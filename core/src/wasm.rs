@@ -18,7 +18,7 @@
 
 use crate::checker::LinearChecker;
 use crate::compiler::Compiler;
-use crate::loader::{LoadError, load_ark_program};
+use crate::loader::{load_ark_program, LoadError};
 use crate::parser;
 use crate::runtime::Value;
 use crate::vm::VM;
