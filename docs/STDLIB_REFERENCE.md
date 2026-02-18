@@ -20,30 +20,66 @@ The standard library (`lib/std/`) provides higher-level wrappers around system i
 
 ## Ai
 
-Neural bridge for AI model interaction. Requires a configured AI provider backend.
+Neural bridge for AI model interaction. Import with `sys.vm.source("lib/std/ai.ark")`.
+
+> **Configuration:** Set `GOOGLE_API_KEY` for Gemini or `ARK_LLM_ENDPOINT` for local models (e.g. Ollama). Without either, calls return a graceful fallback message.
 
 ### `ask(prompt)`
 Sends a prompt to the connected AI model and returns the response as a string.
 
 ```ark
-answer := ai.ask("What is the capital of Canada?")
+answer := ask("What is the capital of Canada?")
 print(answer)  // "Ottawa"
 ```
 
-### `chat(message)`
-Sends a message in an ongoing conversational context (maintains history).
-
-```ark
-ai.chat("Remember my name is Alice")
-response := ai.chat("What's my name?")  // "Alice"
-```
-
-### `new(persona)`
+### `Agent.new(persona)`
 Creates a new AI agent with a custom persona/system prompt.
 
 ```ark
-coder := ai.new("You are a Rust expert. Be concise.")
-coder.ask("How do I read a file?")
+coder := Agent.new("You are a Rust expert. Be concise.")
+```
+
+### `Agent.chat(message)`
+Sends a message to the agent. Maintains conversation history.
+
+```ark
+response := coder.chat("How do I read a file?")
+print(response)
+```
+
+### `Agent.reset()`
+Clears the agent's conversation history.
+
+```ark
+coder.reset()
+```
+
+### `Swarm.new(agents)`
+Creates a swarm from a list of agents.
+
+```ark
+swarm := Swarm.new([Agent.new("Architect"), Agent.new("Reviewer")])
+```
+
+### `Swarm.run(task)`
+Broadcasts a task to all agents. Returns a list of responses.
+
+```ark
+results := swarm.run("Design a cache system")
+```
+
+### `Swarm.run_chain(task)`
+Pipeline execution: each agent receives the previous agent's output.
+
+```ark
+final := swarm.run_chain("Build a REST API")
+```
+
+### `pipeline(prompts)`
+Sequential prompt chaining. Each prompt receives the previous answer as context.
+
+```ark
+result := pipeline(["List sorting algorithms", "Pick the best one", "Write it in Ark"])
 ```
 
 ---

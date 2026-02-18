@@ -389,7 +389,7 @@ Ark ships with 12 standard library modules. Import them with `import lib.std.<mo
 | `event` | Event system | `poll`, `push` |
 | `result` | Error handling | `ok`, `err`, `is_ok`, `unwrap` |
 | `audio` | Audio playback | `play`, `stop` |
-| `ai` | AI/LLM access | `ask`, `extract_code` |
+| `ai` | AI/LLM access | `ask`, `Agent.new`, `Agent.chat`, `Swarm.run`, `pipeline` |
 
 > **Full module documentation:** [STDLIB_REFERENCE.md](STDLIB_REFERENCE.md)
 
@@ -514,16 +514,67 @@ tx_hash := sys.chain.submit_tx(signed_payload)
 
 ## 17. AI Integration
 
-Ark has built-in LLM integration:
+Ark has built-in LLM integration via the `sys.ai.*` namespace:
 
 ```ark
-answer := intrinsic_ask_ai("What is the capital of France?")
+// Direct AI call
+answer := sys.ai.ask("What is the capital of France?")
 print(answer)  // "Paris"
 
 code := intrinsic_extract_code(answer)  // Extract code blocks from AI response
 ```
 
-> **Configuration:** Set `ARK_API_KEY` for cloud LLMs or `ARK_LLM_ENDPOINT` for local models (e.g. Ollama).
+### Agent Class
+
+Create persistent agents with personas and conversation history:
+
+```ark
+sys.vm.source("lib/std/ai.ark")
+
+coder := Agent.new("You are a Rust expert. Be concise.")
+response := coder.chat("How do I read a file?")
+print(response)
+
+// Reset conversation history
+coder.reset()
+```
+
+### Swarm Class
+
+Run tasks across multiple agents:
+
+```ark
+sys.vm.source("lib/std/ai.ark")
+
+architect := Agent.new("You are a software architect.")
+reviewer := Agent.new("You are a code reviewer.")
+
+swarm := Swarm.new([architect, reviewer])
+
+// Broadcast: all agents respond independently
+results := swarm.run("Design a cache system")
+
+// Pipeline: each agent feeds into the next
+final := swarm.run_chain("Build a REST API")
+```
+
+### Pipeline Function
+
+Sequential prompt chaining without agents:
+
+```ark
+sys.vm.source("lib/std/ai.ark")
+
+result := pipeline([
+    "List 5 sorting algorithms",
+    "Pick the fastest one and explain why",
+    "Write it in Ark"
+])
+print(result)
+```
+
+> **Configuration:** Set `GOOGLE_API_KEY` for Gemini or `ARK_LLM_ENDPOINT` for local models (e.g. Ollama at `http://localhost:11434/v1/chat/completions`).
+> Without either, AI calls return a graceful fallback message instead of crashing.
 
 ---
 
@@ -553,7 +604,7 @@ python -m src.agent "Analyze the security of apps/server.ark"
 | Agent | Role | When It's Called |
 | --- | --- | --- |
 | `RouterAgent` | Classifies the task and picks the right specialist | Always (first step) |
-| `CoderAgent` | Writes, modifies, and refactors code | Code generation tasks |
+| `CoderAgent` | Writes, modifies, and refactors code — **Ark-aware** with full language reference, `execute_ark()` and `compile_check()` tools | Code generation tasks |
 | `ResearcherAgent` | Analyzes codebases, gathers context | Research/analysis tasks |
 | `ReviewerAgent` | Audits code for bugs, security, and style | Post-execution review |
 

@@ -1,6 +1,6 @@
 # Intrinsic Parity Ledger: Python (`meta/ark_intrinsics.py`) vs Rust (`core/src/intrinsics.rs`)
 
-**Updated:** 2026-02-17 | **Phase:** 79 (100% Parity Achieved)
+**Updated:** 2026-02-18 | **Phase:** 79 (100% Parity Achieved)
 
 > Track every intrinsic. Close the gap. No orphans. **ALL GAPS CLOSED.**
 
@@ -157,6 +157,7 @@
 | `sys.thread.join` | 🆕 |
 | `sys.event.push` | 🆕 |
 | `intrinsic_ask_ai` | ✅ |
+| `sys.ai.ask` | ✅ |
 | `intrinsic_extract_code` | ✅ |
 
 ---
@@ -165,10 +166,10 @@
 
 | Status | Count |
 |---|---|
-| ✅ PARITY | **106** |
+| ✅ PARITY | **107** |
 | 🆕 RUST_ONLY | **2** |
 | ❌ PYTHON_ONLY | **0** |
-| **Total** | **108** |
+| **Total** | **109** |
 
 **Parity Ratio: 100.0%** ✅ — Target achieved at Phase 78.
 

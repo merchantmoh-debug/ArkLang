@@ -75,6 +75,40 @@ while i < 10 {
 }
 ```
 
+## AI Integration
+
+Ark has built-in AI capabilities. Set up your API key:
+
+```bash
+# Google Gemini
+set GOOGLE_API_KEY=your-key-here
+
+# Or local Ollama
+set ARK_LLM_ENDPOINT=http://localhost:11434/v1/chat/completions
+```
+
+Create a file named `hello_ai.ark`:
+
+```ark
+// Direct AI call
+answer := sys.ai.ask("What is 2 + 2?")
+print(answer)
+
+// Agent with persona
+sys.vm.source("lib/std/ai.ark")
+math_tutor := Agent.new("You are a math tutor. Explain step by step.")
+response := math_tutor.chat("Solve x^2 - 5x + 6 = 0")
+print(response)
+```
+
+Run it:
+
+```bash
+python meta/ark.py run hello_ai.ark
+```
+
+> Without an API key, AI calls return a graceful fallback message instead of crashing.
+
 ## Available Commands
 
 | Command | Description |

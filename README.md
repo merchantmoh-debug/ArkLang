@@ -88,6 +88,8 @@ The Agent Framework is a full-stack orchestration layer that lets Ark programs s
 
 ```text
 Task → RouterAgent → [CoderAgent | ResearcherAgent | ReviewerAgent] → Review → Result
+                          ↕ execute_ark / compile_check
+                     Ark Compiler (meta/ark.py, core/)
 ```
 
 | Component | What It Does |
@@ -104,7 +106,7 @@ Task → RouterAgent → [CoderAgent | ResearcherAgent | ReviewerAgent] → Revi
 | Agent | Role |
 | :--- | :--- |
 | `RouterAgent` | Classifies tasks and delegates to the right specialist |
-| `CoderAgent` | Generates, modifies, and refactors code |
+| `CoderAgent` | Generates, modifies, and refactors code — **Ark-aware** with `execute_ark()` and `compile_check()` tools |
 | `ResearcherAgent` | Analyzes codebases and gathers context |
 | `ReviewerAgent` | Audits code changes for bugs, security issues, and style |
 
@@ -127,6 +129,27 @@ python -m src.swarm_demo
 ```
 
 > **Full Agent Framework guide:** [User Manual — Agent Framework](docs/USER_MANUAL.md#17-agent-framework)
+
+### Ark-Native AI (The Neural Bridge)
+
+Ark is the **only programming language with built-in AI intrinsics**. Call AI directly from `.ark` code:
+
+```ark
+// Direct AI call
+answer := sys.ai.ask("What is the capital of France?")
+print(answer)
+
+// Agent with persona
+sys.vm.source("lib/std/ai.ark")
+coder := Agent.new("You are a Rust expert.")
+response := coder.chat("Explain ownership.")
+
+// Multi-agent swarm
+swarm := Swarm.new([coder, Agent.new("You are a code reviewer.")])
+results := swarm.run("Write a sort function")
+```
+
+> **Configuration:** Set `GOOGLE_API_KEY` or `ARK_LLM_ENDPOINT` (e.g., `http://localhost:11434/v1/chat/completions` for Ollama).
 
 ---
 
