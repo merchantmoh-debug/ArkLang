@@ -1,0 +1,139 @@
+// apps/sovereign_shell.ark
+// Interactive Ark Shell v2.0
+
+import lib.std.string
+
+print("🔮 SOVEREIGN SHELL v2.0 (OMEGA-POINT)")
+print("=======================================")
+print("Type '!help' for commands.")
+
+// --- Shell State ---
+running := true
+history := []
+wallet_address := "Not Loaded"
+peers := []
+
+// --- Commands ---
+
+func cmd_help() {
+    print("Commands:")
+    print("  !help         : Show this help")
+    print("  !run <file>   : Run an Ark script")
+    print("  !exec <cmd>   : Run a system command")
+    print("  !chain        : Show blockchain status")
+    print("  !wallet       : Show wallet status")
+    print("  !peers        : Show connected peers")
+    print("  !connect <ip> : Connect to a peer")
+    print("  !clear        : Clear screen")
+    print("  !exit         : Exit shell")
+    print("  ? <prompt>    : Ask AI (Simulated)")
+    print("  <code>        : Execute Ark code directly")
+}
+
+func cmd_chain() {
+    h := sys.chain.height()
+    print("Chain Height: " + sys.json.stringify(h))
+    // Could check sync status if we had it
+}
+
+func cmd_wallet() {
+    print("Wallet Address: " + wallet_address)
+    if wallet_address != "Not Loaded" {
+        bal := sys.chain.get_balance(wallet_address)
+        print("Balance: " + sys.json.stringify(bal) + " ARK")
+    } else {
+        print("Tip: Run '!exec ark run apps/wallet.ark load <file> <pass>' to use wallet CLI.")
+    }
+}
+
+func cmd_peers() {
+    print("Connected Peers: " + sys.json.stringify(len(peers)))
+    i := 0
+    while i < len(peers) {
+        p := peers[i]
+        print("- " + p)
+        i := i + 1
+    }
+}
+
+func cmd_connect(ip) {
+    print("Connecting to " + ip + "...")
+    // Mock connection for shell demo
+    // In real app, we'd use sys.net.socket.connect and keep handle
+    res := sys.net.socket.connect(ip, 8087)
+    if res != false {
+        print("Connected!")
+        sys.list.append(peers, ip + ":8087")
+    } else {
+        print("Connection Failed.")
+    }
+}
+
+// --- Main Loop ---
+
+while running {
+    // Prompt color
+    // ANSI green: \033[32m ... \033[0m
+    // Prompt: ark>
+    sys.io.write("\033[32mark> \033[0m")
+
+    raw_input := sys.io.read_line()
+
+    // Check EOF
+    if raw_input == "" {
+        running := false
+    }
+
+    if running {
+        input := string.trim(raw_input)
+
+        if input != "" {
+            if string.starts_with(input, "!") {
+                // Command parsing
+                parts := string.split(input, " ")
+                cmd := parts[0]
+
+                arg := ""
+                if len(parts) > 1 { arg := parts[1] }
+
+                if cmd == "!exit" {
+                    running := false
+                }
+                if cmd == "!help" { cmd_help() }
+                if cmd == "!clear" { sys.exec("clear") }
+                if cmd == "!exec" {
+                    // Reconstruct args? string.split is simple
+                    // Just execute arg for now
+                    print(sys.exec(arg))
+                }
+                if cmd == "!run" {
+                    print("Running " + arg + "...")
+                    sys.vm.source(arg)
+                }
+                if cmd == "!chain" { cmd_chain() }
+                if cmd == "!wallet" { cmd_wallet() }
+                if cmd == "!peers" { cmd_peers() }
+                if cmd == "!connect" { cmd_connect(arg) }
+
+            } else if string.starts_with(input, "?") {
+                // AI
+                // Remove "? "
+                prompt := string.slice(input, 2, len(input))
+                print("🤖 Thinking...")
+                res := sys.ai.ask(prompt)
+                print("🤖 " + res)
+
+            } else {
+                // Eval
+                // sys.vm.eval(input)
+                // Capture result?
+                res := sys.vm.eval(input)
+                res_str := sys.json.stringify(res)
+                if res_str != "null" {
+                    print("=> " + res_str)
+                }
+            }
+        }
+    }
+}
+print("Shell Terminated.")

@@ -1,0 +1,16 @@
+func main() {
+    print("--- Security Audit: SimiKusoni's Injection ---")
+
+    // 1. Shell Injection Vulnerability
+    // If fixed, this should print a Security Violation message from the runtime, NOT execute functionality.
+    print("Attempting: ls && echo PWNED")
+    res := sys.exec("ls && echo PWNED")
+    print(res)
+    
+    // 2. Python Interpreter Abuse (Should be caught by whitelist or split)
+    print("Attempting: python -c ...")
+    // Note: We expect this to fail or be blocked.
+    // sys.exec("python -c \"print('PWNED_PYTHON')\"")
+}
+
+main()

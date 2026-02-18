@@ -1,601 +1,668 @@
 """
-MCP (Model Context Protocol) Client Manager.
+MCP (Model Context Protocol) Client Implementation.
 
-Provides a unified interface for connecting to multiple MCP servers
-and exposing their tools as callable functions for the Antigravity agent.
-
-This module implements:
-- Multi-server connection management
-- Tool discovery and registration
-- Transparent tool invocation across different transports (stdio, http, sse)
-- Error handling and reconnection logic
+This module provides a pure Python implementation of the MCP client,
+supporting JSON-RPC 2.0 over Stdio, HTTP, and SSE transports.
 """
 
 import asyncio
 import json
+import logging
 import os
-from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+import sys
+import time
+import uuid
+import urllib.request
+import urllib.error
+import urllib.parse
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Union, Callable
 
-from src.config import settings, MCPServerConfig
+from src.config import settings
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("mcp_client")
+
+
+class MCPError(Exception):
+    """Base exception for MCP errors."""
+    def __init__(self, message: str, code: Optional[int] = None, data: Any = None):
+        super().__init__(message)
+        self.code = code
+        self.data = data
+
+
+class MCPConnectionError(MCPError):
+    """Error related to transport connection."""
+    pass
+
+
+class MCPTimeoutError(MCPError):
+    """Request timed out."""
+    pass
+
+
+class MCPToolError(MCPError):
+    """Error during tool execution."""
+    pass
 
 
 @dataclass
-class MCPTool:
-    """Represents a tool discovered from an MCP server."""
+class JSONRPCRequest:
+    method: str
+    params: Optional[Dict[str, Any]] = None
+    id: Optional[Union[str, int]] = None
+    jsonrpc: str = "2.0"
 
-    name: str
-    description: str
-    server_name: str
-    input_schema: Dict[str, Any]
-    original_name: str  # Name as defined in MCP server
-
-    def get_prefixed_name(self, prefix: str = "") -> str:
-        """Get the tool name with optional prefix."""
-        if prefix:
-            return f"{prefix}{self.server_name}_{self.original_name}"
-        return f"{self.server_name}_{self.original_name}"
+    def to_dict(self) -> Dict[str, Any]:
+        data = {"jsonrpc": self.jsonrpc, "method": self.method}
+        if self.params is not None:
+            data["params"] = self.params
+        if self.id is not None:
+            data["id"] = self.id
+        return data
 
 
 @dataclass
-class MCPServerConnection:
-    """Represents an active connection to an MCP server."""
+class JSONRPCResponse:
+    id: Optional[Union[str, int]]
+    result: Any = None
+    error: Optional[Dict[str, Any]] = None
+    jsonrpc: str = "2.0"
 
-    config: MCPServerConfig
-    session: Any = None  # ClientSession when connected
-    read_stream: Any = None
-    write_stream: Any = None
-    tools: List[MCPTool] = field(default_factory=list)
-    connected: bool = False
-    error: Optional[str] = None
-    _client_cm: Any = None  # Client context manager for cleanup
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "JSONRPCResponse":
+        return cls(
+            id=data.get("id"),
+            result=data.get("result"),
+            error=data.get("error"),
+            jsonrpc=data.get("jsonrpc", "2.0"),
+        )
+
+
+class Transport(ABC):
+    """Abstract base class for MCP transports."""
+
+    @abstractmethod
+    async def connect(self) -> None:
+        """Establish connection."""
+        pass
+
+    @abstractmethod
+    async def send(self, request: JSONRPCRequest) -> None:
+        """Send a JSON-RPC request."""
+        pass
+
+    @abstractmethod
+    async def receive(self) -> Optional[JSONRPCResponse]:
+        """Receive a JSON-RPC response."""
+        pass
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Close connection."""
+        pass
+
+    @abstractmethod
+    def is_connected(self) -> bool:
+        """Check if connected."""
+        pass
+
+
+class StdioTransport(Transport):
+    """Transport over standard input/output streams."""
+
+    def __init__(self, command: str, args: List[str], env: Optional[Dict[str, str]] = None):
+        self.command = command
+        self.args = args
+        self.env = env or os.environ.copy()
+        self.process: Optional[asyncio.subprocess.Process] = None
+        self._read_queue: asyncio.Queue = asyncio.Queue()
+        self._reader_task: Optional[asyncio.Task] = None
+
+    async def connect(self) -> None:
+        try:
+            self.process = await asyncio.create_subprocess_exec(
+                self.command,
+                *self.args,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=self.env,
+            )
+            self._reader_task = asyncio.create_task(self._read_loop())
+            logger.info(f"StdioTransport connected to {self.command}")
+        except Exception as e:
+            raise MCPConnectionError(f"Failed to start process {self.command}: {e}")
+
+    async def _read_loop(self):
+        """Reads JSON-RPC messages from stdout."""
+        if not self.process or not self.process.stdout:
+            return
+
+        while True:
+            try:
+                line = await self.process.stdout.readline()
+                if not line:
+                    break
+
+                line_str = line.decode("utf-8").strip()
+                if not line_str:
+                    continue
+
+                if line_str.startswith("Content-Length:"):
+                    try:
+                        length = int(line_str.split(":")[1].strip())
+                        await self.process.stdout.readline()  # Empty line
+                        body = await self.process.stdout.readexactly(length)
+                        message = json.loads(body.decode("utf-8"))
+                        await self._read_queue.put(JSONRPCResponse.from_dict(message))
+                    except Exception as e:
+                        logger.error(f"Error parsing content-length message: {e}")
+                else:
+                    try:
+                        message = json.loads(line_str)
+                        await self._read_queue.put(JSONRPCResponse.from_dict(message))
+                    except json.JSONDecodeError:
+                        pass
+            except Exception as e:
+                logger.error(f"Read loop error: {e}")
+                break
+
+        await self.close()
+
+    async def send(self, request: JSONRPCRequest) -> None:
+        if not self.process or not self.process.stdin:
+            raise MCPConnectionError("Not connected")
+
+        data = json.dumps(request.to_dict()).encode("utf-8")
+        header = f"Content-Length: {len(data)}\r\n\r\n".encode("utf-8")
+
+        try:
+            self.process.stdin.write(header + data)
+            await self.process.stdin.drain()
+        except Exception as e:
+            raise MCPConnectionError(f"Failed to send data: {e}")
+
+    async def receive(self) -> Optional[JSONRPCResponse]:
+        return await self._read_queue.get()
+
+    async def close(self) -> None:
+        if self._reader_task:
+            self._reader_task.cancel()
+        if self.process:
+            try:
+                self.process.terminate()
+                await self.process.wait()
+            except Exception:
+                pass
+            self.process = None
+
+    def is_connected(self) -> bool:
+        return self.process is not None and self.process.returncode is None
+
+
+def _http_request(url: str, method: str = "GET", data: Optional[Dict] = None, timeout: int = 30) -> Dict:
+    """Helper for synchronous HTTP requests using urllib."""
+    req = urllib.request.Request(url, method=method)
+    req.add_header("Content-Type", "application/json")
+
+    body = None
+    if data is not None:
+        body = json.dumps(data).encode("utf-8")
+        req.add_header("Content-Length", str(len(body)))
+
+    try:
+        with urllib.request.urlopen(req, data=body, timeout=timeout) as response:
+            resp_body = response.read().decode("utf-8")
+            if resp_body:
+                return json.loads(resp_body)
+            return {}
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        raise MCPConnectionError(f"HTTP {e.code}: {e.reason} - {error_body}")
+    except Exception as e:
+        raise MCPConnectionError(f"HTTP request failed: {e}")
+
+
+class HttpTransport(Transport):
+    """Transport over HTTP (Post-based)."""
+
+    def __init__(self, url: str, timeout: int = 30):
+        self.url = url
+        self.timeout = timeout
+        self._connected = False
+        self._response_queue = asyncio.Queue()
+
+    async def connect(self) -> None:
+        try:
+            # Simple GET to check connectivity
+            await asyncio.to_thread(_http_request, self.url, method="GET", timeout=5)
+            self._connected = True
+        except Exception as e:
+            # Some endpoints might not support GET, but we assume reachability
+            # If GET fails with 405 Method Not Allowed, it's still reachable.
+            if "HTTP 405" in str(e):
+                self._connected = True
+            else:
+                raise MCPConnectionError(f"Failed to connect to {self.url}: {e}")
+
+    async def send(self, request: JSONRPCRequest) -> None:
+        if not self._connected:
+            raise MCPConnectionError("Not connected")
+
+        try:
+            response_data = await asyncio.to_thread(
+                _http_request,
+                self.url,
+                method="POST",
+                data=request.to_dict(),
+                timeout=self.timeout
+            )
+            await self._response_queue.put(JSONRPCResponse.from_dict(response_data))
+        except Exception as e:
+            raise MCPConnectionError(f"HTTP request failed: {e}")
+
+    async def receive(self) -> Optional[JSONRPCResponse]:
+        return await self._response_queue.get()
+
+    async def close(self) -> None:
+        self._connected = False
+
+    def is_connected(self) -> bool:
+        return self._connected
+
+
+class SseTransport(Transport):
+    """Transport over Server-Sent Events (SSE)."""
+
+    def __init__(self, url: str):
+        self.url = url
+        self._connected = False
+        self._queue = asyncio.Queue()
+        self._task: Optional[asyncio.Task] = None
+        self.post_url = url
+
+    async def connect(self) -> None:
+        self._connected = True
+        self._task = asyncio.create_task(self._read_stream())
+
+    async def _read_stream(self):
+        try:
+            req = urllib.request.Request(self.url)
+            # SSE headers
+            req.add_header("Accept", "text/event-stream")
+
+            # Using urllib in a thread for blocking read
+            def read_sse():
+                with urllib.request.urlopen(req, timeout=None) as response:
+                    for line in response:
+                        if not self._connected:
+                            break
+                        yield line
+
+            iterator = await asyncio.to_thread(read_sse)
+
+            current_event = None
+
+            # We need to iterate the generator in a way that allows yielding control
+            # but read_sse is a generator running in a thread? No, to_thread runs the function.
+            # Generator cannot be pickled/passed easily from to_thread if it yields?
+            # Actually asyncio.to_thread runs the function and returns result.
+            # If read_sse yields, to_thread returns a generator? No, it waits for function to return.
+            # So I cannot use to_thread(read_sse).
+
+            # I have to implement a loop that reads chunks/lines in a thread.
+
+            while self._connected:
+                # This is inefficient: opening a connection and keeping it open in a thread
+                # blocking the thread pool. But okay for now.
+                # Better: Run the whole reading loop in a thread and use call_soon_threadsafe to put to queue.
+
+                await asyncio.to_thread(self._blocking_read_loop)
+                break
+
+        except Exception as e:
+            logger.error(f"SSE stream error: {e}")
+            self._connected = False
+
+    def _blocking_read_loop(self):
+        try:
+            req = urllib.request.Request(self.url)
+            req.add_header("Accept", "text/event-stream")
+
+            with urllib.request.urlopen(req, timeout=None) as response:
+                current_event = None
+                for line in response:
+                    if not self._connected:
+                        break
+
+                    decoded_line = line.decode('utf-8').strip()
+                    if decoded_line.startswith('event: '):
+                        current_event = decoded_line[7:]
+                    elif decoded_line.startswith('data: '):
+                        data = decoded_line[6:]
+                        if current_event == 'endpoint':
+                            self.post_url = data.strip()
+                            if not self.post_url.startswith('http'):
+                                self.post_url = urllib.parse.urljoin(self.url, self.post_url)
+                            logger.info(f"SSE Transport: Post endpoint updated to {self.post_url}")
+                        else:
+                            try:
+                                message = json.loads(data)
+                                # Put to async queue from thread
+                                asyncio.run_coroutine_threadsafe(
+                                    self._queue.put(JSONRPCResponse.from_dict(message)),
+                                    asyncio.get_event_loop()
+                                )
+                            except json.JSONDecodeError:
+                                pass
+                        current_event = None
+        except Exception as e:
+             logger.error(f"Blocking read loop error: {e}")
+
+    async def send(self, request: JSONRPCRequest) -> None:
+        target_url = getattr(self, 'post_url', self.url)
+        try:
+            await asyncio.to_thread(
+                _http_request,
+                target_url,
+                method="POST",
+                data=request.to_dict()
+            )
+        except Exception as e:
+            raise MCPConnectionError(f"Failed to send to SSE endpoint {target_url}: {e}")
+
+    async def receive(self) -> Optional[JSONRPCResponse]:
+        return await self._queue.get()
+
+    async def close(self) -> None:
+        self._connected = False
+        if self._task:
+            self._task.cancel()
+
+    def is_connected(self) -> bool:
+        return self._connected
+
+
+class MCPClient:
+    """
+    Client for Model Context Protocol.
+    """
+
+    def __init__(self, transport: Transport):
+        self.transport = transport
+        self._request_id = 0
+        self._pending_requests: Dict[Union[str, int], asyncio.Future] = {}
+        self._notification_handlers: Dict[str, Callable] = {}
+        self._listen_task: Optional[asyncio.Task] = None
+        self.capabilities: Dict[str, Any] = {}
+        self.server_capabilities: Dict[str, Any] = {}
+
+    async def connect(self):
+        """Connect to the server and start listening, with retry logic."""
+        retries = 3
+        backoff = 1.0
+
+        for attempt in range(retries):
+            try:
+                await self.transport.connect()
+                self._listen_task = asyncio.create_task(self._listen_loop())
+                await self.initialize()
+                # Start health check
+                asyncio.create_task(self._health_check_loop())
+                return
+            except Exception as e:
+                logger.warning(f"Connection attempt {attempt+1}/{retries} failed: {e}")
+
+                # Cleanup potential zombie resources
+                if self._listen_task:
+                    self._listen_task.cancel()
+                    self._listen_task = None
+
+                try:
+                    await self.transport.close()
+                except Exception as close_error:
+                    logger.warning(f"Error closing transport during cleanup: {close_error}")
+
+                if attempt < retries - 1:
+                    await asyncio.sleep(backoff)
+                    backoff *= 2
+                else:
+                    logger.error("All connection attempts failed")
+                    raise MCPConnectionError(f"Failed to connect after {retries} attempts: {e}")
+
+    async def _health_check_loop(self):
+        """Periodic health check."""
+        while self.transport.is_connected():
+            try:
+                # Use a lightweight request like listing roots or tools to verify connectivity
+                # Standard MCP might not have a dedicated ping, but list_roots is often fast.
+                await self.list_roots()
+            except Exception as e:
+                logger.warning(f"Health check failed: {e}")
+                # If health check fails, we might want to trigger reconnect, but for now just log.
+                # Transport closure should be handled by _listen_loop or read failure.
+            await asyncio.sleep(60) # Ping every 60s
+
+    async def list_roots(self) -> List[Dict[str, Any]]:
+        """List roots (filesystem roots)."""
+        # This is part of MCP spec but not implemented in my previous draft
+        try:
+             result = await self.send_request("roots/list")
+             return result.get("roots", [])
+        except Exception:
+             return []
+
+    async def _listen_loop(self):
+        """Listen for incoming messages."""
+        while self.transport.is_connected():
+            try:
+                response = await self.transport.receive()
+                if not response:
+                    continue
+
+                if response.id is not None:
+                    # Response to a request
+                    if response.id in self._pending_requests:
+                        future = self._pending_requests.pop(response.id)
+                        if not future.done():
+                            if response.error:
+                                future.set_exception(MCPError(
+                                    response.error.get("message", "Unknown error"),
+                                    response.error.get("code"),
+                                    response.error.get("data")
+                                ))
+                            else:
+                                future.set_result(response.result)
+                else:
+                    # Notification (no ID)
+                    if response.method:
+                         handler = self._notification_handlers.get(response.method)
+                         if handler:
+                             try:
+                                 if asyncio.iscoroutinefunction(handler):
+                                     await handler(response.params)
+                                 else:
+                                     handler(response.params)
+                             except Exception as e:
+                                 logger.error(f"Error handling notification {response.method}: {e}")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in listen loop: {e}")
+                await asyncio.sleep(0.1)
+
+    async def send_request(self, method: str, params: Optional[Dict[str, Any]] = None) -> Any:
+        """Send a request and wait for response (Public API)."""
+        return await self._send_request(method, params)
+
+    async def send_notification(self, method: str, params: Optional[Dict[str, Any]] = None) -> None:
+        """Send a notification (no response expected)."""
+        request = JSONRPCRequest(method=method, params=params, id=None)
+        await self.transport.send(request)
+
+    async def _send_request(self, method: str, params: Optional[Dict[str, Any]] = None) -> Any:
+        """Send a request and wait for response."""
+        request_id = self._request_id
+        self._request_id += 1
+
+        request = JSONRPCRequest(method=method, params=params, id=request_id)
+        future = asyncio.Future()
+        self._pending_requests[request_id] = future
+
+        await self.transport.send(request)
+
+        # Wait for response with timeout
+        try:
+            return await asyncio.wait_for(future, timeout=settings.MCP_CONNECTION_TIMEOUT)
+        except asyncio.TimeoutError:
+            self._pending_requests.pop(request_id, None)
+            raise MCPTimeoutError(f"Request {method} timed out")
+
+    async def initialize(self) -> Dict[str, Any]:
+        """Initialize the session."""
+        params = {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {
+                "roots": {"listChanged": True},
+                "sampling": {}
+            },
+            "clientInfo": {
+                "name": "ArkMCPClient",
+                "version": "0.1.0"
+            }
+        }
+        result = await self._send_request("initialize", params)
+        self.server_capabilities = result.get("capabilities", {})
+
+        # Send initialized notification
+        await self.transport.send(JSONRPCRequest(method="notifications/initialized"))
+        return result
+
+    async def list_tools(self) -> List[Dict[str, Any]]:
+        """List available tools."""
+        result = await self._send_request("tools/list")
+        return result.get("tools", [])
+
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
+        """Call a tool."""
+        params = {
+            "name": name,
+            "arguments": arguments
+        }
+        result = await self._send_request("tools/call", params)
+        return result
+
+    async def list_resources(self) -> List[Dict[str, Any]]:
+        """List available resources."""
+        result = await self._send_request("resources/list")
+        return result.get("resources", [])
+
+    async def read_resource(self, uri: str) -> str:
+        """Read a resource."""
+        params = {"uri": uri}
+        result = await self._send_request("resources/read", params)
+        # Result typically contains contents list
+        contents = result.get("contents", [])
+        if contents:
+            return contents[0].get("text", "")
+        return ""
+
+    async def shutdown(self):
+        """Shutdown the client."""
+        if self._listen_task:
+            self._listen_task.cancel()
+        await self.transport.close()
 
 
 class MCPClientManager:
-    """
-    Manages connections to multiple MCP servers and provides a unified
-    interface for tool discovery and invocation.
+    """Manages multiple MCP clients."""
 
-    This class handles:
-    - Loading server configurations from JSON file
-    - Establishing and maintaining connections to MCP servers
-    - Discovering available tools from each server
-    - Creating callable wrappers for MCP tools
-    - Error handling and graceful degradation
+    def __init__(self, config_path: str = "mcp_servers.json"):
+        self.config_path = config_path
+        self.clients: Dict[str, MCPClient] = {}
 
-    Example usage:
-        manager = MCPClientManager()
-        await manager.initialize()
-        tools = manager.get_all_tools_as_callables()
-        result = await tools['mcp_github_create_issue'](title="Bug", body="...")
-    """
-
-    def __init__(self, config_path: Optional[str] = None):
-        """
-        Initialize the MCP Client Manager.
-
-        Args:
-            config_path: Path to MCP servers configuration file.
-                        Defaults to settings.MCP_SERVERS_CONFIG
-        """
-        self.config_path = config_path or settings.MCP_SERVERS_CONFIG
-        self.servers: Dict[str, MCPServerConnection] = {}
-        self.tool_prefix = settings.MCP_TOOL_PREFIX
-        self._initialized = False
-        self._lock = asyncio.Lock()
-
-    def _load_server_configs(self) -> List[MCPServerConfig]:
-        """
-        Load MCP server configurations from JSON file.
-
-        Returns:
-            List of MCPServerConfig objects
-        """
-        config_file = Path(self.config_path)
-
-        if not config_file.exists():
-            print(f"   ⚠️ MCP config file not found: {config_file}")
-            return []
-
-        try:
-            with open(config_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            servers = data.get("servers", [])
-            configs = []
-
-            for server_data in servers:
-                if server_data.get("enabled", True):
-                    configs.append(MCPServerConfig(**server_data))
-
-            return configs
-
-        except json.JSONDecodeError as e:
-            print(f"   ❌ Invalid JSON in MCP config: {e}")
-            return []
-        except Exception as e:
-            print(f"   ❌ Error loading MCP config: {e}")
-            return []
-
-    async def initialize(self) -> None:
-        """
-        Initialize connections to all configured MCP servers.
-
-        This method:
-        1. Loads server configurations
-        2. Establishes connections to each server
-        3. Discovers available tools from each server
-        """
-        async with self._lock:
-            if self._initialized:
-                return
-
-            if not settings.MCP_ENABLED:
-                print("   ℹ️ MCP integration is disabled")
-                return
-
-            print("🔌 Initializing MCP Client Manager...")
-
-            configs = self._load_server_configs()
-
-            if not configs:
-                print("   ℹ️ No MCP servers configured")
-                return
-
-            for config in configs:
-                await self._connect_server(config)
-
-            connected_count = sum(1 for s in self.servers.values() if s.connected)
-            total_tools = sum(len(s.tools) for s in self.servers.values())
-
-            print(f"   ✅ Connected to {connected_count}/{len(configs)} MCP servers")
-            print(f"   📦 Discovered {total_tools} MCP tools")
-
-            self._initialized = True
-
-    async def _connect_server(self, config: MCPServerConfig) -> None:
-        """
-        Establish connection to a single MCP server.
-
-        Args:
-            config: Server configuration
-        """
-        connection = MCPServerConnection(config=config)
-
-        try:
-            print(
-                f"   🔗 Connecting to MCP server: {config.name} ({config.transport})..."
-            )
-
-            if config.transport == "stdio":
-                await self._connect_stdio(connection)
-            elif config.transport in ("http", "streamable-http"):
-                await self._connect_http(connection)
-            elif config.transport == "sse":
-                await self._connect_sse(connection)
-            else:
-                raise ValueError(f"Unsupported transport: {config.transport}")
-
-            # Discover tools if connected
-            if connection.connected and connection.session:
-                await self._discover_tools(connection)
-                print(
-                    f"      ✓ {config.name}: {len(connection.tools)} tools discovered"
-                )
-
-        except ImportError as e:
-            connection.error = f"MCP library not installed: {e}"
-            print(
-                f"      ⚠️ {config.name}: MCP library not installed. Run: pip install 'mcp[cli]'"
-            )
-        except Exception as e:
-            connection.error = str(e)
-            print(f"      ⚠️ {config.name}: Connection failed - {e}")
-
-        self.servers[config.name] = connection
-
-    async def _connect_stdio(self, connection: MCPServerConnection) -> None:
-        """Connect to an MCP server using stdio transport."""
-        try:
-            from mcp import ClientSession, StdioServerParameters
-            from mcp.client.stdio import stdio_client
-
-            config = connection.config
-
-            if not config.command:
-                raise ValueError("stdio transport requires 'command' field")
-
-            server_params = StdioServerParameters(
-                command=config.command,
-                args=config.args,
-                env={**os.environ, **config.env},
-            )
-
-            # Create the client context
-            # Note: We need to manage the async context carefully
-            client_cm = stdio_client(server_params)
-            read_stream, write_stream = await client_cm.__aenter__()
-
-            connection.read_stream = read_stream
-            connection.write_stream = write_stream
-            connection._client_cm = client_cm  # Store for cleanup
-
-            # Create session
-            session = ClientSession(read_stream, write_stream)
-            await session.__aenter__()
-            await session.initialize()
-
-            connection.session = session
-            connection.connected = True
-
-        except Exception as e:
-            connection.error = str(e)
-            connection.connected = False
-            raise
-
-    async def _connect_http(self, connection: MCPServerConnection) -> None:
-        """Connect to an MCP server using HTTP/Streamable HTTP transport."""
-        try:
-            from mcp import ClientSession
-            from mcp.client.streamable_http import streamablehttp_client
-
-            config = connection.config
-
-            if not config.url:
-                raise ValueError("http transport requires 'url' field")
-
-            # Create the client context
-            client_cm = streamablehttp_client(config.url)
-            read_stream, write_stream, _ = await client_cm.__aenter__()
-
-            connection.read_stream = read_stream
-            connection.write_stream = write_stream
-            connection._client_cm = client_cm
-
-            # Create session
-            session = ClientSession(read_stream, write_stream)
-            await session.__aenter__()
-            await session.initialize()
-
-            connection.session = session
-            connection.connected = True
-
-        except Exception as e:
-            connection.error = str(e)
-            connection.connected = False
-            raise
-
-    async def _connect_sse(self, connection: MCPServerConnection) -> None:
-        """Connect to an MCP server using SSE transport."""
-        # SSE is similar to HTTP but uses different client
-        # For now, we'll use the same approach as HTTP
-        # The MCP SDK handles the transport details
-        await self._connect_http(connection)
-
-    async def _discover_tools(self, connection: MCPServerConnection) -> None:
-        """
-        Discover available tools from a connected MCP server.
-
-        Args:
-            connection: Active server connection
-        """
-        if not connection.session:
+    async def connect_all(self):
+        """Connect to all configured servers."""
+        if not os.path.exists(self.config_path):
             return
 
         try:
-            tools_response = await connection.session.list_tools()
+            with open(self.config_path, "r") as f:
+                config = json.load(f)
 
-            for tool in tools_response.tools:
-                mcp_tool = MCPTool(
-                    name=tool.name,
-                    description=tool.description or "No description provided",
-                    server_name=connection.config.name,
-                    input_schema=tool.inputSchema
-                    if hasattr(tool, "inputSchema")
-                    else {},
-                    original_name=tool.name,
-                )
-                connection.tools.append(mcp_tool)
+            servers = config.get("servers", [])
+            for server in servers:
+                if not server.get("enabled", True):
+                    continue
+
+                try:
+                    name = server["name"]
+                    transport_type = server.get("transport", "stdio")
+
+                    if transport_type == "stdio":
+                        transport = StdioTransport(
+                            command=server["command"],
+                            args=server.get("args", []),
+                            env=server.get("env")
+                        )
+                    elif transport_type == "http":
+                        transport = HttpTransport(url=server["url"])
+                    elif transport_type == "sse":
+                        transport = SseTransport(url=server["url"])
+                    else:
+                        logger.warning(f"Unknown transport: {transport_type}")
+                        continue
+
+                    client = MCPClient(transport)
+                    await client.connect()
+                    self.clients[name] = client
+                    logger.info(f"Connected to MCP server: {name}")
+
+                except Exception as e:
+                    logger.error(f"Failed to connect to server {server.get('name')}: {e}")
 
         except Exception as e:
-            print(f"      ⚠️ Error discovering tools: {e}")
+            logger.error(f"Error loading MCP config: {e}")
 
-    def get_all_tools(self) -> List[MCPTool]:
-        """
-        Get all discovered tools from all connected servers.
-
-        Returns:
-            List of all MCPTool objects
-        """
+    async def get_all_tools(self) -> List[Dict[str, Any]]:
+        """Get all tools from all connected servers."""
         all_tools = []
-        for connection in self.servers.values():
-            if connection.connected:
-                all_tools.extend(connection.tools)
+        for name, client in self.clients.items():
+            try:
+                tools = await client.list_tools()
+                for tool in tools:
+                    tool["server"] = name
+                    # Namespace the tool name
+                    tool["original_name"] = tool["name"]
+                    tool["name"] = f"{settings.MCP_TOOL_PREFIX}{name}_{tool['name']}"
+                    all_tools.append(tool)
+            except Exception as e:
+                logger.error(f"Error listing tools for {name}: {e}")
         return all_tools
 
-    def get_all_tools_as_callables(self) -> Dict[str, Callable[..., Any]]:
-        """
-        Convert all MCP tools to callable functions.
+    async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
+        """Call a tool by its namespaced name."""
+        prefix = settings.MCP_TOOL_PREFIX
+        if not name.startswith(prefix):
+             return f"Error: Tool name must start with {prefix}"
 
-        Returns:
-            Dictionary mapping tool names to async callable functions
-        """
-        callables = {}
+        remaining = name[len(prefix):]
 
-        for connection in self.servers.values():
-            if not connection.connected:
-                continue
+        for server_name, client in self.clients.items():
+            if remaining.startswith(server_name + "_"):
+                original_name = remaining[len(server_name) + 1:]
+                try:
+                    return await client.call_tool(original_name, arguments)
+                except Exception as e:
+                    return f"Error calling tool: {e}"
 
-            for tool in connection.tools:
-                prefixed_name = tool.get_prefixed_name(self.tool_prefix)
-                callables[prefixed_name] = self._create_tool_wrapper(connection, tool)
+        return f"Error: Tool {name} not found"
 
-        return callables
-
-    def _create_tool_wrapper(
-        self, connection: MCPServerConnection, tool: MCPTool
-    ) -> Callable[..., Any]:
-        """
-        Create a callable wrapper for an MCP tool.
-
-        Args:
-            connection: Server connection containing the tool
-            tool: Tool metadata
-
-        Returns:
-            Async callable function that invokes the MCP tool
-        """
-
-        async def tool_wrapper(**kwargs) -> Any:
-            """
-            Wrapper function that calls the MCP tool.
-
-            This function is dynamically created for each MCP tool and handles:
-            - Argument validation
-            - Tool invocation via MCP protocol
-            - Result extraction and formatting
-            - Error handling
-            """
-            if not connection.connected or not connection.session:
-                return f"Error: MCP server '{connection.config.name}' is not connected"
-
-            try:
-                result = await connection.session.call_tool(
-                    tool.original_name, arguments=kwargs
-                )
-
-                # Extract content from result
-                if hasattr(result, "content") and result.content:
-                    contents = []
-                    for content in result.content:
-                        if hasattr(content, "text"):
-                            contents.append(content.text)
-                        elif hasattr(content, "data"):
-                            contents.append(f"[Binary data: {len(content.data)} bytes]")
-                    return "\n".join(contents) if contents else str(result)
-
-                # Check for structured content
-                if hasattr(result, "structuredContent") and result.structuredContent:
-                    return result.structuredContent
-
-                return str(result)
-
-            except Exception as e:
-                return f"Error calling MCP tool '{tool.original_name}': {e}"
-
-        # Set function metadata for agent tool discovery
-        tool_wrapper.__name__ = tool.get_prefixed_name(self.tool_prefix)
-        tool_wrapper.__doc__ = f"""[MCP:{connection.config.name}] {tool.description}
-
-Server: {connection.config.name}
-Original Name: {tool.original_name}
-Transport: {connection.config.transport}
-
-Input Schema:
-{json.dumps(tool.input_schema, indent=2) if tool.input_schema else "No schema defined"}
-"""
-
-        return tool_wrapper
-
-    def get_tool_descriptions(self) -> str:
-        """
-        Get formatted descriptions of all available MCP tools.
-
-        Returns:
-            Formatted string with tool descriptions for prompt injection
-        """
-        descriptions = []
-
-        for connection in self.servers.values():
-            if not connection.connected:
-                continue
-
-            for tool in connection.tools:
-                prefixed_name = tool.get_prefixed_name(self.tool_prefix)
-                desc = tool.description.strip().replace("\n", " ")
-                descriptions.append(
-                    f"- {prefixed_name} [MCP:{connection.config.name}]: {desc}"
-                )
-
-        return "\n".join(descriptions)
-
-    async def call_tool(
-        self, tool_name: str, arguments: Dict[str, Any]
-    ) -> Tuple[bool, Any]:
-        """
-        Call an MCP tool by its prefixed name.
-
-        Args:
-            tool_name: The prefixed tool name
-            arguments: Tool arguments
-
-        Returns:
-            Tuple of (success, result)
-        """
-        callables = self.get_all_tools_as_callables()
-
-        if tool_name not in callables:
-            return False, f"Tool '{tool_name}' not found"
-
-        try:
-            result = await callables[tool_name](**arguments)
-            return True, result
-        except Exception as e:
-            return False, str(e)
-
-    async def shutdown(self) -> None:
-        """
-        Gracefully close all MCP server connections.
-        """
-        print("🔌 Shutting down MCP connections...")
-
-        for name, connection in self.servers.items():
-            try:
-                if connection.session:
-                    await connection.session.__aexit__(None, None, None)
-                if hasattr(connection, "_client_cm"):
-                    await connection._client_cm.__aexit__(None, None, None)
-                print(f"   ✓ Disconnected from {name}")
-            except Exception as e:
-                print(f"   ⚠️ Error disconnecting from {name}: {e}")
-
-        self.servers.clear()
-        self._initialized = False
-
-    def get_status(self) -> Dict[str, Any]:
-        """
-        Get status information about all MCP servers.
-
-        Returns:
-            Dictionary with status information
-        """
-        return {
-            "enabled": settings.MCP_ENABLED,
-            "initialized": self._initialized,
-            "servers": {
-                name: {
-                    "connected": conn.connected,
-                    "transport": conn.config.transport,
-                    "tools_count": len(conn.tools),
-                    "error": conn.error,
-                }
-                for name, conn in self.servers.items()
-            },
-        }
-
-
-# Synchronous wrapper for use in non-async contexts
-class MCPClientManagerSync:
-    """
-    Synchronous wrapper for MCPClientManager.
-
-    Provides blocking methods for environments that don't support async/await.
-    """
-
-    def __init__(self, config_path: Optional[str] = None):
-        self._async_manager = MCPClientManager(config_path)
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-
-    def _get_loop(self) -> Tuple[asyncio.AbstractEventLoop, bool]:
-        """Get or create an event loop.
-
-        Returns:
-            Tuple of the event loop and whether the current thread already
-            has a running loop.
-        """
-        try:
-            running_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            running_loop = None
-
-        if running_loop is not None:
-            # Avoid calling run_until_complete on a running loop, which raises
-            # RuntimeError. Use a separate loop (via a new thread) instead.
-            return running_loop, True
-
-        if self._loop is None or self._loop.is_closed():
-            self._loop = asyncio.new_event_loop()
-
-        return self._loop, False
-
-    def _run_in_new_thread(self, coro: Awaitable[Any]) -> Any:
-        """Run a coroutine in a new event loop on a dedicated thread.
-
-        Args:
-            coro: Coroutine to execute.
-
-        Returns:
-            Result of the coroutine.
-
-        Raises:
-            Exception: Any exception raised by the coroutine.
-        """
-        import threading
-
-        result: Dict[str, Any] = {}
-
-        def runner() -> None:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                result["value"] = loop.run_until_complete(coro)
-            except Exception as exc:
-                result["error"] = exc
-            finally:
-                loop.close()
-
-        thread = threading.Thread(target=runner, daemon=True)
-        thread.start()
-        thread.join()
-
-        if "error" in result:
-            raise result["error"]
-
-        return result.get("value")
-
-    def initialize(self) -> None:
-        """Initialize MCP connections synchronously."""
-        loop, running = self._get_loop()
-        if running:
-            self._run_in_new_thread(self._async_manager.initialize())
-            return
-        loop.run_until_complete(self._async_manager.initialize())
-
-    def get_all_tools_as_callables(self) -> Dict[str, Callable[..., Any]]:
-        """Get all tools as sync-wrapped callables."""
-        async_callables = self._async_manager.get_all_tools_as_callables()
-        sync_callables = {}
-
-        for name, async_fn in async_callables.items():
-
-            def make_sync_wrapper(afn):
-                def sync_wrapper(**kwargs):
-                    loop, running = self._get_loop()
-                    if running:
-                        return self._run_in_new_thread(afn(**kwargs))
-                    return loop.run_until_complete(afn(**kwargs))
-
-                sync_wrapper.__name__ = afn.__name__
-                sync_wrapper.__doc__ = afn.__doc__
-                return sync_wrapper
-
-            sync_callables[name] = make_sync_wrapper(async_fn)
-
-        return sync_callables
-
-    def get_tool_descriptions(self) -> str:
-        """Get tool descriptions."""
-        return self._async_manager.get_tool_descriptions()
-
-    def shutdown(self) -> None:
-        """Shutdown connections."""
-        loop, running = self._get_loop()
-        if running:
-            self._run_in_new_thread(self._async_manager.shutdown())
-            return
-        loop.run_until_complete(self._async_manager.shutdown())
-
-    def get_status(self) -> Dict[str, Any]:
-        """Get status information."""
-        return self._async_manager.get_status()
+    async def shutdown(self):
+        """Shutdown all clients."""
+        for client in self.clients.values():
+            await client.shutdown()

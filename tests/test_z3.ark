@@ -1,0 +1,25 @@
+// Test Z3 Verification Bridge
+
+// 1. Consistent constraints
+c1 := ["(declare-const x Int)", "(assert (> x 10))"]
+print("Testing Consistent Constraints:", c1)
+res1 := sys.z3.verify(c1)
+print("Result (Expect true):", res1)
+
+if res1 != true {
+    print("FAIL: Expected true for consistent constraints")
+    sys.exit(1)
+}
+
+// 2. Inconsistent constraints
+c2 := ["(declare-const x Int)", "(assert (> x 10))", "(assert (< x 5))"]
+print("Testing Inconsistent Constraints:", c2)
+res2 := sys.z3.verify(c2)
+print("Result (Expect false):", res2)
+
+if res2 != false {
+    print("FAIL: Expected false for inconsistent constraints")
+    sys.exit(1)
+}
+
+print("Z3 Bridge Test Passed")

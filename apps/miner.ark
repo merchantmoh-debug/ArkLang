@@ -1,0 +1,81 @@
+// @capabilities: net, thread
+// apps/miner.ark
+// Solo Miner (PoW)
+
+import lib.std.string
+
+func start_miner(target_ip, target_port) {
+    print("Starting Ark Solo Miner (v112.0)...")
+
+    my_address := "ark_miner_wallet_v1"
+    target_prefix := "00" // Adjust difficulty here (mock)
+
+    print("Target Difficulty Prefix: " + target_prefix)
+    print("Press Ctrl+C to stop.")
+
+    while 1 {
+        height_val_struct := sys.chain.height() 
+        height := height_val_struct
+
+        // Construct Block Candidate
+        tx_count := 5
+        merkle_root := sys.crypto.hash("txs_" + sys.json.stringify(height))
+
+        nonce := 0
+        found := false
+
+        print("--------------------------------------------------")
+        print("Mining Block #" + sys.json.stringify(height))
+        print("Merkle Root: " + merkle_root)
+
+        start_time := sys.time.now()
+
+        while found == false {
+            // Block Header Construction
+            prev_hash := "0000000000000000000000000000000000000000000000000000000000000000"
+
+            header := prev_hash + merkle_root + sys.json.stringify(nonce)
+            block_hash := sys.crypto.hash(header)
+
+            // Check Target
+            if sys.str.starts_with(block_hash, target_prefix) {
+                found := true
+                end_time := sys.time.now()
+                duration := end_time - start_time
+
+                print(">>> BLOCK MINED! <<<")
+                print("Hash:      " + block_hash)
+                print("Nonce:     " + sys.json.stringify(nonce))
+                print("Time:      " + sys.json.stringify(duration) + "ms")
+
+                // Submit Block (Coinbase Tx)
+                coinbase_payload := {
+                    kind: "coinbase",
+                    height: height,
+                    miner: my_address,
+                    hash: block_hash
+                }
+
+                // sys.chain.submit_tx returns "tx_hash_mock"
+                res := sys.chain.submit_tx(sys.json.stringify(coinbase_payload))
+                print("Broadcast: " + res)
+
+                // Simulate network propagation delay
+                sys.time.sleep(2)
+            }
+
+            nonce := nonce + 1
+        }
+    }
+}
+
+// Check execution mode
+// Note: sys.args is a list of strings
+args_len_info := len(sys.args)
+if args_len_info > 0 {
+    script_name := sys.args[0]
+    // If run directly: "apps/miner.ark"
+    if script_name == "apps/miner.ark" {
+         start_miner("127.0.0.1", 3333)
+    }
+}

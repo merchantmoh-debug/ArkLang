@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ark WASM Browser Test Harness</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #0f0; padding: 2rem; }
+    .pass { color: #0f0; }
+    .fail { color: #f00; font-weight: bold; }
+    #results { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>🧪 Ark WASM Test Harness</h1>
+  <div id="results">Loading WASM...</div>
+
+  <!-- Fallback manual loader for local dev (no wasm-bindgen) -->
+  <script src="ark_wasm.js"></script>
+
+  <script type="module">
+    const log = [];
+    let pass = 0;
+    let fail = 0;
+
+    function assert(name, condition, detail) {
+      if (condition) {
+        log.push(`✅ PASS: ${name}`);
+        pass++;
+      } else {
+        log.push(`❌ FAIL: ${name} — ${detail || 'assertion false'}`);
+        fail++;
+      }
+    }
+
+    function finish() {
+      const summary = `\n${'═'.repeat(50)}\n${pass} passed, ${fail} failed\n`;
+      log.push(summary);
+      document.getElementById('results').innerHTML = log.map(l =>
+        l.startsWith('✅') ? `<span class="pass">${l}</span>` :
+        l.startsWith('❌') ? `<span class="fail">${l}</span>` : l
+      ).join('\n');
+      window.__ARK_WASM_TEST_RESULTS = { pass, fail, total: pass + fail };
+      console.log(`ARK_WASM_TESTS: ${pass} passed, ${fail} failed`);
+      if (fail > 0) {
+        console.error('ARK_WASM_TESTS_FAILED');
+      } else {
+        console.log('ARK_WASM_TESTS_PASSED');
+      }
+    }
+
+    try {
+      // Strategy 1: Try wasm-bindgen generated bindings (CI path)
+      let wasmExports = null;
+      let wasmMemory = null;
+      let usedBindgen = false;
+
+      try {
+        const bindgen = await import('./ark_bindings.js');
+        // wasm-bindgen --target web: default export is init(), named exports are wasm functions
+        const initResult = await bindgen.default('ark.wasm');
+        // After init, the module's memory is accessible
+        wasmMemory = bindgen.memory || (initResult && initResult.memory);
+        wasmExports = initResult;
+        usedBindgen = true;
+        assert('WASM module loads (wasm-bindgen)', true);
+      } catch (e) {
+        console.warn('wasm-bindgen bindings not available, trying manual loader:', e.message);
+      }
+
+      // Strategy 2: Fallback to manual ArkWasm loader (local dev)
+      if (!usedBindgen) {
+        if (typeof ArkWasm !== 'undefined') {
+          const result = await ArkWasm.load('ark.wasm');
+          wasmExports = result.instance.exports;
+          wasmMemory = result.instance.exports.memory;
+          assert('WASM module loads (manual)', true);
+        } else {
+          throw new Error('No WASM loader available');
+        }
+      }
+
+      // Test 2: Memory is accessible
+      if (wasmMemory) {
+        assert('Memory is WebAssembly.Memory', wasmMemory instanceof WebAssembly.Memory);
+
+        // Test 3: Memory has reasonable size (at least 1 page = 64KB)
+        const pages = wasmMemory.buffer.byteLength / 65536;
+        assert('Memory >= 1 page', pages >= 1, `pages: ${pages}`);
+
+        // Test 4: Can write to and read from memory
+        const view = new Uint8Array(wasmMemory.buffer);
+        view[0] = 42;
+        assert('Memory read/write', view[0] === 42);
+      } else {
+        assert('Has memory export', false, 'memory not found in exports');
+      }
+
+      // Test 5: Has function exports
+      if (wasmExports) {
+        const keys = Object.keys(wasmExports);
+        assert('Has function exports', keys.length > 0, `total exports: ${keys.length}`);
+      }
+
+      // Test 6: WASM binary size is reasonable
+      const response = await fetch('ark.wasm');
+      const blob = await response.blob();
+      assert('WASM size < 5MB', blob.size < 5 * 1024 * 1024, `size: ${blob.size}`);
+      assert('WASM size > 10KB', blob.size > 10 * 1024, `size: ${blob.size}`);
+
+    } catch (err) {
+      log.push(`❌ FATAL: ${err.message}`);
+      fail++;
+    }
+
+    finish();
+  </script>
+</body>
+</html>

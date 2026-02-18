@@ -1,0 +1,12 @@
+fn fib(n) -> Int {
+    if n < 2 {
+        n
+    } else {
+        fib(n - 1) + fib(n - 2)
+    }
+}
+
+x := fib(10)
+print(x)
+explanation := intrinsic_ask_ai("Explain the significance of the number " + x)
+print(explanation)

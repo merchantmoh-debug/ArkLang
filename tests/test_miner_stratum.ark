@@ -1,0 +1,10 @@
+// @capabilities: thread, net
+// tests/test_miner_stratum.ark
+// Mock Stratum Pool for Verification
+
+func mock_pool_server() {
+    print(">> [MockPool] Feature 'Stratum Mining' not implemented in apps/miner.ark yet.")
+    print(">> [MockPool] Skipping test.")
+}
+
+print(">> [Test] Stratum Mining Test Skipped (Not Implemented)")

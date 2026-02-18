@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ark - The Sovereign Computing Stack</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <style>
+        .secondary-btn {
+            color: var(--text-primary);
+            padding: 12px 24px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin-left: 10px;
+            font-weight: 600;
+        }
+        .secondary-btn:hover {
+            background-color: var(--hover-bg);
+            text-decoration: none;
+        }
+        .cta-container {
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body class="landing-page">
+    <header>
+        <div class="logo">
+            ARK <span>//</span> OMEGA-POINT
+        </div>
+        <nav class="header-controls">
+            <a href="https://github.com/mohamadalzawahreh/ark" target="_blank" class="header-btn">GitHub</a>
+            <a href="../web/index.html" class="header-btn" style="color: var(--text-accent);">Playground</a>
+        </nav>
+    </header>
+
+    <section class="hero">
+        <h1>THE SOVEREIGN<br>COMPUTING STACK</h1>
+        <p>
+            A JIT-compiled language designed to replace the entire SaaS industry with zero-cost, localized, formal verification software.
+        </p>
+        <div class="cta-container">
+            <a href="../web/index.html" class="cta-btn">Try the Playground</a>
+            <a href="https://github.com/mohamadalzawahreh/ark" class="secondary-btn">View Source</a>
+        </div>
+    </section>
+
+    <section class="features-grid">
+        <div class="feature-card">
+            <h3>⚡ Zero-Cost Abstraction</h3>
+            <p>JIT-compiled to native code. Runs at the speed of Rust. No garbage collection pauses. Deterministic performance.</p>
+        </div>
+        <div class="feature-card">
+            <h3>🛡️ Formally Verified</h3>
+            <p>Core primitives are verified against specification. Type system ensures memory safety without borrow checker complexity.</p>
+        </div>
+        <div class="feature-card">
+            <h3>📦 95+ Intrinsics</h3>
+            <p>Batteries included: Networking, Crypto, Graphics, and System calls available out of the box.</p>
+        </div>
+        <div class="feature-card">
+            <h3>🔒 Sandboxed</h3>
+            <p>Capability-based security model. Scripts cannot access network or disk without explicit permission.</p>
+        </div>
+    </section>
+
+    <section class="install-section" id="install" style="text-align: center; padding: 60px 20px;">
+        <h2>Get Started</h2>
+        <div class="code-block" style="background: #111; padding: 20px; border-radius: 8px; display: inline-block; text-align: left; font-family: 'JetBrains Mono', monospace; margin-top: 20px; border: 1px solid var(--border-color);">
+            <div style="margin-bottom: 8px;"><span style="color: #666">$</span> git clone https://github.com/mohamadalzawahreh/ark</div>
+            <div style="margin-bottom: 8px;"><span style="color: #666">$</span> cd ark</div>
+            <div><span style="color: #666">$</span> python meta/ark.py install</div>
+        </div>
+    </section>
+
+    <footer>
+        <div style="text-align: center; padding: 40px; color: #666; font-size: 12px; border-top: 1px solid var(--border-color);">
+            &copy; 2024 Ark Sovereign Systems. Released under MIT License.
+        </div>
+    </footer>
+</body>
+</html>

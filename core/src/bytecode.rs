@@ -1,5 +1,12 @@
 use crate::runtime::Value;
-use serde::{Deserialize, Serialize};
+// Removed unused imports
+
+/// Source location for debugger mapping
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct SourceLocation {
+    pub line: u32,
+    pub col: u32,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OpCode {
@@ -42,12 +49,26 @@ pub enum OpCode {
     // System
     Print,
     Destructure,
+
+    // Types
+    MakeList(usize),
+    MakeStruct(usize),
+    GetField(String),
+    SetField(String),
 }
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
     pub code: Vec<OpCode>,
-    pub constants: Vec<Value>, // Using OpCode::Push(Value) directly for now, optimization later
+    pub constants: Vec<Value>,
+    pub source_map: Vec<SourceLocation>,
+    current_loc: SourceLocation,
+}
+
+impl Default for Chunk {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Chunk {
@@ -55,10 +76,23 @@ impl Chunk {
         Self {
             code: Vec::new(),
             constants: Vec::new(),
+            source_map: Vec::new(),
+            current_loc: SourceLocation::default(),
         }
+    }
+
+    /// Set the current source position for subsequent writes
+    pub fn set_source_pos(&mut self, line: u32, col: u32) {
+        self.current_loc = SourceLocation { line, col };
     }
 
     pub fn write(&mut self, op: OpCode) {
         self.code.push(op);
+        self.source_map.push(self.current_loc.clone());
+    }
+
+    /// Get the source location for a given instruction pointer
+    pub fn get_source_loc(&self, ip: usize) -> Option<&SourceLocation> {
+        self.source_map.get(ip)
     }
 }

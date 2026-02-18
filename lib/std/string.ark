@@ -1,0 +1,227 @@
+// Standard Library: String
+
+// Polyfill for true/false as they might not be in scope depending on runner
+true := 1 == 1
+false := 1 == 0
+
+func string_len(s) {
+    return len(s)
+}
+
+func string_get(s, i) {
+    return get(s, i)
+}
+
+func string_concat(a, b) {
+    return a + b
+}
+
+func string_slice(s, start, end) {
+    res := ""
+    i := start
+    while i < end {
+        res := res + get(s, i)
+        i := i + 1
+    }
+    return res
+}
+
+func string_find(s, sub, start_index) {
+    n := len(s)
+    m := len(sub)
+    if m == 0 { return start_index }
+
+    i := start_index
+    while i <= (n - m) {
+        // Check if substring matches starting at i
+        j := 0
+        is_match := true
+        while j < m {
+            if (get(s, i + j) == get(sub, j)) == false {
+                is_match := false
+                j := m // break inner loop simulation
+            }
+            j := j + 1
+        }
+
+        if is_match { return i }
+        i := i + 1
+    }
+
+    return -1
+}
+
+func string_contains(s, sub) {
+    idx := string_find(s, sub, 0)
+    return (idx == -1) == false
+}
+
+func string_starts_with(s, prefix) {
+    pl := len(prefix)
+    if pl > len(s) { return false }
+
+    // Check match
+    i := 0
+    is_match := true
+    while i < pl {
+        if (get(s, i) == get(prefix, i)) == false {
+            is_match := false
+            i := pl // break
+        }
+        i := i + 1
+    }
+    return is_match
+}
+
+func string_ends_with(s, suffix) {
+    sl := len(suffix)
+    l := len(s)
+    if sl > l { return false }
+
+    start := l - sl
+    i := 0
+    is_match := true
+    while i < sl {
+        if (get(s, start + i) == get(suffix, i)) == false {
+            is_match := false
+            i := sl // break
+        }
+        i := i + 1
+    }
+    return is_match
+}
+
+func string_split(s, delim) {
+    res := []
+    l := len(s)
+    dl := len(delim)
+
+    if dl == 0 {
+        // split by char
+        i := 0
+        while i < l {
+            intrinsic_list_append(res, get(s, i))
+            i := i + 1
+        }
+        return res
+    }
+
+    start := 0
+    idx := string_find(s, delim, start)
+
+    while (idx == -1) == false {
+        // slice from start to idx
+        part := string_slice(s, start, idx)
+        intrinsic_list_append(res, part)
+
+        start := idx + dl
+        idx := string_find(s, delim, start)
+    }
+
+    // Last part
+    part := string_slice(s, start, l)
+    intrinsic_list_append(res, part)
+    return res
+}
+
+func string_join(lst, sep) {
+    res := ""
+    l := len(lst)
+    i := 0
+    while i < l {
+        item := get(lst, i)
+        if i > 0 {
+            res := res + sep
+        }
+        res := res + item
+        i := i + 1
+    }
+    return res
+}
+
+func string_replace(s, old, new) {
+    if len(old) == 0 { return s }
+
+    res := ""
+    start := 0
+    idx := string_find(s, old, start)
+
+    if idx == -1 { return s }
+
+    ol := len(old)
+
+    while (idx == -1) == false {
+        res := res + string_slice(s, start, idx)
+        res := res + new
+        start := idx + ol
+        idx := string_find(s, old, start)
+    }
+
+    res := res + string_slice(s, start, len(s))
+    return res
+}
+
+func string_is_space(c) {
+    if c == " " { return true }
+    if c == "\t" { return true }
+    if c == "\n" { return true }
+    if c == "\r" { return true }
+    return false
+}
+
+func _string_trim_find_start(s) {
+    i := 0
+    l := len(s)
+    found := false
+
+    while i < l {
+        if found == false {
+            c := get(s, i)
+            if string_is_space(c) == false {
+                return i
+            }
+        }
+        i := i + 1
+    }
+    return l
+}
+
+func _string_trim_find_end(s) {
+    l := len(s)
+    i := l - 1
+    found := false
+
+    while i >= 0 {
+        if found == false {
+            c := get(s, i)
+            if string_is_space(c) == false {
+                return i + 1
+            }
+        }
+        i := i - 1
+    }
+    return 0
+}
+
+func string_trim(s) {
+    start := _string_trim_find_start(s)
+    end := _string_trim_find_end(s)
+
+    if start >= end { return "" }
+    return string_slice(s, start, end)
+}
+
+string := {
+    len: string_len,
+    get: string_get,
+    concat: string_concat,
+    slice: string_slice,
+    find: string_find,
+    contains: string_contains,
+    starts_with: string_starts_with,
+    ends_with: string_ends_with,
+    split: string_split,
+    join: string_join,
+    replace: string_replace,
+    trim: string_trim
+}

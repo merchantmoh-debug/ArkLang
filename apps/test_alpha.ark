@@ -7,10 +7,10 @@ func main() {
     c := "s"
     res := is_alpha(c)
     print("is_alpha('s') = " + res)
-    
+
     print("Checking 's' >= 'a': " + ("s" >= "a"))
     print("Checking 's' <= 'z': " + ("s" <= "z"))
-    
+
     c2 := "1"
     print("is_alpha('1') = " + is_alpha(c2))
 }

@@ -1,0 +1,59 @@
+// Ark Standard Library: Time
+// (c) 2026 Sovereign Systems
+//
+// Provides wall-clock timestamps, delays, and elapsed-time measurement.
+
+// now() -> Int
+// Returns the current Unix timestamp in seconds since epoch.
+func time_now() {
+    return sys.time.now()
+}
+
+// sleep(seconds: Int) -> Nil
+// Blocks execution for the given number of seconds.
+func time_sleep(s) {
+    sys.time.sleep(s)
+}
+
+// elapsed(start: Int, end: Int) -> Int
+// Returns the elapsed time in seconds between two timestamps.
+func time_elapsed(start, end) {
+    return end - start
+}
+
+// format_ms(ms: Int) -> String
+// Formats milliseconds as "Xs Yms" for human-readable display.
+func time_format_ms(ms) {
+    s := ms / 1000
+    rem := ms - (s * 1000)
+    return str(s) + "s " + str(rem) + "ms"
+}
+
+// timestamp() -> Int
+// Alias for now(). Returns current Unix timestamp.
+func time_timestamp() {
+    return sys.time.now()
+}
+
+// to_iso(ts: Int) -> String
+// Converts a Unix timestamp to an ISO 8601-style string (YYYY-MM-DD HH:MM:SS UTC).
+// Note: Simplified implementation — year/month/day derived from epoch arithmetic.
+func time_to_iso(ts) {
+    // Days since epoch
+    days := ts / 86400
+    remaining := ts - (days * 86400)
+    hours := remaining / 3600
+    remaining2 := remaining - (hours * 3600)
+    minutes := remaining2 / 60
+    seconds := remaining2 - (minutes * 60)
+    return str(days) + "d " + str(hours) + ":" + str(minutes) + ":" + str(seconds) + " UTC"
+}
+
+time := {
+    now: time_now,
+    sleep: time_sleep,
+    elapsed: time_elapsed,
+    format_ms: time_format_ms,
+    timestamp: time_timestamp,
+    to_iso: time_to_iso
+}

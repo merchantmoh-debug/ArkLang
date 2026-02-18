@@ -1,98 +1,398 @@
-const WASM_PATH = '../target/wasm32-unknown-unknown/release/ark_0_zheng.wasm';
+import {EditorView, basicSetup} from "codemirror"
+import {keymap} from "@codemirror/view"
+import {Compartment} from "@codemirror/state"
+import {defaultKeymap, indentWithTab} from "@codemirror/commands"
+import {StreamLanguage} from "@codemirror/language"
+import {oneDark} from "@codemirror/theme-one-dark"
 
-let wasmExports = null;
-let wasmMemory = null;
+// --- WASM Module ---
+let wasmModule = null;
+let wasmReady = false;
 
-async function init() {
-    const outputDiv = document.getElementById('output');
-    const statusDot = document.getElementById('wasm-status');
-
-    outputDiv.innerText = "[SYSTEM] Boot Sequence Initiated...\n";
-    
+async function initWasm() {
     try {
-        const response = await fetch(WASM_PATH);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const bytes = await response.arrayBuffer();
-        const { instance } = await WebAssembly.instantiate(bytes, { env: {} });
-
-        wasmExports = instance.exports;
-        wasmMemory = wasmExports.memory;
-
-        statusDot.classList.add('active');
-        logSystem("WASM Module Loaded.");
-        logSystem("Ark-0 Runtime: ONLINE.");
-        logSystem("Virtual Nervous System: ACTIVE.");
-        
+        // Try to load the WASM module (built with wasm-pack)
+        const wasm = await import('../core/pkg/ark_0_zheng.js');
+        await wasm.default(); // Initialize WASM
+        wasmModule = wasm;
+        wasmReady = true;
+        logToConsole("WASM Runtime loaded — client-side execution enabled.", "success");
     } catch (e) {
-        statusDot.classList.add('error');
-        logError(`Failed to load WASM: ${e}`);
+        console.warn("WASM module not available, falling back to server-side execution:", e);
+        logToConsole("WASM not available — using server-side execution.", "dim");
     }
 }
 
-function logSystem(msg) {
-    const out = document.getElementById('output');
-    out.innerText += `[SYS] ${msg}\n`;
-    out.scrollTop = out.scrollHeight;
-}
+// --- Ark Language Definition ---
+const arkKeywords = new Set([
+    "let", "mut", "func", "if", "else", "while", "for", "return",
+    "import", "struct", "match", "true", "false", "nil", "async", "await"
+]);
 
-function logError(msg) {
-    const out = document.getElementById('output');
-    out.innerText += `[ERR] ${msg}\n`;
-    out.scrollTop = out.scrollHeight;
-}
+const arkTypes = new Set([
+    "Int", "Float", "String", "Bool", "List", "Dict", "Any", "void"
+]);
 
-function runArk() {
-    if (!wasmExports) {
-        logError("Runtime not ready.");
-        return;
-    }
+const arkLanguage = StreamLanguage.define({
+    token(stream) {
+        if (stream.eatSpace()) return null;
 
-    const inputJson = document.getElementById('input').value;
-    const outputDiv = document.getElementById('output');
+        // Comments
+        if (stream.match("//")) {
+            stream.skipToEnd();
+            return "comment";
+        }
 
-    outputDiv.innerText += `\n> EXECUTE_VECTOR [LEN: ${inputJson.length}]\n`;
+        // Strings
+        if (stream.match('"')) {
+            while (!stream.eol()) {
+                if (stream.next() == '"' && stream.string[stream.pos-2] != '\\') break;
+            }
+            return "string";
+        }
 
-    try {
-        const ptr = strToPtr(inputJson);
-        const len = new TextEncoder().encode(inputJson).length;
+        // Numbers
+        if (stream.match(/^\d+(\.\d+)?/)) return "number";
 
-        const resPtr = wasmExports.ark_eval(ptr, len);
-        const response = readResponse(resPtr);
+        // Keywords & Identifiers
+        if (stream.match(/^[a-zA-Z_][a-zA-Z0-9_]*/)) {
+            const word = stream.current();
+            if (arkKeywords.has(word)) return "keyword";
+            if (arkTypes.has(word)) return "typeName";
+            if (stream.peek() === '(') return "functionName";
+            return "variableName";
+        }
 
-        outputDiv.innerText += `${response}\n`;
-        outputDiv.innerText += `[OIS] Transaction Complete.\n`;
+        // Operators
+        if (stream.match(/^[\+\-\*\/=<>!&|]+/)) return "operator";
 
-    } catch (e) {
-        logError(`Execution Fault: ${e}`);
-    }
-    outputDiv.scrollTop = outputDiv.scrollHeight;
-}
+        // Brackets
+        if (stream.match(/^[\{\}\(\)\[\]]/)) return "punctuation";
 
-function strToPtr(str) {
-    const encoder = new TextEncoder();
-    const bytes = encoder.encode(str);
-    const ptr = wasmExports.ark_alloc(bytes.length);
-    const buffer = new Uint8Array(wasmMemory.buffer, ptr, bytes.length);
-    buffer.set(bytes);
-    return ptr;
-}
-
-function readResponse(ptr) {
-    const view = new DataView(wasmMemory.buffer);
-    const len = view.getUint32(ptr, true);
-    const contentOffset = ptr + 4;
-    const decoder = new TextDecoder();
-    const bytes = new Uint8Array(wasmMemory.buffer, contentOffset, len);
-    const str = decoder.decode(bytes);
-    wasmExports.ark_dealloc(ptr, len + 4);
-    return str;
-}
-
-// Ctrl+Enter to Run
-document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        runArk();
+        stream.next();
+        return null;
     }
 });
 
-window.addEventListener('load', init);
+// --- Examples ---
+const EXAMPLES = {
+    "Hello World": `// Hello World in Ark
+print("Hello, Ark Sovereign World!")`,
+    "Factorial": `// Recursive factorial
+func factorial(n) {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+result := factorial(10)
+print(result)`,
+    "Fibonacci": `// Fibonacci sequence
+func fib(n) {
+    if n <= 1 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+i := 0
+while i < 10 {
+    print(fib(i))
+    i += 1
+}`,
+    "Pipe Operator": `// Functional pipe operator
+func double(x) { return x * 2 }
+func add_one(x) { return x + 1 }
+
+result := 5 |> double |> add_one
+print(result)`,
+    "Match Expression": `// Pattern matching
+value := 42
+match value {
+    1 => print("one"),
+    42 => print("the answer"),
+    _ => print("something else")
+}`
+};
+
+// --- Editor Setup ---
+let view;
+let themeCompartment = new Compartment();
+let currentFontSize = 14;
+
+function initEditor() {
+    // Check for shared code in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const sharedCode = urlParams.get('code');
+    let startCode = sharedCode ? atob(sharedCode) : EXAMPLES["Hello World"];
+
+    view = new EditorView({
+        doc: startCode,
+        extensions: [
+            basicSetup,
+            keymap.of([indentWithTab, ...defaultKeymap]),
+            arkLanguage,
+            themeCompartment.of(oneDark),
+            EditorView.updateListener.of((update) => {
+                if (update.selectionSet) {
+                    updateCursorPos(update.state);
+                }
+            })
+        ],
+        parent: document.getElementById("editor")
+    });
+
+    updateCursorPos(view.state);
+}
+
+function updateCursorPos(state) {
+    const pos = state.selection.main.head;
+    const line = state.doc.lineAt(pos);
+    const col = pos - line.from + 1;
+    document.getElementById("cursor-pos").textContent = `Ln ${line.number}, Col ${col}`;
+}
+
+// --- Execution Logic ---
+async function runCode() {
+    const code = view.state.doc.toString();
+
+    logToConsole("Running...", "info", true);
+    const startTime = performance.now();
+
+    if (wasmReady) {
+        // Client-side WASM execution
+        try {
+            const resultJson = wasmModule.ark_eval_source(code);
+            const result = JSON.parse(resultJson);
+            const elapsed = (performance.now() - startTime).toFixed(1);
+
+            if (result.stdout) {
+                logToConsole(result.stdout);
+            }
+
+            if (result.error) {
+                logToConsole(result.error, "error");
+            } else if (result.result !== null && result.result !== undefined) {
+                logToConsole(`→ ${JSON.stringify(result.result)}`, "dim");
+            }
+
+            logToConsole(`Completed in ${elapsed}ms (WASM)`, "dim");
+
+        } catch (e) {
+            logToConsole(`WASM execution failed: ${e.message}`, "error");
+        }
+    } else {
+        // Server-side fallback
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+            const response = await fetch('/api/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code }),
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (!response.ok) {
+                throw new Error(`Server Error: ${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            const elapsed = (performance.now() - startTime).toFixed(1);
+
+            if (result.stdout) logToConsole(result.stdout);
+            if (result.stderr) logToConsole(result.stderr, "error");
+            if (result.error) logToConsole(result.error, "error");
+
+            logToConsole(`Completed in ${elapsed}ms (server)`, "dim");
+
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                logToConsole("Execution timed out (10s limit).", "error");
+            } else {
+                logToConsole(`Failed to execute: ${e.message}`, "error");
+                logToConsole("Build WASM with: wasm-pack build --target web core/", "dim");
+            }
+        }
+    }
+}
+
+function logToConsole(msg, type = "normal", isSystem = false) {
+    const outputDiv = document.getElementById("console-output");
+    const entry = document.createElement("div");
+    entry.className = "log-entry";
+
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+    entry.innerHTML = `
+        <div class="log-timestamp">[${timestamp}]</div>
+        <div class="log-content log-${type}">${escapeHtml(msg)}</div>
+    `;
+
+    outputDiv.appendChild(entry);
+    outputDiv.scrollTop = outputDiv.scrollHeight;
+}
+
+function escapeHtml(unsafe) {
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;")
+         .replace(/\n/g, "<br>");
+}
+
+// --- UI Handlers ---
+function setupUI() {
+    // Examples Sidebar
+    const list = document.getElementById("examples-list");
+    if (list) {
+        Object.keys(EXAMPLES).forEach(name => {
+            const item = document.createElement("div");
+            item.className = "sidebar-item";
+            item.textContent = name;
+            item.onclick = () => {
+                const currentCode = view.state.doc.toString();
+                if (currentCode !== EXAMPLES[name] && currentCode.length > 50) {
+                     if(!confirm("Replace current code with example?")) return;
+                }
+
+                view.dispatch({
+                    changes: {from: 0, to: view.state.doc.length, insert: EXAMPLES[name]}
+                });
+
+                document.querySelectorAll(".sidebar-item").forEach(el => el.classList.remove("active"));
+                item.classList.add("active");
+            };
+            list.appendChild(item);
+        });
+    }
+
+    // Run Button
+    document.getElementById("run-btn").addEventListener("click", runCode);
+
+    // Clear Button
+    document.getElementById("clear-btn").addEventListener("click", () => {
+        document.getElementById("console-output").innerHTML = "";
+        logToConsole("Console cleared.", "dim");
+    });
+
+    // Share Button
+    document.getElementById("share-btn").addEventListener("click", () => {
+        const code = view.state.doc.toString();
+        const b64 = btoa(code);
+        const url = new URL(window.location);
+        url.searchParams.set('code', b64);
+        window.history.pushState({}, '', url);
+        navigator.clipboard.writeText(url.toString()).then(() => {
+            logToConsole("Link copied to clipboard!", "success");
+        });
+    });
+
+    // Theme Toggle
+    const themeBtn = document.getElementById("theme-btn");
+    themeBtn.addEventListener("click", () => {
+        const isDark = !document.body.classList.contains("light-theme");
+        if (isDark) {
+            document.body.classList.add("light-theme");
+            // Switch to default (light) theme by passing empty array
+            view.dispatch({effects: themeCompartment.reconfigure([])});
+            themeBtn.innerHTML = '<span class="icon">☀</span>';
+        } else {
+            document.body.classList.remove("light-theme");
+            // Switch to One Dark
+            view.dispatch({effects: themeCompartment.reconfigure(oneDark)});
+            themeBtn.innerHTML = '<span class="icon">◑</span>';
+        }
+    });
+
+    // Font Size
+    document.getElementById("font-inc").addEventListener("click", () => {
+        currentFontSize += 2;
+        document.documentElement.style.setProperty('--editor-font-size', currentFontSize + 'px');
+    });
+
+    document.getElementById("font-dec").addEventListener("click", () => {
+        currentFontSize = Math.max(10, currentFontSize - 2);
+        document.documentElement.style.setProperty('--editor-font-size', currentFontSize + 'px');
+    });
+
+    // Keyboard Shortcuts
+    document.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+            e.preventDefault();
+            runCode();
+        }
+    });
+}
+
+// --- System Monitor ---
+function initSystemMonitor() {
+    const pollInterval = 2000;
+
+    async function updateStats() {
+        try {
+            const response = await fetch('/api/stats');
+            if (!response.ok) return;
+            const stats = await response.json();
+
+            updateVal('stat-cpu', stats.cpu + '%', stats.cpu > 80);
+            updateVal('stat-mem', stats.memory + '%', stats.memory > 80);
+            updateVal('stat-disk', stats.disk + '%', stats.disk > 90);
+            updateVal('stat-neural', stats.neural, false);
+
+            // Adjust pulse speed based on neural activity
+            const pulse = document.getElementById('monitor-pulse');
+            if (pulse) {
+                const duration = Math.max(0.5, 2 - (stats.neural / 100));
+                pulse.style.animationDuration = `${duration}s`;
+            }
+
+        } catch (e) {
+            // Silent fail
+        }
+    }
+
+    function updateVal(id, text, isHigh) {
+        const el = document.getElementById(id);
+        if (el) {
+            el.textContent = text;
+            if (isHigh) el.classList.add('high');
+            else el.classList.remove('high');
+        }
+    }
+
+    setInterval(updateStats, pollInterval);
+    updateStats(); // Initial call
+}
+
+// Initialize
+window.addEventListener("DOMContentLoaded", async () => {
+    try {
+        initEditor();
+    } catch (e) {
+        console.error("Editor initialization failed:", e);
+        logToConsole("Editor failed to load. Please refresh.", "error");
+    }
+
+    try {
+        setupUI();
+    } catch (e) {
+        console.error("UI setup failed:", e);
+    }
+
+    try {
+        initSystemMonitor();
+    } catch (e) {
+        console.error("System Monitor initialization failed:", e);
+    }
+
+    logToConsole("Ark Environment Ready.", "success");
+
+    // Load WASM module (non-blocking — UI is ready first)
+    await initWasm();
+});
+

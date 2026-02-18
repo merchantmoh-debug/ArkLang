@@ -1,0 +1,4 @@
+l := [1, 2, 3]
+let (val, l) := sys.list.pop(l, 1)
+print(val) // Should be 2
+print(l)   // Should be [1, 3]

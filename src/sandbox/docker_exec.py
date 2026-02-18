@@ -1,135 +1,301 @@
+import asyncio
 import os
+import sys
 import tempfile
 import time
-from typing import Optional
+from typing import Optional, Set
 
-from .base import CodeSandbox, ExecutionResult
+from .base import (
+    BaseSandbox,
+    ExecutionResult,
+    truncate_output,
+    SandboxError,
+    SandboxTimeoutError,
+)
+
+# Security: Whitelist of allowed Docker images
+ALLOWED_DOCKER_IMAGES = {
+    "ark-sandbox:latest",
+    "python:3.11-slim",
+    "python:3.12-slim",
+    "python:3.10-slim",
+    "python:3.9-slim",
+}
+DEFAULT_DOCKER_IMAGE = "ark-sandbox:latest"
 
 
-class DockerSandbox(CodeSandbox):
-    """Docker-based sandbox (opt-in).
+class DockerSandbox(BaseSandbox):
+    """Docker-based sandbox for isolated execution."""
 
-    This implementation performs lazy imports and graceful error handling so that
-    environments without Docker SDK or daemon do not crash the application. It
-    returns a structured error via ExecutionResult when unavailable.
-    """
+    _client = None
+
+    def __init__(self, capabilities: Set[str] = None):
+        super().__init__(capabilities)
+
+    def _get_client(self):
+        """Lazy initialization of the Docker client."""
+        if DockerSandbox._client is not None:
+            return DockerSandbox._client
+
+        try:
+            import docker
+            DockerSandbox._client = docker.from_env()
+            return DockerSandbox._client
+        except Exception:
+            return None
 
     def _docker_available(self) -> tuple[bool, Optional[str]]:
         try:
-            import docker  # type: ignore
+            client = self._get_client()
+            if client is None:
+                return False, "Docker SDK not installed or daemon not running"
+            client.ping()
+            return True, None
+        except Exception as exc:
+            DockerSandbox._client = None
+            return False, f"Docker daemon not available: {exc}"
 
-            try:
-                client = docker.from_env()
-                # ping the daemon to verify connectivity
-                client.ping()
-                return True, None
-            except Exception as exc:  # daemon not reachable
-                return False, f"Docker daemon not available: {exc}"
-        except Exception as exc:  # SDK not installed
-            return False, f"Docker SDK not installed: {exc}"
-
-    def execute(self, code: str, language: str = "python", timeout: int = 30) -> ExecutionResult:
-        ok, reason = self._docker_available()
-        start = time.time()
+    async def execute(
+        self,
+        code: str,
+        language: str = "python",
+        timeout: int = 30,
+    ) -> ExecutionResult:
+        # Check availability
+        ok, reason = await asyncio.to_thread(self._docker_available)
         if not ok:
             return ExecutionResult(
                 stdout="",
-                stderr=reason or "Docker not available",
+                stderr=reason or "Docker unavailable",
                 exit_code=1,
-                duration=time.time() - start,
-                meta={
-                    "runtime": "docker",
-                    "timed_out": False,
-                    "truncated": False,
-                },
+                duration_ms=0.0,
+                truncated=False
             )
 
-        if language.lower() != "python":
-            return ExecutionResult(
-                stdout="",
-                stderr=f"Unsupported language: {language}",
-                exit_code=1,
-                duration=time.time() - start,
-                meta={"runtime": "docker", "timed_out": False, "truncated": False},
-            )
+        start_time = time.time()
 
-        # Lazy imports only after availability confirmed
-        import docker  # type: ignore
+        def run_container_logic():
+            # This runs in a thread to do blocking IO (file write, docker start)
+            import docker
+            client = self._get_client()
 
-        image = os.getenv("DOCKER_IMAGE", "python:3.11-slim")
-        network_enabled = os.getenv("DOCKER_NETWORK_ENABLED", "false").lower() == "true"
-        cpu_limit = os.getenv("DOCKER_CPU_LIMIT", "0.5")
-        mem_limit = os.getenv("DOCKER_MEMORY_LIMIT", "256m")
+            # Create temp dir for this run
+            # We use mkdtemp to ensure it persists until we explicitly cleanup or context ends
+            # But context manager is safer.
+            # We can't yield from thread easily.
+            # So we do everything inside the context in the thread?
+            # No, we need to return the container object to main thread to wait on it?
+            # Container objects are not thread-safe? usually fine.
+            # But simpler: run the whole start logic in thread, return container object.
 
-        client = docker.from_env()
-
-        # Prepare a temp script file, then mount/run inside container
-        with tempfile.TemporaryDirectory(prefix="ag_sbx_dk_") as tmpdir:
-            script_path = os.path.join(tmpdir, "main.py")
-            with open(script_path, "w", encoding="utf-8") as f:
-                f.write(code)
-
-            mounts = {tmpdir: {"bind": "/work", "mode": "ro"}}
-
-            command = ["python", "/work/main.py"]
+            tmpdir = tempfile.mkdtemp(prefix="ark_docker_")
 
             try:
+                # Write code
+                filename = "main.py"
+                if language == "javascript": filename = "main.js"
+                elif language == "rust": filename = "main.rs"
+                elif language == "ark": filename = "main.ark"
+
+                filepath = os.path.join(tmpdir, filename)
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(code)
+
+                # Make script executable just in case
+                os.chmod(filepath, 0o755)
+
+                mounts = {
+                    tmpdir: {"bind": "/workspace", "mode": "ro"}
+                }
+
+                image = os.getenv("DOCKER_IMAGE", DEFAULT_DOCKER_IMAGE)
+                if image not in ALLOWED_DOCKER_IMAGES:
+                    image = DEFAULT_DOCKER_IMAGE
+
+                cmd = []
+                if language == "python":
+                    cmd = ["python", f"/workspace/{filename}"]
+                elif language == "javascript":
+                    cmd = ["node", f"/workspace/{filename}"]
+                elif language == "rust":
+                    # Compile to /tmp (tmpfs) and run
+                    cmd = ["sh", "-c", f"rustc /workspace/{filename} -o /tmp/main && /tmp/main"]
+                elif language == "ark":
+                    cmd = ["python", "/app/meta/ark.py", "run", f"/workspace/{filename}"]
+                else:
+                    raise ValueError(f"Unsupported language: {language}")
+
                 container = client.containers.run(
                     image=image,
-                    command=command,
+                    command=cmd,
                     volumes=mounts,
-                    network_disabled=(not network_enabled),
-                    mem_limit=mem_limit,
-                    nano_cpus=int(float(cpu_limit) * 1e9),  # approximate CPU limit
+                    network_disabled=True,
+                    mem_limit="256m",
+                    nano_cpus=500000000,
+                    read_only=True,
+                    tmpfs={'/tmp': ''},
                     detach=True,
-                    stdout=True,
-                    stderr=True,
-                    working_dir="/work",
-                    remove=True,
+                    working_dir="/workspace",
                 )
-
+                return container, tmpdir
+            except Exception as e:
+                # Clean up tmpdir if failed
                 try:
-                    exit_code = container.wait(timeout=timeout)["StatusCode"]
-                except Exception:
-                    # timeout enforcement: kill the container
-                    try:
-                        container.kill()
-                    except Exception:
-                        # Best-effort cleanup: ignore errors if the container is already
-                        # stopped, missing, or cannot be killed. The timeout result below
-                        # is returned to the caller regardless of kill() success.
-                        pass
-                    return ExecutionResult(
-                        stdout="",
-                        stderr=f"Execution timed out after {timeout}s",
-                        exit_code=-1,
-                        duration=time.time() - start,
-                        meta={
-                            "runtime": "docker",
-                            "timed_out": True,
-                            "truncated": False,
-                        },
-                    )
+                    import shutil
+                    shutil.rmtree(tmpdir)
+                except: pass
+                raise e
 
-                logs = container.logs(stdout=True, stderr=True)
-                out = logs.decode("utf-8", errors="ignore")
-                # Split rough stdout/stderr is non-trivial; return all in stdout for now
-                return ExecutionResult(
-                    stdout=out,
-                    stderr="",
-                    exit_code=int(exit_code),
-                    duration=time.time() - start,
-                    meta={
-                        "runtime": "docker",
-                        "timed_out": False,
-                        "truncated": False,
-                    },
-                )
-            except Exception as exc:
-                return ExecutionResult(
-                    stdout="",
-                    stderr=f"Docker execution error: {exc}",
-                    exit_code=1,
-                    duration=time.time() - start,
-                    meta={"runtime": "docker", "timed_out": False, "truncated": False},
-                )
+        # 1. Start Container
+        try:
+            container, tmpdir = await asyncio.to_thread(run_container_logic)
+        except Exception as e:
+            return ExecutionResult(
+                stdout="",
+                stderr=f"Failed to start container: {e}",
+                exit_code=1,
+                duration_ms=(time.time() - start_time) * 1000,
+                truncated=False
+            )
+
+        # 2. Wait for completion or timeout
+        timed_out = False
+        exit_code = -1
+
+        try:
+            # We use asyncio.wait_for on a thread that blocks on container.wait()
+            # container.wait() returns {'StatusCode': int}
+            wait_result = await asyncio.wait_for(
+                asyncio.to_thread(container.wait),
+                timeout=timeout
+            )
+            exit_code = wait_result.get("StatusCode", 1)
+
+        except asyncio.TimeoutError:
+            timed_out = True
+            # Kill container
+            try:
+                await asyncio.to_thread(container.kill)
+            except Exception:
+                pass
+        except Exception as e:
+            # Other error
+            try:
+                await asyncio.to_thread(container.kill)
+            except Exception:
+                pass
+
+            # Clean up
+            await asyncio.to_thread(cleanup_helper, container, tmpdir)
+
+            return ExecutionResult(
+                stdout="",
+                stderr=f"Execution error: {e}",
+                exit_code=1,
+                duration_ms=(time.time() - start_time) * 1000,
+                truncated=False
+            )
+
+        # 3. Capture Logs
+        try:
+            # logs() returns bytes
+            stdout_bytes = await asyncio.to_thread(container.logs, stdout=True, stderr=False)
+            stderr_bytes = await asyncio.to_thread(container.logs, stdout=False, stderr=True)
+
+            stdout_str = stdout_bytes.decode("utf-8", errors="ignore")
+            stderr_str = stderr_bytes.decode("utf-8", errors="ignore")
+        except Exception as e:
+            stdout_str = ""
+            stderr_str = f"Failed to retrieve logs: {e}"
+
+        # 4. Cleanup
+        await asyncio.to_thread(cleanup_helper, container, tmpdir)
+
+        duration_ms = (time.time() - start_time) * 1000
+
+        trunc_out, is_trunc1 = truncate_output(stdout_str)
+        trunc_err, is_trunc2 = truncate_output(stderr_str)
+
+        if timed_out:
+            return ExecutionResult(
+                stdout=trunc_out,
+                stderr="Execution timed out" + ("\n" + trunc_err if trunc_err else ""),
+                exit_code=-1,
+                duration_ms=duration_ms,
+                truncated=(is_trunc1 or is_trunc2)
+            )
+
+        return ExecutionResult(
+            stdout=trunc_out,
+            stderr=trunc_err,
+            exit_code=exit_code,
+            duration_ms=duration_ms,
+            truncated=(is_trunc1 or is_trunc2)
+        )
+
+    async def cleanup(self):
+        pass
+
+
+def cleanup_helper(container, tmpdir):
+    try:
+        container.remove(force=True)
+    except:
+        pass
+    try:
+        import shutil
+        shutil.rmtree(tmpdir)
+    except:
+        pass
+
+
+if __name__ == "__main__":
+    async def main():
+        print("Verifying src/sandbox/docker_exec.py...")
+        sandbox = DockerSandbox()
+
+        # Check availability
+        ok, reason = await asyncio.to_thread(sandbox._docker_available)
+        if not ok:
+            print(f"Docker not available: {reason}")
+            print("Skipping actual Docker tests.")
+            return
+
+        # Check if we can run python:3.11-slim for testing
+        import docker
+        client = docker.from_env()
+        try:
+            client.images.get("python:3.11-slim")
+            os.environ["DOCKER_IMAGE"] = "python:3.11-slim"
+            print("Using python:3.11-slim for tests.")
+        except:
+            print("python:3.11-slim not found locally. Tests might fail if pull fails.")
+
+        print("Docker is available. Running tests...")
+
+        # 1. Simple Python
+        res = await sandbox.execute('print("Hello Docker")', "python")
+        print(f"Result 1: Exit={res.exit_code}, Err={res.stderr}")
+
+        err_lower = res.stderr.lower()
+        image_missing = "not found" in err_lower or "pull access denied" in err_lower
+
+        if res.exit_code == 0:
+            assert "Hello Docker" in res.stdout
+            print("Docker Python: OK")
+        elif image_missing:
+             print("Docker Python: Skipped (Image missing)")
+        else:
+            print(f"Docker Python Failed: {res.stderr}")
+
+        # 2. Timeout
+        if not image_missing:
+            res = await sandbox.execute('import time; time.sleep(2)', "python", timeout=1)
+            print(f"Result 2: Exit={res.exit_code}, Err={res.stderr}")
+            if res.exit_code == -1:
+                assert "timed out" in res.stderr or "Timeout" in res.stderr
+                print("Docker Timeout: OK")
+            else:
+                 print(f"Docker Timeout Test Failed (expected -1): {res.exit_code}")
+
+    asyncio.run(main())

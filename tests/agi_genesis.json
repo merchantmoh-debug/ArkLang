@@ -1,0 +1,172 @@
+{
+  "Statement": {
+    "Block": [
+      {
+        "Function": {
+          "name": "fib",
+          "inputs": [
+            [
+              "n",
+              {
+                "Linear": "Integer"
+              }
+            ]
+          ],
+          "output": {
+            "Linear": "Integer"
+          },
+          "body": {
+            "hash": "todo_hash",
+            "content": {
+              "Statement": {
+                "Block": [
+                  {
+                    "If": {
+                      "condition": {
+                        "Call": {
+                          "function_hash": "intrinsic_lt",
+                          "args": [
+                            {
+                              "Variable": "n"
+                            },
+                            {
+                              "Literal": "2"
+                            }
+                          ]
+                        }
+                      },
+                      "then_block": [
+                        {
+                          "Expression": {
+                            "Variable": "n"
+                          }
+                        }
+                      ],
+                      "else_block": [
+                        {
+                          "Expression": {
+                            "Call": {
+                              "function_hash": "intrinsic_add",
+                              "args": [
+                                {
+                                  "Call": {
+                                    "function_hash": "fib",
+                                    "args": [
+                                      {
+                                        "Call": {
+                                          "function_hash": "intrinsic_sub",
+                                          "args": [
+                                            {
+                                              "Variable": "n"
+                                            },
+                                            {
+                                              "Literal": "1"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "Call": {
+                                    "function_hash": "fib",
+                                    "args": [
+                                      {
+                                        "Call": {
+                                          "function_hash": "intrinsic_sub",
+                                          "args": [
+                                            {
+                                              "Variable": "n"
+                                            },
+                                            {
+                                              "Literal": "2"
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "x",
+          "ty": null,
+          "value": {
+            "Call": {
+              "function_hash": "fib",
+              "args": [
+                {
+                  "Literal": "10"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Variable": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "Let": {
+          "name": "explanation",
+          "ty": null,
+          "value": {
+            "Call": {
+              "function_hash": "intrinsic_ask_ai",
+              "args": [
+                {
+                  "Call": {
+                    "function_hash": "intrinsic_add",
+                    "args": [
+                      {
+                        "Literal": "Explain the significance of the number "
+                      },
+                      {
+                        "Variable": "x"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Variable": "explanation"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

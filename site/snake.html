@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ark Snake (WASM)</title>
+    <style>
+        body { background: #1a1a1a; color: #eee; font-family: 'Courier New', Courier, monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        canvas { border: 4px solid #333; background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        #status { margin-top: 10px; color: #888; }
+    </style>
+</head>
+<body>
+    <h1>Ark Sovereign Snake</h1>
+    <canvas id="game" width="400" height="400"></canvas>
+    <div id="controls" style="margin-top: 10px;">
+        <button id="btn-pause">Pause (P)</button>
+        <button id="btn-restart">Restart (R)</button>
+    </div>
+    <div id="status">Loading WASM...</div>
+
+    <script type="module">
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+        const btnPause = document.getElementById('btn-pause');
+        const btnRestart = document.getElementById('btn-restart');
+        const SCALE = 20;
+
+        let wasm = null;
+        let gameState = null;
+        let lastInput = "None";
+        let isPaused = false;
+
+        // --- WASM Bridge ---
+        async function loadArk() {
+            try {
+                // 1. Load WASM
+                const response = await fetch('wasm/ark.wasm');
+                if (!response.ok) throw new Error(`WASM Fetch Error: ${response.status}`);
+                const bytes = await response.arrayBuffer();
+
+                const { instance } = await WebAssembly.instantiate(bytes, {
+                    env: {},
+                    // Mock wasm-bindgen imports if present (due to dependencies like chrono/rand)
+                    __wbindgen_placeholder__: new Proxy({}, {
+                        get: (target, prop) => {
+                            // console.log("Mocking import:", prop);
+                            return (...args) => {
+                                console.warn("Called mocked import:", prop, args);
+                                return 0;
+                            };
+                        }
+                    }),
+                    __wbindgen_externref_xform__: new Proxy({}, {
+                        get: (target, prop) => {
+                            return (...args) => { return 0; };
+                        }
+                    })
+                });
+                wasm = instance.exports;
+                status.innerText = "Loading Game Logic...";
+
+                // 2. Load Snake Logic (MAST JSON)
+                const logicResp = await fetch('snake.json');
+                if (!logicResp.ok) throw new Error(`Logic Fetch Error: ${logicResp.status}`);
+                const logicJson = await logicResp.text(); // Get as text
+
+                // 3. Initialize VM
+                const result = callWasmString(wasm.ark_init, logicJson);
+                if (result !== "OK") {
+                    throw new Error(`Ark Init Failed: ${result}`);
+                }
+
+                // 4. Initialize Game State
+                const initRes = callWasmJson(wasm.ark_call, "init", []);
+                if (initRes.error) throw new Error(initRes.error);
+                gameState = initRes;
+
+                status.innerText = "Running (Use Arrow Keys)";
+                requestAnimationFrame(loop);
+
+            } catch (e) {
+                status.innerText = `Error: ${e.message}`;
+                console.error(e);
+            }
+        }
+
+        function callWasmString(func, str) {
+            const encoder = new TextEncoder();
+            const bytes = encoder.encode(str);
+            const len = bytes.length;
+            const ptr = wasm.ark_alloc(len);
+
+            const mem = new Uint8Array(wasm.memory.buffer);
+            mem.set(bytes, ptr);
+
+            const resPtr = func(ptr, len);
+
+            // Read Response
+            // Format: [len (4 bytes LE)] [content...]
+            const view = new DataView(wasm.memory.buffer);
+            const resLen = view.getUint32(resPtr, true);
+            const resBytes = new Uint8Array(wasm.memory.buffer, resPtr + 4, resLen);
+            const decoder = new TextDecoder();
+            const result = decoder.decode(resBytes);
+
+            // Cleanup
+            // We own input ptr (alloc'd), func frees it?
+            // Core implementation:
+            // ark_eval: takes input_ptr. Reconstructs slice. Does NOT free input_ptr automatically?
+            // `slice::from_raw_parts` borrows.
+            // So we MUST free input_ptr.
+            wasm.ark_dealloc(ptr, len);
+            // We must also free result buffer
+            wasm.ark_dealloc(resPtr, resLen + 4);
+
+            return result;
+        }
+
+        function callWasmJson(func, name, args) {
+            const argsStr = JSON.stringify(args);
+
+            const encoder = new TextEncoder();
+            const nameBytes = encoder.encode(name);
+            const argsBytes = encoder.encode(argsStr);
+
+            const namePtr = wasm.ark_alloc(nameBytes.length);
+            const argsPtr = wasm.ark_alloc(argsBytes.length);
+
+            const mem = new Uint8Array(wasm.memory.buffer);
+            mem.set(nameBytes, namePtr);
+            mem.set(argsBytes, argsPtr);
+
+            const resPtr = func(namePtr, nameBytes.length, argsPtr, argsBytes.length);
+
+            // Read Response
+            const view = new DataView(wasm.memory.buffer);
+            const resLen = view.getUint32(resPtr, true);
+            const resBytes = new Uint8Array(wasm.memory.buffer, resPtr + 4, resLen);
+            const decoder = new TextDecoder();
+            const resultStr = decoder.decode(resBytes);
+
+            // Cleanup
+            wasm.ark_dealloc(namePtr, nameBytes.length);
+            wasm.ark_dealloc(argsPtr, argsBytes.length);
+            wasm.ark_dealloc(resPtr, resLen + 4);
+
+            try {
+                return JSON.parse(resultStr);
+            } catch (e) {
+                console.error("JSON Parse Error on Result:", resultStr);
+                return { error: "Invalid JSON from Ark" };
+            }
+        }
+
+        // --- State Normalization ---
+        const BOOLEAN_FIELDS = new Set(['game_over']);
+
+        function normalizeState(obj, fieldName) {
+            if (Array.isArray(obj)) return obj.map(item => normalizeState(item));
+            if (obj !== null && typeof obj === 'object') {
+                const out = {};
+                for (const [k, v] of Object.entries(obj)) out[k] = normalizeState(v, k);
+                return out;
+            }
+            if (BOOLEAN_FIELDS.has(fieldName)) {
+                const n = Number(obj);
+                return n !== 0 && obj !== '' && obj !== 'false' && obj !== false;
+            }
+            if (typeof obj === 'string' && obj !== '' && !Number.isNaN(Number(obj)) && Number.isFinite(Number(obj))) return Number(obj);
+            return obj;
+        }
+
+        // --- Game Loop ---
+        let lastTime = 0;
+        const TICK_RATE = 100; // ms
+
+        function loop(timestamp) {
+            if (!gameState) return;
+
+            if (!isPaused && timestamp - lastTime > TICK_RATE) {
+                // Update
+                if (!Number(gameState.game_over)) {
+                    const stateToSend = normalizeState(gameState);
+                    const newState = callWasmJson(wasm.ark_call, "update", [stateToSend, lastInput]);
+                    // Don't reset input immediately to ensure 180 prevention works?
+                    // Actually, reset input after consumed.
+                    // But if tick is slow, we might miss input?
+                    // Simple queue or just use current.
+                    // snake_browser.ark consumes input.
+                    // We only send one input per tick.
+                    // If user pressed multiple keys, we send last one.
+
+                    if (newState && !newState.error) {
+                        gameState = newState;
+                    } else {
+                        console.error("Update failed", newState);
+                    }
+                }
+                lastTime = timestamp;
+            }
+
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        function draw() {
+            if (!gameState) return;
+
+            // Clear
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Snake
+            const snake = gameState.snake || [];
+            for (let i = 0; i < snake.length; i++) {
+                const seg = snake[i];
+                const x = Number(seg[0]) * SCALE;
+                const y = Number(seg[1]) * SCALE;
+                if (i === snake.length - 1) {
+                    ctx.fillStyle = '#0f0';
+                } else {
+                    ctx.fillStyle = '#0a0';
+                }
+                ctx.fillRect(x, y, SCALE - 1, SCALE - 1);
+            }
+
+            // Draw Apple
+            const apple = gameState.apple || [0, 0];
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(Number(apple[0]) * SCALE, Number(apple[1]) * SCALE, SCALE - 1, SCALE - 1);
+
+            // Score
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px monospace';
+            ctx.fillText(`Score: ${gameState.score || 0}`, 10, 20);
+
+            if (Number(gameState.game_over)) {
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#fff';
+                ctx.font = '30px monospace';
+                ctx.fillText("GAME OVER", 120, 200);
+            }
+        }
+
+        // --- Input (Arrow Keys + WASD) ---
+        const WASD_MAP = { 'w': 'ArrowUp', 'a': 'ArrowLeft', 's': 'ArrowDown', 'd': 'ArrowRight' };
+        window.addEventListener('keydown', e => {
+            const key = e.key;
+            const lower = key.toLowerCase();
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+                if (!isPaused) lastInput = key;
+                e.preventDefault();
+            }
+            if (WASD_MAP[lower]) {
+                if (!isPaused) lastInput = WASD_MAP[lower];
+                e.preventDefault();
+            }
+            if (lower === 'p') togglePause();
+            if (lower === 'r') restartGame();
+        });
+
+        function togglePause() {
+            isPaused = !isPaused;
+            btnPause.innerText = isPaused ? "Resume (P)" : "Pause (P)";
+            status.innerText = isPaused ? "Paused" : "Running";
+        }
+
+        function restartGame() {
+            if (!wasm) return;
+            // Re-init game state
+            const initRes = callWasmJson(wasm.ark_call, "init", []);
+            if (initRes.error) {
+                console.error(initRes.error);
+                return;
+            }
+            gameState = initRes;
+            lastInput = "None";
+            isPaused = false;
+            btnPause.innerText = "Pause (P)";
+            status.innerText = "Running";
+            // Clear Canvas for visual feedback
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        btnPause.addEventListener('click', () => {
+            togglePause();
+            // Remove focus so space/arrow keys work for game not button
+            btnPause.blur();
+        });
+
+        btnRestart.addEventListener('click', () => {
+            restartGame();
+            btnRestart.blur();
+        });
+
+        // Start
+        loadArk();
+    </script>
+</body>
+</html>

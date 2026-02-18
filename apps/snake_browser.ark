@@ -1,0 +1,88 @@
+func init() {
+    state := {
+        w: 20,
+        h: 20,
+        // Start snake horizontally to avoid immediate self-collision with UP (0) dir
+        snake: [[10, 10], [11, 10], [12, 10]],
+        // Initial direction: Right (3) to move away from tail
+        dir: 3,
+        apple: [5, 5],
+        game_over: 0,
+        score: 0
+    }
+    return state
+}
+
+func update(state, input) {
+    if state.game_over { return state }
+
+    // Input Handling
+    if input == "ArrowUp" && state.dir != 1 { state.dir := 0 }
+    if input == "ArrowDown" && state.dir != 0 { state.dir := 1 }
+    if input == "ArrowLeft" && state.dir != 3 { state.dir := 2 }
+    if input == "ArrowRight" && state.dir != 2 { state.dir := 3 }
+
+    // Get Head (snake is a list of [x, y] lists)
+    let (l, _) := sys.len(state.snake)
+    let (head, _) := sys.list.get(state.snake, l - 1)
+    let (hx, _) := sys.list.get(head, 0)
+    let (hy, _) := sys.list.get(head, 1)
+
+    // Move
+    if state.dir == 0 { hy := hy - 1 }
+    if state.dir == 1 { hy := hy + 1 }
+    if state.dir == 2 { hx := hx - 1 }
+    if state.dir == 3 { hx := hx + 1 }
+
+    // Bounds Check
+    if hx < 0 || hx >= state.w || hy < 0 || hy >= state.h {
+        state.game_over := 1
+        return state
+    }
+
+    // Self Collision
+    i := 0
+    while i < l {
+        let (part, _) := sys.list.get(state.snake, i)
+        let (px, _) := sys.list.get(part, 0)
+        let (py, _) := sys.list.get(part, 1)
+        if px == hx && py == hy {
+            state.game_over := 1
+            return state
+        }
+        i := i + 1
+    }
+
+    new_head := [hx, hy]
+    eaten := 0
+
+    // Apple Check
+    let (ax, _) := sys.list.get(state.apple, 0)
+    let (ay, _) := sys.list.get(state.apple, 1)
+
+    if hx == ax && hy == ay {
+        eaten := 1
+        state.score := state.score + 1
+
+        // Simple Pseudo-Random
+        t := state.score * 17 + hx * 3 + hy * 7
+        ax := (t + 5) % state.w
+        ay := (t + 9) % state.h
+        state.apple := [ax, ay]
+    }
+
+    new_snake := []
+    start_idx := 0
+    if eaten == 0 { start_idx := 1 }
+
+    i := start_idx
+    while i < l {
+        let (val, _) := sys.list.get(state.snake, i)
+        sys.list.append(new_snake, val)
+        i := i + 1
+    }
+    sys.list.append(new_snake, new_head)
+    state.snake := new_snake
+
+    return state
+}

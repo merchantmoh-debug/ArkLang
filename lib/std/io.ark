@@ -1,0 +1,43 @@
+// lib/std/io.ark
+
+// Async Operations
+func read_file_async(path, cb) {
+    sys.io.read_file_async(path, cb)
+}
+
+func net_request_async(url, cb) {
+    sys.net.request_async(url, cb)
+}
+
+// Sync Operations
+func read_file(path) {
+    return sys.fs.read(path)
+}
+
+func write_file(path, content) {
+    sys.fs.write(path, content)
+}
+
+io := {
+    read_file_async: read_file_async,
+    net_request_async: net_request_async,
+    read_file: read_file,
+    write_file: write_file
+}
+
+func print(msg) {
+    sys.io.write(msg)
+}
+
+func println(msg) {
+    sys.io.write(msg + "\n")
+}
+
+io := {
+    read_file_async: read_file_async,
+    net_request_async: net_request_async,
+    read_file: read_file,
+    write_file: write_file,
+    print: print,
+    println: println
+}

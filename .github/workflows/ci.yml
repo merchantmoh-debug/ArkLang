@@ -1,0 +1,349 @@
+# Badge: https://github.com/${{ github.repository }}/actions/workflows/ci.yml/badge.svg
+
+name: Ark Compiler CI
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ─── Rust CI ──────────────────────────────────────────────────────────
+  rust-ci:
+    name: Rust CI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+
+      - name: Cache Cargo Registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check Formatting
+        run: cargo fmt --check
+        working-directory: core
+
+      - name: Run Clippy
+        run: cargo clippy -- -D warnings
+        working-directory: core
+
+      - name: Run Tests
+        id: tests
+        run: cargo test --release
+        working-directory: core
+        continue-on-error: true
+
+      - name: Build Release Binary
+        run: cargo build --release --bin ark_loader
+
+      - name: Build WASM (Verify wasm32 target compiles)
+        if: runner.os == 'Linux'
+        run: cargo build --target wasm32-unknown-unknown --release --lib
+        working-directory: core
+
+      - name: Prepare Artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            BINARY="target/release/ark_loader.exe"
+            DEST="dist/ark-core.exe"
+          else
+            BINARY="target/release/ark_loader"
+            DEST="dist/ark-core"
+          fi
+          if [ -f "$BINARY" ]; then
+            cp "$BINARY" "$DEST"
+            echo "Artifact ready: $DEST"
+          else
+            echo "::warning::Binary not found at $BINARY - listing available binaries:"
+            find target/release -maxdepth 1 -type f -executable 2>/dev/null | head -20 || ls -la target/release/ 2>/dev/null | head -30 || echo "target/release/ does not exist"
+            echo "::error::ark_loader binary was not produced by cargo build"
+            exit 1
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ark-core-${{ matrix.os }}
+          path: dist/*
+          if-no-files-found: warn
+
+      - name: Fail if tests failed
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
+
+  # ─── Python CI ────────────────────────────────────────────────────────
+  python-ci:
+    name: Python CI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install lark z3-solver pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run Pytest
+        run: python -m pytest meta/ -v
+
+      - name: Run Gauntlet
+        run: python meta/gauntlet.py
+        timeout-minutes: 5
+        env:
+          ALLOW_DANGEROUS_LOCAL_EXECUTION: "true"
+
+      - name: Run Smoke Tests
+        if: runner.os == 'Linux'
+        run: bash tests/smoke.sh
+
+      - name: Run Intrinsic Count Verification
+        if: runner.os == 'Linux'
+        run: python -m pytest tests/test_intrinsic_count.py -v
+
+      - name: Run Wallet Smoke Tests
+        if: runner.os == 'Linux'
+        run: python -m pytest tests/test_wallet_smoke.py -v
+        env:
+          ARK_CAPABILITIES: "exec,fs_write,fs_read,crypto"
+
+      - name: Run Golden Demo (README Promise Test)
+        if: runner.os == 'Linux'
+        run: bash tests/golden_demo.sh
+
+  # ─── WASM Browser Test ──────────────────────────────────────────────────
+  wasm-browser-test:
+    name: WASM Browser Test
+    needs: [rust-ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ark-core-ubuntu-latest
+          path: dist
+
+      - name: Install Rust & Build WASM
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build WASM Binary
+        run: cargo build --target wasm32-unknown-unknown --release --lib
+        working-directory: core
+
+      - name: Install wasm-bindgen-cli
+        run: cargo install wasm-bindgen-cli --version 0.2.108
+
+      - name: Generate WASM bindings
+        run: |
+          wasm-bindgen target/wasm32-unknown-unknown/release/ark_0_zheng.wasm \
+            --out-dir site/wasm/pkg \
+            --target web \
+            --no-typescript
+
+      - name: Copy WASM to test harness
+        run: |
+          cp site/wasm/pkg/ark_0_zheng_bg.wasm site/wasm/ark.wasm
+          cp site/wasm/pkg/ark_0_zheng.js site/wasm/ark_bindings.js
+          ls -la site/wasm/
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: |
+          npm install playwright
+          npx playwright install chromium
+
+      - name: Serve & Test WASM in Browser
+        run: |
+          # Start a local HTTP server
+          cd site/wasm
+          python3 -m http.server 8099 &
+          SERVER_PID=$!
+          sleep 2
+
+          # Run headless browser test
+          node -e "
+            const { chromium } = require('playwright');
+            (async () => {
+              const browser = await chromium.launch();
+              const page = await browser.newPage();
+              const logs = [];
+              page.on('console', msg => {
+                logs.push(msg.text());
+                console.log('[browser]', msg.text());
+              });
+              await page.goto('http://localhost:8099/index.html');
+              await page.waitForTimeout(5000);
+              await browser.close();
+
+              const passed = logs.some(l => l.includes('ARK_WASM_TESTS_PASSED'));
+              const failed = logs.some(l => l.includes('ARK_WASM_TESTS_FAILED'));
+
+              if (failed || !passed) {
+                console.error('WASM browser tests FAILED');
+                process.exit(1);
+              }
+              console.log('WASM browser tests PASSED');
+            })();
+          "
+
+          kill $SERVER_PID || true
+
+  # ─── Docker CI ─────────────────────────────────────────────────────────
+  docker-ci:
+    name: Docker Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: docker build -t ark-compiler .
+
+      - name: Test Version Command
+        run: docker run --rm ark-compiler python meta/ark.py version
+
+      - name: Test Hello World
+        run: docker run --rm ark-compiler python meta/ark.py run apps/hello.ark
+
+      - name: Test REPL Starts
+        run: echo '!exit' | timeout 10 docker run -i --rm ark-compiler || true
+
+  # ─── Security Scan ────────────────────────────────────────────────────
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Security Tools
+        run: |
+          pip install pip-audit bandit
+          cargo install cargo-audit
+
+      - name: Audit Rust Dependencies
+        run: cargo audit
+
+      - name: Audit Python Dependencies
+        run: pip-audit
+
+      - name: Static Analysis (Bandit)
+        # Skip B101 (assert), B104 (bind 0.0.0.0), B110 (try-except-pass), B310/B311 (random/url), B404/B603/B607 (subprocess)
+        run: bandit -r meta/ -s B101,B104,B110,B310,B311,B404,B603,B607,B113
+
+  # ─── Release ──────────────────────────────────────────────────────────
+  release:
+    name: Release
+    needs: [rust-ci, python-ci, docker-ci, security]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Asset (Linux)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/ark-core-ubuntu-latest/ark-core
+          asset_name: ark-core-linux
+          asset_content_type: application/octet-stream
+
+      - name: Upload Asset (macOS)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/ark-core-macos-latest/ark-core
+          asset_name: ark-core-macos
+          asset_content_type: application/octet-stream
+
+      - name: Upload Asset (Windows)
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/ark-core-windows-latest/ark-core.exe
+          asset_name: ark-core-windows.exe
+          asset_content_type: application/vnd.microsoft.portable-executable

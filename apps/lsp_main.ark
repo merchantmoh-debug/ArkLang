@@ -1,0 +1,8 @@
+// --- Ark LSP Entry Point ---
+
+// Load the library
+// This executes the definitions in apps/lsp.ark, adding them to the scope.
+sys.vm.source("apps/lsp.ark")
+
+// Start the server loop
+run_server()

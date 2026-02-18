@@ -1,0 +1,75 @@
+// Ark Test Suite
+
+// Helper: Assert
+func assert(cond, msg) {
+    if cond {
+        print("PASS: " + msg)
+    } else {
+        print("FAIL: " + msg)
+        // Force crash (Runtime Error: ZeroDivisionError)
+        crash := 1 / 0
+    }
+}
+
+// 1. If-Else
+func test_if_else() {
+    print("Testing If-Else...")
+    if 1 == 1 {
+        assert(1, "1 == 1")
+    } else {
+        assert(0, "1 == 1 failed")
+    }
+
+    if 1 > 2 {
+        assert(0, "1 > 2 passed?")
+    } else {
+        assert(1, "1 > 2 failed as expected")
+    }
+}
+
+// 2. While Loops
+func test_while() {
+    print("Testing While...")
+    count := 0
+    while count < 5 {
+        count := count + 1
+    }
+    assert(count == 5, "Count reached 5")
+}
+
+// 3. Functions
+func add(a, b) {
+    return a + b
+}
+
+func test_functions() {
+    print("Testing Functions...")
+    res := add(3, 4)
+    assert(res == 7, "add(3, 4) == 7")
+}
+
+// 4. Recursion
+func fib(n) {
+    if n <= 1 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+func test_recursion() {
+    print("Testing Recursion...")
+    // fib(0)=0, fib(1)=1, fib(2)=1, fib(3)=2, fib(4)=3, fib(5)=5, fib(6)=8
+    val := fib(6)
+    assert(val == 8, "fib(6) == 8")
+}
+
+func main() {
+    print("=== STARTING TEST SUITE ===")
+    test_if_else()
+    test_while()
+    test_functions()
+    test_recursion()
+    print("=== ALL TESTS PASSED ===")
+}
+
+main()

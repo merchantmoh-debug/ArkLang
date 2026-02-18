@@ -1,0 +1,5 @@
+// apps/miner.ark
+// SYNTAX ERROR HERE
+func broken() {
+    if true {
+}

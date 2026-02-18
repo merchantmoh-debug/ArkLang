@@ -1,0 +1,16 @@
+// @capabilities: thread
+func worker() {
+    print("Worker thread started")
+    sys.time.sleep(1)
+    print("Worker thread finished")
+}
+
+func main() {
+    print("Main thread spawning worker...")
+    sys.thread.spawn(worker)
+    print("Main thread continuing...")
+    sys.time.sleep(2)
+    print("Main thread verification complete")
+}
+
+main()

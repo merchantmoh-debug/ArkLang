@@ -20,6 +20,11 @@ TOKEN_KEYWORD_WHILE := 102
 TOKEN_KEYWORD_FUNC := 103
 TOKEN_KEYWORD_RETURN := 104
 TOKEN_KEYWORD_LET := 105
+TOKEN_KEYWORD_CLASS := 106
+TOKEN_KEYWORD_TRUE := 107
+TOKEN_KEYWORD_FALSE := 108
+TOKEN_AND := 23
+TOKEN_OR := 24
 
 // --- Helpers ---
 
@@ -38,9 +43,10 @@ func is_whitespace(char_str) {
 // --- Lexer Struct & Methods ---
 
 func lexer_new(source) {
+    let (l, src) := sys.len(source)
     return {
-        source: source,
-        length: sys.len(source),
+        source: src,
+        length: l,
         pos: 0,
         line: 1,
         col: 1,
@@ -52,22 +58,8 @@ func lexer_peek(lexer) {
     if lexer.pos >= lexer.length {
         return "" // EOF
     }
-    // We need sys.str.get or indexing?
-    // "source[pos]" syntax compiles to `sys.list.get` (which handles strings in Python prototype?).
-    // In Rust `intrinsics.rs`, `sys.list.get` expects List.
-    // We need `sys.str.get` or `intrinsic_buffer_read`?
-    // Wait, source is String.
-    // I need `sys.str.get`!
-    // Python `sys.list.get` handles string indexing?
-    // Let's check `intrinsics.rs` -> `intrinsic_list_get` expects List.
-    // BLOCKER: No string indexing in Rust Core yet!
-    // I need to add `intrinsic_string_get` or make `list_get` polymorphic.
-    // Or use `sys.mem.read` if source is Buffer.
-    // The plan said "Input: Source Code (String)".
-    // I will use `sys.str.get(str, idx)` intrinsic.
-    // I need to implement it.
-    // For now, I will assume it exists and fix it in next step.
-    return sys.str.get(lexer.source, lexer.pos)
+    let (c, src) := sys.str.get(lexer.source, lexer.pos)
+    return c
 }
 
 func lexer_advance(lexer) {
@@ -79,8 +71,27 @@ func lexer_advance(lexer) {
     } else {
         lexer.col := lexer.col + 1
     }
-    // Return modified lexer because we modified fields in place?
-    // `lexer.pos := ...` updates the Struct in place (Rust `eval.rs` SetField).
+
+    // Check for comments (//)
+    if lexer.pos < lexer.length {
+        let (next_c, _src) := sys.str.get(lexer.source, lexer.pos)
+        if next_c == "/" {
+             if (lexer.pos + 1) < lexer.length {
+                 let (next_next_c, _src2) := sys.str.get(lexer.source, lexer.pos + 1)
+                 if next_next_c == "/" {
+                     // Skip until newline
+                     looping := 1
+                     while looping {
+                         lexer := lexer_advance(lexer)
+                         peek_c := lexer_peek(lexer)
+                         if peek_c == "\n" { looping := 0 }
+                         if peek_c == "" { looping := 0 }
+                     }
+                 }
+             }
+        }
+    }
+
     return lexer
 }
 
@@ -96,13 +107,18 @@ func lexer_add_token(lexer, type, value) {
 }
 
 func check_keyword(ident_str) {
-    if ident_str == "if" { return 100 }
-    if ident_str == "else" { return 101 }
-    if ident_str == "while" { return 102 }
-    if ident_str == "func" { return 103 }
-    if ident_str == "return" { return 104 }
-    if ident_str == "let" { return 105 }
-    return 1 // TOKEN_IDENTIFIER
+    if ident_str == "if" { return TOKEN_KEYWORD_IF }
+    if ident_str == "else" { return TOKEN_KEYWORD_ELSE }
+    if ident_str == "while" { return TOKEN_KEYWORD_WHILE }
+    if ident_str == "func" { return TOKEN_KEYWORD_FUNC }
+    if ident_str == "return" { return TOKEN_KEYWORD_RETURN }
+    if ident_str == "let" { return TOKEN_KEYWORD_LET }
+    if ident_str == "and" { return TOKEN_AND }
+    if ident_str == "or" { return TOKEN_OR }
+    if ident_str == "class" { return TOKEN_KEYWORD_CLASS }
+    if ident_str == "true" { return TOKEN_KEYWORD_TRUE }
+    if ident_str == "false" { return TOKEN_KEYWORD_FALSE }
+    return TOKEN_IDENTIFIER
 }
 
 func lexer_scan(lexer) {
@@ -146,6 +162,28 @@ func lexer_scan(lexer) {
         lexer := lexer_add_token(lexer, token_type, ident_str)
         return lexer
     }
+
+    // Comments
+    if char_str == "/" {
+        if (lexer.pos + 1) < lexer.length {
+            let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
+            if next_char == "/" {
+                 // Skip until newline
+                 looping := true
+                 while looping {
+                     lexer := lexer_advance(lexer)
+                     c := lexer_peek(lexer)
+                     if c == "\n" {
+                         looping := false
+                     }
+                     if c == "" {
+                         looping := false
+                     }
+                 }
+                 return lexer_scan(lexer)
+            }
+        }
+    }
     
     // Symbols
     lexer := lexer_add_token(lexer, TOKEN_SYMBOL, char_str)
@@ -157,18 +195,11 @@ func lexer_tokenize(source) {
     lexer := lexer_new(source)
     running := true
     while running {
-        // Need to check if EOF token added.
-        // But `lexer_scan` adds one token and returns.
-        // How do we know if done?
-        // Access last token?
-        count := sys.len(lexer.tokens)
+        let (count, tokens_ref) := sys.len(lexer.tokens)
+        lexer.tokens := tokens_ref
         if count > 0 {
             last_token := sys.list.get(lexer.tokens, count - 1)
-            // list.get returns [val, list]
-            // We need to extract val.
-            // Destructure!
             let (token_val, token_list) := last_token
-            // token_val is Struct.
             type := token_val.type
             if type == TOKEN_EOF {
                 running := false
@@ -218,6 +249,9 @@ TOKEN_KEYWORD_WHILE := 102
 TOKEN_KEYWORD_FUNC := 103
 TOKEN_KEYWORD_RETURN := 104
 TOKEN_KEYWORD_LET := 105
+TOKEN_KEYWORD_CLASS := 106
+TOKEN_KEYWORD_TRUE := 107
+TOKEN_KEYWORD_FALSE := 108
 
 // --- AST Node Types ---
 NODE_PROGRAM := 0
@@ -283,6 +317,20 @@ func parse_primary(parser) {
         p_adv := parser_advance(p_peek)
         node := { kind: NODE_EXPR_LITERAL_INT, value: val }
         return [node, p_adv]
+    }
+
+    // TOKEN_KEYWORD_TRUE := 107
+    if ttype == 107 {
+         p_adv := parser_advance(p_peek)
+         node := { kind: NODE_EXPR_LITERAL_BOOL, value: "true" }
+         return [node, p_adv]
+    }
+
+    // TOKEN_KEYWORD_FALSE := 108
+    if ttype == 108 {
+         p_adv := parser_advance(p_peek)
+         node := { kind: NODE_EXPR_LITERAL_BOOL, value: "false" }
+         return [node, p_adv]
     }
     
     // TOKEN_IDENTIFIER := 1
@@ -774,6 +822,9 @@ func parse_stmt(parser) {
 }
 
 func parse_program(tokens) {
+    let (count, tokens) := sys.len(tokens)
+    print("Parser Input Tokens: " + int_to_str(count))
+
     parser := parser_new(tokens)
     ref_parser := [parser]
     children := []
@@ -792,6 +843,10 @@ func parse_program(tokens) {
             let (node, p_next) := parse_func_def(p_prog_peek)
             children := sys.list.append(children, node)
             ref_parser := [p_next]
+        } else if ttype == 106 { // TOKEN_KEYWORD_CLASS
+            print("Warning: Class definitions not supported in parser yet. Skipping 'class' keyword.")
+            p_next := parser_advance(p_prog_peek)
+            ref_parser := [p_next]
         } else {
             // Use parse_stmt
             let (node, p_next) := parse_stmt(p_prog_peek)
@@ -800,6 +855,9 @@ func parse_program(tokens) {
         }
     }
     
+    let (child_count, _) := sys.len(children)
+    print("Parser Output Nodes: " + int_to_str(child_count))
+
     return {
         kind: NODE_PROGRAM,
         children: children
@@ -917,6 +975,7 @@ func codegen_block(stmts) {
 
 func codegen_func(node) {
     let (name, node) := sys.struct.get(node, "name")
+    print("Codegen Func: " + name)
     let (args, node) := sys.struct.get(node, "args")
     let (body, node) := sys.struct.get(node, "body")
     
@@ -941,15 +1000,32 @@ func codegen_program(ast) {
     let (children, ast) := sys.struct.get(ast, "children")
     let (count, children) := sys.len(children)
     
-    if count > 0 {
-        let (child, children) := sys.list.get(children, 0)
+    // We need to collect all functions.
+    // MAST structure: List of Nodes.
+
+    json := "["
+    i := 0
+    first := 1
+
+    while i < count {
+        let (child, children) := sys.list.get(children, i)
         let (kind, child) := sys.struct.get(child, "kind")
+
         if kind == 1 { // FUNC_DEF
-             return codegen_func(child)
+            func_json := codegen_func(child)
+
+            if first == 0 {
+                json := json + ", "
+            }
+            json := json + func_json
+            first := 0
         }
+
+        i := i + 1
     }
     
-    return "{\"Error\": \"EmptyOrInvalidProgram\"}"
+    json := json + "]"
+    return json
 }
 
 
@@ -976,37 +1052,40 @@ func main() {
     
     // Get Input Path (For Read - Fresh Copy)
     let (input_path, _) := sys.list.get(sys_args, 2)
-    // let (output_path, _) := sys.list.get(sys_args, 3)
-    output_path := "force_output.json"
+    let (output_path, _) := sys.list.get(sys_args, 3)
     
     // Print using dedicated copy
     let (input_path_print, _) := sys.list.get(sys_args, 2)
     print("Compiling: " + input_path_print)
     
     // 2. Read Source (Using input_path)
-    print("DEBUG: 1. Reading Source...")
     source := sys.fs.read(input_path)
-    print("DEBUG: 2. Source Loaded.")
+    print("Source Loaded.")
 
     // 3. Lexer
-    print("DEBUG: 3. Starting Lexer...")
+    // tokens := lexer_tokenize(source)
+    print("Starting Lexer...")
     tokens := lexer_tokenize(source)
-    print("DEBUG: 4. Lexer Finished.")
+    print("Lexer Finished.")
     
     // 4. Parser
-    print("DEBUG: 5. Starting Parser...")
+    // ast := parse_program(tokens)
+    print("Starting Parser...")
     ast := parse_program(tokens)
-    print("DEBUG: 6. Parser Finished.")
+    print("Parser Finished.")
     
     // 5. Codegen
-    print("DEBUG: 7. Starting Codegen...")
+    print("Starting Codegen...")
     mast_json := codegen_program(ast)
-    print("DEBUG: 8. Codegen Finished.")
+    print("Codegen Finished.")
     
+    // Debug Codegen Output
+    let (mast_len, _) := sys.len(mast_json)
+    print("MAST JSON Length: " + int_to_str(mast_len))
+
     // 6. Write Output
-    print("DEBUG: 9. Writing Output to: " + output_path)
+    print("Writing Output to: '" + output_path + "'")
     sys.fs.write(output_path, mast_json)
-    print("DEBUG: 10. Done.")
     
     print("Compilation Complete. Output written to: " + output_path)
     

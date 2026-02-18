@@ -1,9 +1,58 @@
-target/
-**/*.rs.bk
-Cargo.lock
-**/*.pyc
 __pycache__/
-.idea/
+*.pyc
+.env*
+.venv
+ops/secrets.py
+*.log
+JULES_DEPLOYMENT_LOG.txt
+SWARM_REGISTRY_OMEGA.txt
+target/
 .vscode/
-*.swp
-*.swo
+.agent/
+.antigravity/
+.context/
+.pytest_cache/
+.memory_key
+
+# Internal tool directories (NOT part of the project)
+artifacts/
+scratch/
+patches/
+
+# Local Scratch & Build Tools
+scratch/
+build_log.txt
+test.c
+test.exe
+
+# Test Artifacts (auto-generated, not source)
+*.tmp
+*.enc
+test.mp3
+test_tone.wav
+bench_temp.txt
+test_data.txt
+wallet.json
+test_integration*.log
+
+# Debug Artifacts
+debug_output.txt
+debug_build.py
+
+# Build & Operational Outputs
+out.json
+nts_clean.txt
+security.json
+swarm_*_log.json
+trace.log
+
+# Backup/stale files
+*.bak
+*.user_bak
+*.attack
+
+# Additional test/build artifacts
+*.mp3
+*.wav
+build_log.txt
+ark-pkg

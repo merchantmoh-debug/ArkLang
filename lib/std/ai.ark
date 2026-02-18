@@ -1,0 +1,88 @@
+// Ark Standard Library: AI (The Neural Bridge)
+// (c) 2026 Sovereign Systems
+//
+// Provides native AI capabilities within the Ark language.
+// Requires: GOOGLE_API_KEY or ARK_LLM_ENDPOINT environment variable.
+
+// --- Core Function ---
+
+func ask(prompt) {
+    return sys.ai.ask(prompt)
+}
+
+// --- Agent Class ---
+// An Agent wraps a persona (system prompt) and maintains conversation context.
+
+class Agent {
+    func new(persona) {
+        a := Agent()
+        a.persona := persona
+        a.history := []
+        return a
+    }
+
+    func chat(message) {
+        p := this.persona
+        full_prompt := "System: " + p + "\nUser: " + message
+        response := sys.ai.ask(full_prompt)
+        sys.list.append(this.history, message)
+        sys.list.append(this.history, response)
+        return response
+    }
+
+    func reset() {
+        this.history := []
+    }
+}
+
+// --- Swarm Class ---
+// A Swarm runs a task across multiple agents and collects results.
+
+class Swarm {
+    func new(agents) {
+        s := Swarm()
+        s.agents := agents
+        return s
+    }
+
+    func run(task) {
+        results := []
+        i := 0
+        while i < len(this.agents) {
+            a := this.agents[i]
+            res := a.chat(task)
+            sys.list.append(results, res)
+            i := i + 1
+        }
+        return results
+    }
+
+    func run_chain(task) {
+        // Pipeline: each agent receives the previous agent's output
+        current := task
+        i := 0
+        while i < len(this.agents) {
+            a := this.agents[i]
+            current := a.chat(current)
+            i := i + 1
+        }
+        return current
+    }
+}
+
+// --- Pipeline Function ---
+// Sequential AI pipeline: ask a series of prompts, feeding each answer into the next.
+
+func pipeline(prompts) {
+    current := ""
+    i := 0
+    while i < len(prompts) {
+        p := prompts[i]
+        if current != "" {
+            p := p + "\n\nContext: " + current
+        }
+        current := sys.ai.ask(p)
+        i := i + 1
+    }
+    return current
+}

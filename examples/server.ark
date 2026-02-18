@@ -1,0 +1,14 @@
+func handle(path) {
+    print("Request for:", path)
+    if path == "/" {
+        return "<h1>Welcome to Ark Server</h1><p>Running on Protocol Omega v112.0</p>"
+    }
+    return "<h1>404 Not Found</h1>"
+}
+
+print("Starting server on port 8080...")
+sys.net.http.serve(8080, handle)
+
+while 1 {
+    sys.time.sleep(1)
+}

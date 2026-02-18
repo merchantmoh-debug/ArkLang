@@ -1,0 +1,10 @@
+cryptography
+pydantic
+pydantic-settings
+google-genai
+lark
+prompt_toolkit
+pygments
+requests
+psutil
+z3-solver

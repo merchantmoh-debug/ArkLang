@@ -25,6 +25,23 @@ You are free to use, copy, modify, and distribute this software under the terms 
 3. PATENT GRANT TERMINATION:
    The grant of patent licenses provided in Section 11 of the AGPL-3.0 is EXPRESSLY CONDITIONED on compliance with the terms of this license. If you fail to comply with the AGPL-3.0 conditions (including the source code disclosure requirement), your patent license to US Patent App #63/935,467 and related IP is automatically and immediately terminated.
 
+4. PATENT SCOPE LIMITATION (Section 7 Additional Term):
+   Pursuant to Section 7 of the AGPL-3.0, the following additional term applies:
+
+   The patent license granted under Section 11 of the AGPL-3.0 is LIMITED EXCLUSIVELY to the use, modification, and distribution of the Ark Compiler software, Ark-0 Runtime, and Ark Standard Library SOURCE CODE as provided in this repository. Specifically:
+
+   (a) "Essential patent claims" as defined in Section 11 SHALL BE CONSTRUED NARROWLY to include ONLY those claims of US Patent App #63/935,467 (and any patents issuing therefrom, continuations, divisionals, or foreign counterparts) that are necessarily infringed by the specific software implementation contained in this repository — i.e., by compiling, running, or modifying the source code files herein.
+
+   (b) The patent license granted under Section 11 DOES NOT extend to, and SHALL NOT BE CONSTRUED to cover:
+       (i)   Any claims directed to abstract methods, processes, frameworks, reasoning architectures, cognitive models, or algorithmic methodologies described in the patent specification;
+       (ii)  Any independent implementation of the patented methods that does not incorporate or derive from the Ark source code;
+       (iii) Any use of the patented methods in hardware, firmware, or software not derived from this repository;
+       (iv)  Any claims that would only be infringed by the OUTPUT or ARTIFACTS produced by the Ark Compiler, as opposed to the compiler software itself.
+
+   (c) For the avoidance of doubt: using the Ark Compiler to compile a program DOES NOT grant the user a patent license to the underlying methods claimed in the patent. The patent license covers only the compiler tool itself, not the conceptual methods it implements.
+
+   (d) Any party wishing to practice the broader patent claims outside the scope of this software must obtain a separate Commercial License from Sovereign Systems.
+
 --------------------------------------------------------------------------
 OPTION 2: COMMERCIAL USE (PROPRIETARY)
 --------------------------------------------------------------------------

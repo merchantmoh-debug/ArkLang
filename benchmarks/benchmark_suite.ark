@@ -1,0 +1,88 @@
+
+// Ark Omega-Point Benchmark Suite
+// v1.0.0 - The Silicon Heart Stress Test
+
+print("--- Ark Omega-Point Benchmarks ---")
+
+// 1. Fibonacci (Recursion Stress)
+func fib(n) {
+    if n < 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+print("[BENCH] Running Fibonacci(25)...")
+// We don't have a timer intrinsic yet (Standard Lib gap), so we rely on external timing.
+res_fib := fib(25)
+print("Result: " + res_fib)
+
+// 2. Ackermann (Stack Depth Stress)
+func ackermann(m, n) {
+    if m == 0 {
+        return n + 1
+    }
+    if n == 0 {
+        return ackermann(m - 1, 1)
+    }
+    return ackermann(m - 1, ackermann(m, n - 1))
+}
+
+print("[BENCH] Running Ackermann(3, 2)...")
+res_ack := ackermann(3, 2)
+print("Result: " + res_ack)
+
+// 3. Bubble Sort (Memory/List Stress)
+// Ark lists are dynamic arrays.
+func bubble_sort(arr) {
+    len_res := sys.len(arr)
+    // Destructuring support for sys.len needs to be robust
+    // sys.len returns [length, list] if linear, or just length?
+    // In current intrinsics, sys.len(list) -> [int, list]
+    
+    // Let's assume standard linear behavior:
+    let (n, arr) := sys.len(arr)
+    
+    // Outer loop
+    i := 0
+    while i < n {
+        // Inner loop
+        j := 0
+        limit := n - i - 1
+        while j < limit {
+            // Get elements
+            let (a, arr) := sys.list.get(arr, j)
+            let (b, arr) := sys.list.get(arr, j + 1)
+            
+            if a > b {
+                // Swap
+                // set(list, index, val) -> list
+                arr := sys.list.set(arr, j, b)
+                arr := sys.list.set(arr, j + 1, a)
+            }
+            
+            j := j + 1
+        }
+        i := i + 1
+    }
+    return arr
+}
+
+print("[BENCH] Running Bubble Sort (Linear List)...")
+// Construct a list in reverse
+list := []
+list := sys.list.append(list, 10)
+list := sys.list.append(list, 9)
+list := sys.list.append(list, 8)
+list := sys.list.append(list, 7)
+list := sys.list.append(list, 6)
+list := sys.list.append(list, 5)
+list := sys.list.append(list, 4)
+list := sys.list.append(list, 3)
+list := sys.list.append(list, 2)
+list := sys.list.append(list, 1)
+
+sorted := bubble_sort(list)
+print("Sorted: " + sorted)
+
+print("--- Benchmarks Complete ---")

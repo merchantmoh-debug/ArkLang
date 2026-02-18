@@ -1,0 +1,21 @@
+print("Starting Ark System...")
+
+config := {
+    version: 1,
+    mode: "secure"
+}
+
+if config.mode == "secure" {
+    print("Security Active")
+}
+
+config.version := 2
+print("Upgraded to Version:")
+print(config)
+
+func double(n) {
+    return n * 2
+}
+
+result := double(10)
+print(result)

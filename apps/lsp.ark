@@ -1,0 +1,1440 @@
+
+// --- LSP Library ---
+
+// --- Constants ---
+TOKEN_EOF := 0
+TOKEN_IDENTIFIER := 1
+TOKEN_NUMBER := 2
+TOKEN_STRING := 3
+TOKEN_SYMBOL := 4
+TOKEN_KEYWORD := 5
+
+// Keywords (Must match Parser)
+TOKEN_KEYWORD_IF := 100
+TOKEN_KEYWORD_ELSE := 101
+TOKEN_KEYWORD_WHILE := 102
+TOKEN_KEYWORD_FUNC := 103
+TOKEN_KEYWORD_RETURN := 104
+TOKEN_KEYWORD_LET := 105
+TOKEN_KEYWORD_TRUE := 106
+TOKEN_KEYWORD_FALSE := 107
+TOKEN_KEYWORD_IMPORT := 108
+TOKEN_KEYWORD_STRUCT := 109
+TOKEN_KEYWORD_MATCH := 110
+
+// --- AST Node Types ---
+NODE_PROGRAM := 0
+NODE_FUNC_DEF := 1
+NODE_BLOCK := 2
+NODE_IF := 3
+NODE_WHILE := 4
+NODE_RETURN := 5
+NODE_LET := 6
+NODE_ASSIGN := 7
+NODE_EXPR_BINARY := 8
+NODE_EXPR_CALL := 9
+NODE_EXPR_LITERAL_INT := 10
+NODE_EXPR_LITERAL_STR := 11
+NODE_EXPR_VAR := 12
+NODE_EXPR_LITERAL_BOOL := 13
+
+// --- Helpers ---
+
+func int_to_str(i) {
+    return "" + i
+}
+
+func is_digit(char_str) {
+    return (char_str >= "0") and (char_str <= "9")
+}
+
+func is_alpha(char_str) {
+    return ((char_str >= "a") and (char_str <= "z")) or ((char_str >= "A") and (char_str <= "Z")) or (char_str == "_") or (char_str == ".")
+}
+
+func is_whitespace(char_str) {
+    return (char_str == " ") or (char_str == "\n") or (char_str == "\t") or (char_str == "\r")
+}
+
+// --- Lexer ---
+
+func lexer_new(source) {
+    let (l, src) := sys.len(source)
+    return {
+        source: src,
+        length: l,
+        pos: 0,
+        line: 0,
+        col: 0,
+        tokens: []
+    }
+}
+
+func lexer_peek(lexer) {
+    if lexer.pos >= lexer.length {
+        return "" // EOF
+    }
+    let (c, src) := sys.str.get(lexer.source, lexer.pos)
+    return c
+}
+
+func lexer_advance(lexer) {
+    c := lexer_peek(lexer)
+    lexer.pos := lexer.pos + 1
+    if c == "\n" {
+        lexer.line := lexer.line + 1
+        lexer.col := 0
+    } else {
+        lexer.col := lexer.col + 1
+    }
+    return lexer
+}
+
+func lexer_add_token(lexer, type, value) {
+    // Calculate end position based on value length
+    let (val_len, _) := sys.len(value)
+
+    // Start is current lexer.line/col - val_len (roughly, if on same line)
+    // But lexer_advance updates line/col.
+    // Better strategy: capture start pos before scanning token.
+    // But here we are adding after scanning.
+    // We can use lexer.line/col as END.
+    // START = END - len.
+    // This assumes single line tokens. Multiline strings break this.
+    // For now, assume single line tokens.
+
+    end_line := lexer.line
+    end_col := lexer.col
+    start_line := end_line
+    start_col := end_col - val_len
+
+    if start_col < 0 { start_col := 0 } // Safety
+
+    token := {
+        type: type,
+        value: value,
+        range: {
+            start: { line: start_line, character: start_col },
+            end: { line: end_line, character: end_col }
+        }
+    }
+    lexer.tokens := sys.list.append(lexer.tokens, token)
+    return lexer
+}
+
+func check_keyword(ident_str) {
+    if ident_str == "if" { return 100 }
+    if ident_str == "else" { return 101 }
+    if ident_str == "while" { return 102 }
+    if ident_str == "func" { return 103 }
+    if ident_str == "return" { return 104 }
+    if ident_str == "let" { return 105 }
+    if ident_str == "true" { return 106 }
+    if ident_str == "false" { return 107 }
+    if ident_str == "import" { return 108 }
+    if ident_str == "struct" { return 109 }
+    if ident_str == "match" { return 110 }
+    return 1 // TOKEN_IDENTIFIER
+}
+
+func lexer_scan(lexer) {
+    char_str := lexer_peek(lexer)
+
+    if char_str == "" {
+        lexer := lexer_add_token(lexer, TOKEN_EOF, "")
+        return lexer
+    }
+
+    if is_whitespace(char_str) {
+        lexer := lexer_advance(lexer)
+        return lexer_scan(lexer)
+    }
+
+    if is_digit(char_str) {
+        num_str := ""
+        while is_digit(lexer_peek(lexer)) {
+            num_str := num_str + lexer_peek(lexer)
+            lexer := lexer_advance(lexer)
+        }
+        lexer := lexer_add_token(lexer, TOKEN_NUMBER, num_str)
+        return lexer
+    }
+
+    if is_alpha(char_str) {
+        ident_str := ""
+        while is_alpha(lexer_peek(lexer)) or is_digit(lexer_peek(lexer)) {
+            ident_str := ident_str + lexer_peek(lexer)
+            lexer := lexer_advance(lexer)
+        }
+
+        token_type := check_keyword(ident_str)
+        lexer := lexer_add_token(lexer, token_type, ident_str)
+        return lexer
+    }
+
+    if char_str == "\"" {
+        lexer := lexer_advance(lexer) // Skip start quote
+        str_val := ""
+        while (lexer_peek(lexer) != "\"") and (lexer_peek(lexer) != "") {
+            str_val := str_val + lexer_peek(lexer)
+            lexer := lexer_advance(lexer)
+        }
+        if lexer_peek(lexer) == "\"" {
+            lexer := lexer_advance(lexer) // Skip end quote
+        }
+        // Token value includes quotes? Usually string literal value doesn't.
+        // But for range calculation, we need full length including quotes.
+        // Let's store raw value including quotes for range, but value field for AST?
+        // Let's store value as the content string.
+        // Adjust range manually.
+
+        let (content_len, _) := sys.len(str_val)
+        full_len := content_len + 2
+
+        end_line := lexer.line
+        end_col := lexer.col
+        start_line := end_line
+        start_col := end_col - full_len
+
+        token := {
+            type: TOKEN_STRING,
+            value: str_val,
+            range: {
+                start: { line: start_line, character: start_col },
+                end: { line: end_line, character: end_col }
+            }
+        }
+        lexer.tokens := sys.list.append(lexer.tokens, token)
+        return lexer
+    }
+
+    // Comments
+    if char_str == "/" {
+        if (lexer.pos + 1) < lexer.length {
+            let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
+            if next_char == "/" {
+                 looping := true
+                 while looping {
+                     lexer := lexer_advance(lexer)
+                     c := lexer_peek(lexer)
+                     if c == "\n" { looping := false }
+                     if c == "" { looping := false }
+                 }
+                 return lexer_scan(lexer)
+            }
+        }
+    }
+
+    // Symbols
+    // Handle :=
+    if char_str == ":" {
+        if (lexer.pos + 1) < lexer.length {
+            let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
+            if next_char == "=" {
+                 lexer := lexer_advance(lexer) // :
+                 lexer := lexer_advance(lexer) // =
+                 lexer := lexer_add_token(lexer, 16, ":=") // TOKEN_ASSIGN
+                 return lexer
+            }
+        }
+    }
+
+    // Handle ==
+    if char_str == "=" {
+        if (lexer.pos + 1) < lexer.length {
+            let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
+            if next_char == "=" {
+                 lexer := lexer_advance(lexer)
+                 lexer := lexer_advance(lexer)
+                 lexer := lexer_add_token(lexer, 21, "==")
+                 return lexer
+            }
+        }
+    }
+
+    lexer := lexer_advance(lexer)
+    lexer := lexer_add_token(lexer, TOKEN_SYMBOL, char_str)
+    return lexer
+}
+
+func lexer_tokenize(source) {
+    lexer := lexer_new(source)
+    running := true
+    while running {
+        let (count, tokens_ref) := sys.len(lexer.tokens)
+        lexer.tokens := tokens_ref
+        if count > 0 {
+            last_token := sys.list.get(lexer.tokens, count - 1)
+            let (token_val, token_list) := last_token
+            type := token_val.type
+            if type == TOKEN_EOF {
+                running := false
+            } else {
+                lexer := lexer_scan(lexer)
+            }
+        } else {
+            lexer := lexer_scan(lexer)
+        }
+    }
+    return lexer.tokens
+}
+
+// --- Parser ---
+
+func parser_new(tok_input) {
+    return {
+        tokens: tok_input,
+        pos: 0
+    }
+}
+
+func parser_peek(parser) {
+    let (tok_list, parser) := sys.struct.get(parser, "tokens")
+    let (pos, parser) := sys.struct.get(parser, "pos")
+
+    let (len, _) := sys.len(tok_list)
+    if pos >= len {
+        // Safe EOF
+        if len > 0 {
+            let (last_tok, _) := sys.list.get(tok_list, len - 1)
+            return [last_tok, parser]
+        } else {
+            return [{type: 0, value: "", range: {start: {line: 0, character: 0}, end: {line: 0, character: 0}}}, parser]
+        }
+    }
+
+    let (tok, tok_list) := sys.list.get(tok_list, pos)
+    parser := sys.struct.set(parser, "tokens", tok_list)
+    return [tok, parser]
+}
+
+func parser_advance(parser) {
+    let (pos, parser) := sys.struct.get(parser, "pos")
+    new_pos := pos + 1
+    parser := sys.struct.set(parser, "pos", new_pos)
+    return parser
+}
+
+func make_node(kind, start_tok, end_tok, props) {
+    // start_tok and end_tok are tokens with `range`
+    let (start_range, _) := sys.struct.get(start_tok, "range")
+    let (end_range, _) := sys.struct.get(end_tok, "range")
+
+    let (start_pos, _) := sys.struct.get(start_range, "start")
+    let (end_pos, _) := sys.struct.get(end_range, "end")
+
+    range := {
+        start: start_pos,
+        end: end_pos
+    }
+
+    node := {
+        kind: kind,
+        range: range
+    }
+
+    // Merge props
+    // Assume props is an Instance (Struct)
+    // We can iterate keys? No.
+    // We have to set fields manually or copy manually.
+    // Ark doesn't support merging structs easily without iterating keys (which we can't do natively yet unless sys.struct.keys exists).
+    // So caller should pass the fully constructed node, and we just add range.
+
+    // Let's change signature: make_node(node, start_tok, end_tok)
+
+    // But props was just fields.
+    // Let's implement sys.struct.merge? No.
+
+    // Workaround: We pass the object, we set range on it.
+
+    return sys.struct.set(props, "range", range)
+}
+
+func parse_primary(parser) {
+    let (tok, p_peek) := parser_peek(parser)
+    let (ttype, tok) := sys.struct.get(tok, "type")
+
+    if ttype == TOKEN_NUMBER {
+        let (val, tok) := sys.struct.get(tok, "value")
+        p_adv := parser_advance(p_peek)
+        node := { kind: NODE_EXPR_LITERAL_INT, value: val }
+        node := sys.struct.set(node, "range", tok.range)
+        return [node, p_adv]
+    }
+
+    if ttype == TOKEN_STRING {
+        let (val, tok) := sys.struct.get(tok, "value")
+        p_adv := parser_advance(p_peek)
+        node := { kind: NODE_EXPR_LITERAL_STR, value: val }
+        node := sys.struct.set(node, "range", tok.range)
+        return [node, p_adv]
+    }
+
+    if ttype == TOKEN_KEYWORD_TRUE {
+        p_adv := parser_advance(p_peek)
+        node := { kind: NODE_EXPR_LITERAL_BOOL, value: 1 }
+        node := sys.struct.set(node, "range", tok.range)
+        return [node, p_adv]
+    }
+
+    if ttype == TOKEN_KEYWORD_FALSE {
+        p_adv := parser_advance(p_peek)
+        node := { kind: NODE_EXPR_LITERAL_BOOL, value: 0 }
+        node := sys.struct.set(node, "range", tok.range)
+        return [node, p_adv]
+    }
+
+    if ttype == TOKEN_IDENTIFIER {
+        let (val, tok) := sys.struct.get(tok, "value")
+        p_after_id := parser_advance(p_peek)
+
+        let (tok2, p_peek2) := parser_peek(p_after_id)
+        let (val2, tok2) := sys.struct.get(tok2, "value")
+
+        if val2 == "(" {
+             p_after_paren := parser_advance(p_peek2)
+
+             args := []
+             ref_parser := [p_after_paren]
+             running := true
+
+             // Track end token for range (RPAREN)
+             end_tok := tok2 // Default to LPAREN if empty args (wrong but safe)
+
+             while running {
+                 let (p, _) := sys.list.get(ref_parser, 0)
+                 let (t, p_pk) := parser_peek(p)
+                 let (val_t, t) := sys.struct.get(t, "value")
+                 let (tt, t) := sys.struct.get(t, "type")
+
+                 if tt == TOKEN_EOF {
+                     running := false
+                 } else if val_t == ")" {
+                     end_tok := t
+                     running := false
+                     p_after_args := parser_advance(p_pk)
+                     ref_parser := [p_after_args]
+                 } else {
+                     let (arg_expr, p_next) := parse_expr(p_pk)
+                     args := sys.list.append(args, arg_expr)
+
+                     let (t2, p_pk2) := parser_peek(p_next)
+                     let (val_t2, t2) := sys.struct.get(t2, "value")
+
+                     if val_t2 == "," {
+                         p_comma := parser_advance(p_pk2)
+                         ref_parser := [p_comma]
+                     } else {
+                         ref_parser := [p_next]
+                     }
+                 }
+             }
+
+             let (final_parser, _) := sys.list.get(ref_parser, 0)
+
+             node := {
+                kind: NODE_EXPR_CALL,
+                function: val,
+                args: args
+             }
+
+             // Range: Identifier Start to RPAREN End
+             range := {
+                 start: tok.range.start,
+                 end: end_tok.range.end
+             }
+             node := sys.struct.set(node, "range", range)
+
+             return [node, final_parser]
+        }
+
+        node := { kind: NODE_EXPR_VAR, name: val }
+        node := sys.struct.set(node, "range", tok.range)
+        return [node, p_after_id]
+    }
+
+    p_adv := parser_advance(p_peek)
+    return [{kind: 99, value: "unexpected_primary", line: tok.range.start.line, col: tok.range.start.character}, p_adv]
+}
+
+func parse_expr(parser) {
+    return parse_primary(parser) // Simplified for brevity (no binary ops yet for LSP demo)
+}
+
+func parse_block(parser) {
+    let (tok_start, p_brace) := parser_peek(parser)
+    p_curr := parser_advance(p_brace)
+
+    children := []
+    ref_parser := [p_curr]
+    end_tok := tok_start
+
+    running := true
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_peek) := parser_peek(p)
+        let (val_tok, tok) := sys.struct.get(tok, "value")
+
+        if val_tok == "}" {
+            end_tok := tok
+            running := false
+            p_after_block := parser_advance(p_peek)
+            ref_parser := [p_after_block]
+        } else if val_tok == "" { // EOF
+            end_tok := tok
+            running := false
+            ref_parser := [p_peek]
+        } else {
+            let (stmt, p_next) := parse_stmt(p_peek)
+            children := sys.list.append(children, stmt)
+            ref_parser := [p_next]
+        }
+    }
+
+    let (final_parser, _) := sys.list.get(ref_parser, 0)
+
+    range := {
+        start: tok_start.range.start,
+        end: end_tok.range.end
+    }
+
+    // Block is list of statements, but let's wrap it in NODE_BLOCK?
+    // Or just return children list?
+    // Caller expects list? parse_func_def expects list.
+    // But parse_block should return range info.
+    // So let's return a Block Node.
+
+    node := {
+        kind: NODE_BLOCK,
+        children: children,
+        range: range
+    }
+
+    return [node, final_parser]
+}
+
+func parse_func_def(parser) {
+    let (tok_start, p_func) := parser_peek(parser)
+    p_after_func := parser_advance(p_func)
+
+    let (tok2, p_peek2) := parser_peek(p_after_func)
+    let (name, tok2) := sys.struct.get(tok2, "value")
+    p_after_name := parser_advance(p_peek2)
+
+    // Skip args parsing for brevity (LSP demo), assume ()
+    ref_parser := [p_after_name]
+    running := true
+    while running {
+         let (p, _) := sys.list.get(ref_parser, 0)
+         let (t, p_pk) := parser_peek(p)
+         let (v, t) := sys.struct.get(t, "value")
+         let (tt, t) := sys.struct.get(t, "type")
+
+         if tt == TOKEN_EOF {
+             running := false
+         } else if v == "{" {
+             running := false
+         } else {
+             p_next := parser_advance(p_pk)
+             ref_parser := [p_next]
+         }
+    }
+    let (p_before_block, _) := sys.list.get(ref_parser, 0)
+
+    let (body_node, p_after_body) := parse_block(p_before_block)
+
+    node := {
+        kind: NODE_FUNC_DEF,
+        name: name,
+        args: [], // Skipped
+        body: body_node.children
+    }
+
+    range := {
+        start: tok_start.range.start,
+        end: body_node.range.end
+    }
+    node := sys.struct.set(node, "range", range)
+
+    return [node, p_after_body]
+}
+
+func parse_return(parser) {
+    let (tok_start, p_ret) := parser_peek(parser)
+    p_after_ret := parser_advance(p_ret)
+
+    let (val, p_final) := parse_expr(p_after_ret)
+
+    let (end_range, _) := sys.struct.get(val, "range")
+    let (end_pos, _) := sys.struct.get(end_range, "end")
+
+    range := {
+        start: tok_start.range.start,
+        end: end_pos
+    }
+
+    node := {
+        kind: NODE_RETURN,
+        value: val,
+        range: range
+    }
+    return [node, p_final]
+}
+
+func parse_if(parser) {
+    let (tok_start, p_if) := parser_peek(parser)
+    p_after_if := parser_advance(p_if)
+
+    let (cond, p_after_cond) := parse_expr(p_after_if)
+    let (body_node, p_after_body) := parse_block(p_after_cond)
+
+    range := {
+        start: tok_start.range.start,
+        end: body_node.range.end
+    }
+
+    node := {
+        kind: NODE_IF,
+        condition: cond,
+        then_block: body_node.children,
+        range: range
+    }
+    // Handle else? Skipped for brevity
+    return [node, p_after_body]
+}
+
+func parse_while(parser) {
+    let (tok_start, p_while) := parser_peek(parser)
+    p_after_while := parser_advance(p_while)
+
+    let (cond, p_after_cond) := parse_expr(p_after_while)
+    let (body_node, p_after_body) := parse_block(p_after_cond)
+
+    range := {
+        start: tok_start.range.start,
+        end: body_node.range.end
+    }
+
+    node := {
+        kind: NODE_WHILE,
+        condition: cond,
+        body: body_node.children,
+        range: range
+    }
+    return [node, p_after_body]
+}
+
+func parse_stmt(parser) {
+    let (tok, p_stmt_peek) := parser_peek(parser)
+    let (ttype, tok) := sys.struct.get(tok, "type")
+
+    if ttype == TOKEN_KEYWORD_FUNC { return parse_func_def(p_stmt_peek) }
+    if ttype == TOKEN_KEYWORD_RETURN { return parse_return(p_stmt_peek) }
+    if ttype == TOKEN_KEYWORD_IF { return parse_if(p_stmt_peek) }
+    if ttype == TOKEN_KEYWORD_WHILE { return parse_while(p_stmt_peek) }
+
+    // Assignments/Exprs
+    let (expr, p_next) := parse_expr(p_stmt_peek)
+
+    // Check for assignment :=
+    let (tok2, p_peek2) := parser_peek(p_next)
+    let (val2, tok2) := sys.struct.get(tok2, "value")
+
+    if val2 == ":=" {
+        p_assign := parser_advance(p_peek2)
+        let (val_expr, p_final) := parse_expr(p_assign)
+
+        let (name, _) := sys.struct.get(expr, "name") // Assume LHS is var
+
+        let (start_r, _) := sys.struct.get(expr, "range")
+        let (end_r, _) := sys.struct.get(val_expr, "range")
+
+        range := {
+            start: start_r.start,
+            end: end_r.end
+        }
+
+        node := {
+            kind: NODE_ASSIGN,
+            name: name,
+            value: val_expr,
+            range: range
+        }
+        return [node, p_final]
+    }
+
+    return [expr, p_next]
+}
+
+func parse_program(tokens) {
+    parser := parser_new(tokens)
+    ref_parser := [parser]
+    children := []
+
+    running := true
+    while running {
+        let (p, _) := sys.list.get(ref_parser, 0)
+        let (tok, p_prog_peek) := parser_peek(p)
+        let (ttype, tok) := sys.struct.get(tok, "type")
+
+        if ttype == TOKEN_EOF {
+            running := false
+            ref_parser := [p_prog_peek]
+        } else {
+            let (node, p_next) := parse_stmt(p_prog_peek)
+            children := sys.list.append(children, node)
+            ref_parser := [p_next]
+        }
+    }
+
+    // Calculate range for PROGRAM
+    // 0,0 to last token end
+    // Assume 0,0 start
+
+    end_range := { line: 0, character: 0 }
+    // Get last token
+    let (tlen, _) := sys.len(tokens)
+    if tlen > 0 {
+        let (last_tok, _) := sys.list.get(tokens, tlen - 1)
+        let (r, _) := sys.struct.get(last_tok, "range")
+        let (e, _) := sys.struct.get(r, "end")
+        end_range := e
+    }
+
+    prog_range := {
+        start: { line: 0, character: 0 },
+        end: end_range
+    }
+
+    return {
+        kind: NODE_PROGRAM,
+        children: children,
+        range: prog_range
+    }
+}
+
+// --- LSP Logic ---
+
+func in_range(line, col, range) {
+    let (start, _) := sys.struct.get(range, "start")
+    let (end, _) := sys.struct.get(range, "end")
+
+    s_line := start.line
+    s_col := start.character
+    e_line := end.line
+    e_col := end.character
+
+    if (line < s_line) or (line > e_line) { return false }
+    if (line == s_line) and (col < s_col) { return false }
+    if (line == e_line) and (col > e_col) { return false }
+
+    return true
+}
+
+func find_node_at_pos(node, line, col) {
+    // Check if node has range
+    has_range := sys.struct.has(node, "range")
+    if has_range == false { return node } // Or null?
+
+    let (range, _) := sys.struct.get(node, "range")
+    if in_range(line, col, range) == false { return 0 } // 0 as null
+
+    // Check children fields
+    fields := ["children", "body", "then_block", "else_block", "args"]
+    let (flen, _) := sys.len(fields)
+    k := 0
+    while k < flen {
+        let (fname, _) := sys.list.get(fields, k)
+        if sys.struct.has(node, fname) {
+            let (children, _) := sys.struct.get(node, fname)
+            // Check if list
+            // We assume it is list.
+            // Check length
+            let (len, _) := sys.len(children)
+            i := 0
+            while i < len {
+                let (child, _) := sys.list.get(children, i)
+                // Check if child is struct (has range)
+                if sys.struct.has(child, "range") {
+                    res := find_node_at_pos(child, line, col)
+                    if res != 0 { return res }
+                }
+                i := i + 1
+            }
+        }
+        k := k + 1
+    }
+
+    // Check singular fields
+    node_fields := ["condition", "expression", "value", "left", "right"]
+    let (nlen, _) := sys.len(node_fields)
+    j := 0
+    while j < nlen {
+        let (fname, _) := sys.list.get(node_fields, j)
+        if sys.struct.has(node, fname) {
+            let (child, _) := sys.struct.get(node, fname)
+            if sys.struct.has(child, "range") {
+                res := find_node_at_pos(child, line, col)
+                if res != 0 { return res }
+            }
+        }
+        j := j + 1
+    }
+
+    // Only return self if no child matched (most specific)
+    return node
+}
+
+// --- Intrinsic Registry ---
+// Returns a list of { label, kind, detail, documentation } for every public intrinsic.
+
+func build_intrinsic_registry() {
+    items := []
+
+    // Helper to add an intrinsic with docs
+    // kind: 3 = Function
+
+    // ── sys namespace ──
+    items := sys.list.append(items, { label: "sys.len",          kind: 3, detail: "sys",    documentation: "Returns (length, ref) of a string, list, or struct" })
+    items := sys.list.append(items, { label: "sys.exec",         kind: 3, detail: "sys",    documentation: "Execute a shell command, returns stdout as string" })
+    items := sys.list.append(items, { label: "sys.exit",         kind: 3, detail: "sys",    documentation: "Exit the process with optional exit code" })
+    items := sys.list.append(items, { label: "sys.log",          kind: 3, detail: "sys",    documentation: "Log a message to stderr" })
+    items := sys.list.append(items, { label: "sys.extract_code", kind: 3, detail: "sys",    documentation: "Extract code blocks from a markdown string" })
+    items := sys.list.append(items, { label: "sys.html_escape",  kind: 3, detail: "sys",    documentation: "HTML-escape a string (< > & \" ')" })
+    items := sys.list.append(items, { label: "print",            kind: 3, detail: "sys",    documentation: "Print value(s) to stdout" })
+
+    // ── sys.fs ──
+    items := sys.list.append(items, { label: "sys.fs.read",         kind: 3, detail: "fs",    documentation: "Read a file and return its contents as a string" })
+    items := sys.list.append(items, { label: "sys.fs.write",        kind: 3, detail: "fs",    documentation: "Write a string to a file (creates/overwrites)" })
+    items := sys.list.append(items, { label: "sys.fs.read_buffer",  kind: 3, detail: "fs",    documentation: "Read file as raw byte buffer" })
+    items := sys.list.append(items, { label: "sys.fs.write_buffer", kind: 3, detail: "fs",    documentation: "Write raw byte buffer to file" })
+
+    // ── sys.io ──
+    items := sys.list.append(items, { label: "sys.io.read_line",       kind: 3, detail: "io",    documentation: "Read a line from stdin" })
+    items := sys.list.append(items, { label: "sys.io.read_bytes",      kind: 3, detail: "io",    documentation: "Read exactly N bytes from stdin" })
+    items := sys.list.append(items, { label: "sys.io.write",           kind: 3, detail: "io",    documentation: "Write raw string to stdout (no newline)" })
+    items := sys.list.append(items, { label: "sys.io.read_file_async", kind: 3, detail: "io",    documentation: "Asynchronously read a file, returns future" })
+    items := sys.list.append(items, { label: "io.cls",                 kind: 3, detail: "io",    documentation: "Clear the terminal screen" })
+
+    // ── sys.list ──
+    items := sys.list.append(items, { label: "sys.list.get",    kind: 3, detail: "list",   documentation: "Get element at index from list → (value, list)" })
+    items := sys.list.append(items, { label: "sys.list.set",    kind: 3, detail: "list",   documentation: "Set element at index in list" })
+    items := sys.list.append(items, { label: "sys.list.append", kind: 3, detail: "list",   documentation: "Append an element to a list, returns new list" })
+    items := sys.list.append(items, { label: "sys.list.delete", kind: 3, detail: "list",   documentation: "Delete element at index from list" })
+
+    // ── sys.struct ──
+    items := sys.list.append(items, { label: "sys.struct.get", kind: 3, detail: "struct", documentation: "Get field value from struct → (value, struct)" })
+    items := sys.list.append(items, { label: "sys.struct.set", kind: 3, detail: "struct", documentation: "Set field on struct, returns updated struct" })
+    items := sys.list.append(items, { label: "sys.struct.has", kind: 3, detail: "struct", documentation: "Check if struct has a given field → bool" })
+
+    // ── sys.json ──
+    items := sys.list.append(items, { label: "sys.json.parse",     kind: 3, detail: "json", documentation: "Parse a JSON string into Ark values" })
+    items := sys.list.append(items, { label: "sys.json.stringify", kind: 3, detail: "json", documentation: "Serialize Ark value to JSON string" })
+
+    // ── sys.vm ──
+    items := sys.list.append(items, { label: "sys.vm.eval",   kind: 3, detail: "vm",   documentation: "Evaluate an Ark expression string at runtime" })
+    items := sys.list.append(items, { label: "sys.vm.source", kind: 3, detail: "vm",   documentation: "Load and execute an Ark source file" })
+
+    // ── sys.thread ──
+    items := sys.list.append(items, { label: "sys.thread.spawn", kind: 3, detail: "thread", documentation: "Spawn a new thread executing a function → thread_id" })
+    items := sys.list.append(items, { label: "sys.thread.join",  kind: 3, detail: "thread", documentation: "Wait for a thread to finish by thread_id" })
+
+    // ── sys.event ──
+    items := sys.list.append(items, { label: "sys.event.poll", kind: 3, detail: "event", documentation: "Poll the event queue, returns event or null" })
+    items := sys.list.append(items, { label: "sys.event.push", kind: 3, detail: "event", documentation: "Push a value onto the event queue" })
+
+    // ── sys.func ──
+    items := sys.list.append(items, { label: "sys.func.apply", kind: 3, detail: "func", documentation: "Apply a function with given argument list" })
+
+    // ── sys.time ──
+    items := sys.list.append(items, { label: "time.now",        kind: 3, detail: "time", documentation: "Returns current Unix timestamp in milliseconds" })
+    items := sys.list.append(items, { label: "sys.time.sleep",  kind: 3, detail: "time", documentation: "Sleep for N milliseconds" })
+
+    // ── sys.crypto ──
+    items := sys.list.append(items, { label: "sys.crypto.hash",            kind: 3, detail: "crypto", documentation: "SHA-256 hash of a string → hex string" })
+    items := sys.list.append(items, { label: "sys.crypto.verify",          kind: 3, detail: "crypto", documentation: "Verify a signature against data and public key" })
+    items := sys.list.append(items, { label: "sys.crypto.sha512",          kind: 3, detail: "crypto", documentation: "SHA-512 hash → hex string" })
+    items := sys.list.append(items, { label: "sys.crypto.hmac_sha512",     kind: 3, detail: "crypto", documentation: "HMAC-SHA512(key, data) → hex string" })
+    items := sys.list.append(items, { label: "sys.crypto.pbkdf2",          kind: 3, detail: "crypto", documentation: "PBKDF2 key derivation (password, salt, iters, len)" })
+    items := sys.list.append(items, { label: "sys.crypto.aes_gcm_encrypt", kind: 3, detail: "crypto", documentation: "AES-256-GCM encrypt(key, nonce, plaintext) → ciphertext" })
+    items := sys.list.append(items, { label: "sys.crypto.aes_gcm_decrypt", kind: 3, detail: "crypto", documentation: "AES-256-GCM decrypt(key, nonce, ciphertext) → plaintext" })
+    items := sys.list.append(items, { label: "sys.crypto.random_bytes",    kind: 3, detail: "crypto", documentation: "Generate N cryptographically random bytes" })
+    items := sys.list.append(items, { label: "sys.crypto.ed25519_generate", kind: 3, detail: "crypto", documentation: "Generate Ed25519 keypair → { public, secret }" })
+    items := sys.list.append(items, { label: "sys.crypto.ed25519_sign",    kind: 3, detail: "crypto", documentation: "Sign data with Ed25519 secret key → signature" })
+    items := sys.list.append(items, { label: "sys.crypto.ed25519_verify",  kind: 3, detail: "crypto", documentation: "Verify Ed25519 signature → bool" })
+
+    // ── sys.chain (blockchain) ──
+    items := sys.list.append(items, { label: "sys.chain.height",      kind: 3, detail: "chain", documentation: "Get current blockchain height" })
+    items := sys.list.append(items, { label: "sys.chain.get_balance", kind: 3, detail: "chain", documentation: "Get balance for an address" })
+    items := sys.list.append(items, { label: "sys.chain.submit_tx",   kind: 3, detail: "chain", documentation: "Submit a signed transaction" })
+    items := sys.list.append(items, { label: "sys.chain.verify_tx",   kind: 3, detail: "chain", documentation: "Verify transaction validity → bool" })
+
+    // ── sys.z3 ──
+    items := sys.list.append(items, { label: "sys.z3.verify", kind: 3, detail: "z3", documentation: "Verify a logical predicate via Z3 solver" })
+
+    // ── sys.ai ──
+    items := sys.list.append(items, { label: "sys.ai.ask", kind: 3, detail: "ai", documentation: "Send a prompt to the AI engine, returns response string" })
+    items := sys.list.append(items, { label: "ai.ask",     kind: 3, detail: "ai", documentation: "Alias for sys.ai.ask" })
+
+    // ── math ──
+    items := sys.list.append(items, { label: "math.pow",        kind: 3, detail: "math", documentation: "math.pow(base, exp) → base^exp" })
+    items := sys.list.append(items, { label: "math.pow_mod",    kind: 3, detail: "math", documentation: "math.pow_mod(base, exp, mod) → modular exponentiation" })
+    items := sys.list.append(items, { label: "math.sqrt",       kind: 3, detail: "math", documentation: "math.sqrt(x) → square root" })
+    items := sys.list.append(items, { label: "math.sin",        kind: 3, detail: "math", documentation: "math.sin(radians) → sine" })
+    items := sys.list.append(items, { label: "math.cos",        kind: 3, detail: "math", documentation: "math.cos(radians) → cosine" })
+    items := sys.list.append(items, { label: "math.tan",        kind: 3, detail: "math", documentation: "math.tan(radians) → tangent" })
+    items := sys.list.append(items, { label: "math.asin",       kind: 3, detail: "math", documentation: "math.asin(x) → arcsine in radians" })
+    items := sys.list.append(items, { label: "math.acos",       kind: 3, detail: "math", documentation: "math.acos(x) → arccosine in radians" })
+    items := sys.list.append(items, { label: "math.atan",       kind: 3, detail: "math", documentation: "math.atan(x) → arctangent in radians" })
+    items := sys.list.append(items, { label: "math.atan2",      kind: 3, detail: "math", documentation: "math.atan2(y, x) → angle in radians" })
+    items := sys.list.append(items, { label: "math.sin_scaled", kind: 3, detail: "math", documentation: "Integer-scaled sine for fixed-point math" })
+    items := sys.list.append(items, { label: "math.cos_scaled", kind: 3, detail: "math", documentation: "Integer-scaled cosine for fixed-point math" })
+
+    // ── math.Tensor ──
+    items := sys.list.append(items, { label: "math.Tensor",     kind: 3, detail: "tensor", documentation: "Create a tensor from shape and data list" })
+    items := sys.list.append(items, { label: "math.matmul",     kind: 3, detail: "tensor", documentation: "Matrix multiply two tensors" })
+    items := sys.list.append(items, { label: "math.transpose",  kind: 3, detail: "tensor", documentation: "Transpose a 2D tensor" })
+    items := sys.list.append(items, { label: "math.dot",        kind: 3, detail: "tensor", documentation: "Dot product of two vectors" })
+    items := sys.list.append(items, { label: "math.add",        kind: 3, detail: "tensor", documentation: "Element-wise tensor addition" })
+    items := sys.list.append(items, { label: "math.sub",        kind: 3, detail: "tensor", documentation: "Element-wise tensor subtraction" })
+    items := sys.list.append(items, { label: "math.mul_scalar", kind: 3, detail: "tensor", documentation: "Multiply tensor by scalar" })
+
+    // ── net ──
+    items := sys.list.append(items, { label: "net.http.request",      kind: 3, detail: "net", documentation: "HTTP request: net.http.request(method, url, body, headers)" })
+    items := sys.list.append(items, { label: "net.http.serve",        kind: 3, detail: "net", documentation: "Start HTTP server on port with handler function" })
+    items := sys.list.append(items, { label: "net.socket.bind",       kind: 3, detail: "net", documentation: "Bind a TCP listener socket on host:port" })
+    items := sys.list.append(items, { label: "net.socket.accept",     kind: 3, detail: "net", documentation: "Accept incoming connection on bound socket" })
+    items := sys.list.append(items, { label: "net.socket.connect",    kind: 3, detail: "net", documentation: "Connect TCP to host:port" })
+    items := sys.list.append(items, { label: "net.socket.send",       kind: 3, detail: "net", documentation: "Send data on connected socket" })
+    items := sys.list.append(items, { label: "net.socket.recv",       kind: 3, detail: "net", documentation: "Receive data from socket" })
+    items := sys.list.append(items, { label: "net.socket.close",      kind: 3, detail: "net", documentation: "Close a socket" })
+    items := sys.list.append(items, { label: "net.socket.set_timeout", kind: 3, detail: "net", documentation: "Set read/write timeout on socket (ms)" })
+
+    // ── governance ──
+    items := sys.list.append(items, { label: "governance.trace",        kind: 3, detail: "gov", documentation: "Emit a governance trace record" })
+    items := sys.list.append(items, { label: "governance.mcc_check",    kind: 3, detail: "gov", documentation: "MCC compliance check" })
+    items := sys.list.append(items, { label: "governance.verify_chain", kind: 3, detail: "gov", documentation: "Verify a governance chain" })
+
+    return items
+}
+
+// --- Scope-Aware Symbol Collector ---
+// Walks the AST and collects all user-defined symbols (functions, variables)
+// that are visible at a given line number.
+
+func collect_scope_symbols(node, target_line) {
+    symbols := []
+    if sys.struct.has(node, "kind") == false { return symbols }
+
+    let (kind, _) := sys.struct.get(node, "kind")
+
+    // Collect function definitions
+    if kind == NODE_FUNC_DEF {
+        let (name, _) := sys.struct.get(node, "name")
+        symbols := sys.list.append(symbols, { label: name, kind: 3, detail: "function", documentation: "User function: " + name + "()" })
+    }
+
+    // Collect assignments / let bindings as variables
+    if kind == NODE_ASSIGN {
+        // Only include if the assignment is before or at the cursor line
+        has_range := sys.struct.has(node, "range")
+        if has_range {
+            let (range, _) := sys.struct.get(node, "range")
+            if range.start.line <= target_line {
+                let (name, _) := sys.struct.get(node, "name")
+                symbols := sys.list.append(symbols, { label: name, kind: 6, detail: "variable", documentation: "Variable: " + name })
+            }
+        }
+    }
+
+    // Recurse into children lists
+    lists := ["children", "body", "then_block", "else_block", "args"]
+    let (llen, _) := sys.len(lists)
+    k := 0
+    while k < llen {
+        let (fname, _) := sys.list.get(lists, k)
+        if sys.struct.has(node, fname) {
+            let (lst, _) := sys.struct.get(node, fname)
+            let (len, _) := sys.len(lst)
+            i := 0
+            while i < len {
+                let (child, _) := sys.list.get(lst, i)
+                child_syms := collect_scope_symbols(child, target_line)
+                let (cs_len, _) := sys.len(child_syms)
+                j := 0
+                while j < cs_len {
+                    let (sym, _) := sys.list.get(child_syms, j)
+                    symbols := sys.list.append(symbols, sym)
+                    j := j + 1
+                }
+                i := i + 1
+            }
+        }
+        k := k + 1
+    }
+
+    // Recurse into singular node fields
+    nodes := ["expression", "value", "condition", "left", "right"]
+    let (nlen, _) := sys.len(nodes)
+    m := 0
+    while m < nlen {
+        let (fname, _) := sys.list.get(nodes, m)
+        if sys.struct.has(node, fname) {
+            let (child, _) := sys.struct.get(node, fname)
+            if sys.struct.has(child, "kind") {
+                child_syms := collect_scope_symbols(child, target_line)
+                let (cs_len, _) := sys.len(child_syms)
+                n := 0
+                while n < cs_len {
+                    let (sym, _) := sys.list.get(child_syms, n)
+                    symbols := sys.list.append(symbols, sym)
+                    n := n + 1
+                }
+            }
+        }
+        m := m + 1
+    }
+
+    return symbols
+}
+
+// --- Intrinsic Documentation Lookup ---
+// For hover: look up an intrinsic by name and return its doc string.
+
+func lookup_intrinsic_doc(name) {
+    registry := build_intrinsic_registry()
+    let (rlen, _) := sys.len(registry)
+    i := 0
+    while i < rlen {
+        let (item, _) := sys.list.get(registry, i)
+        if item.label == name {
+            return item.documentation
+        }
+        i := i + 1
+    }
+    return ""
+}
+
+func handle_completion(params, ast) {
+    items := []
+
+    // 1. Keywords (kind: 14 = Keyword)
+    keywords := ["if", "else", "while", "func", "return", "let", "true", "false", "import", "struct", "match", "for", "in", "class", "linear", "and", "or", "not"]
+    let (k_len, _) := sys.len(keywords)
+    i := 0
+    while i < k_len {
+        let (k, _) := sys.list.get(keywords, i)
+        item := { label: k, kind: 14 }
+        items := sys.list.append(items, item)
+        i := i + 1
+    }
+
+    // 2. Full intrinsic registry (kind: 3 = Function)
+    intrinsics := build_intrinsic_registry()
+    let (i_len, _) := sys.len(intrinsics)
+    j := 0
+    while j < i_len {
+        let (intr, _) := sys.list.get(intrinsics, j)
+        items := sys.list.append(items, intr)
+        j := j + 1
+    }
+
+    // 3. Scope-aware user symbols (functions + variables from AST)
+    target_line := 0
+    if sys.struct.has(params, "position") {
+        let (pos, _) := sys.struct.get(params, "position")
+        let (line, _) := sys.struct.get(pos, "line")
+        target_line := line
+    }
+    user_symbols := collect_scope_symbols(ast, target_line)
+    let (u_len, _) := sys.len(user_symbols)
+    k := 0
+    while k < u_len {
+        let (sym, _) := sys.list.get(user_symbols, k)
+        items := sys.list.append(items, sym)
+        k := k + 1
+    }
+
+    return { isIncomplete: false, items: items }
+}
+
+func handle_hover(params, ast) {
+    let (pos, _) := sys.struct.get(params, "position")
+    let (line, _) := sys.struct.get(pos, "line")
+    let (col, _) := sys.struct.get(pos, "character")
+
+    node := find_node_at_pos(ast, line, col)
+    if node == 0 { return 0 }
+
+    let (kind, _) := sys.struct.get(node, "kind")
+
+    // Variable  access — check if it's an intrinsic or user variable
+    if kind == NODE_EXPR_VAR {
+        let (name, _) := sys.struct.get(node, "name")
+
+        // Check intrinsic docs
+        doc := lookup_intrinsic_doc(name)
+        if doc != "" {
+            return {
+                contents: {
+                    kind: "markdown",
+                    value: "**Intrinsic** `" + name + "`\n\n" + doc
+                }
+            }
+        }
+
+        return {
+            contents: {
+                kind: "markdown",
+                value: "**Variable** `" + name + "`"
+            }
+        }
+    }
+
+    // Function definition — show signature info
+    if kind == NODE_FUNC_DEF {
+        let (name, _) := sys.struct.get(node, "name")
+        let (args, _) := sys.struct.get(node, "args")
+        let (argc, _) := sys.len(args)
+
+        return {
+            contents: {
+                kind: "markdown",
+                value: "**Function** `" + name + "` — " + int_to_str(argc) + " parameter(s)\n\n```ark\nfunc " + name + "(...) { ... }\n```"
+            }
+        }
+    }
+
+    // Function call — show intrinsic doc or user func reference
+    if kind == NODE_EXPR_CALL {
+        let (name, _) := sys.struct.get(node, "function")
+        let (args, _) := sys.struct.get(node, "args")
+        let (argc, _) := sys.len(args)
+
+        // Check intrinsic docs
+        doc := lookup_intrinsic_doc(name)
+        if doc != "" {
+            return {
+                contents: {
+                    kind: "markdown",
+                    value: "**Intrinsic** `" + name + "` — " + int_to_str(argc) + " arg(s)\n\n" + doc
+                }
+            }
+        }
+
+        return {
+            contents: {
+                kind: "markdown",
+                value: "**Call** `" + name + "(...)` — " + int_to_str(argc) + " arg(s)"
+            }
+        }
+    }
+
+    // Assignment
+    if kind == NODE_ASSIGN {
+        let (name, _) := sys.struct.get(node, "name")
+        return {
+            contents: {
+                kind: "markdown",
+                value: "**Assignment** `" + name + " := ...`"
+            }
+        }
+    }
+
+    // Literals
+    if kind == NODE_EXPR_LITERAL_INT {
+        let (val, _) := sys.struct.get(node, "value")
+        return {
+            contents: {
+                kind: "markdown",
+                value: "**Integer literal** `" + val + "`\n\nType: `Int`"
+            }
+        }
+    }
+
+    if kind == NODE_EXPR_LITERAL_STR {
+        let (val, _) := sys.struct.get(node, "value")
+        return {
+            contents: {
+                kind: "markdown",
+                value: "**String literal**\n\nType: `String`"
+            }
+        }
+    }
+
+    if kind == NODE_EXPR_LITERAL_BOOL {
+        return {
+            contents: {
+                kind: "markdown",
+                value: "**Boolean literal**\n\nType: `Bool`"
+            }
+        }
+    }
+
+    return 0
+}
+
+func collect_diagnostics(node, errors) {
+    if sys.struct.has(node, "kind") == false { return 0 }
+    let (kind, _) := sys.struct.get(node, "kind")
+
+    if kind == 99 {
+        let (msg, _) := sys.struct.get(node, "value")
+        let (line, _) := sys.struct.get(node, "line")
+        let (col, _) := sys.struct.get(node, "col")
+
+        diag := {
+            range: {
+                start: { line: line, character: col },
+                end: { line: line, character: col + 1 }
+            },
+            severity: 1,
+            message: "Syntax Error: " + msg,
+            source: "ark-lsp"
+        }
+        sys.list.append(errors, diag)
+        return 0
+    }
+
+    // Lists
+    lists := ["children", "body", "then_block", "else_block", "args"]
+    let (llen, _) := sys.len(lists)
+    k := 0
+    while k < llen {
+        let (fname, _) := sys.list.get(lists, k)
+        if sys.struct.has(node, fname) {
+            let (lst, _) := sys.struct.get(node, fname)
+            let (len, _) := sys.len(lst)
+            i := 0
+            while i < len {
+                let (child, _) := sys.list.get(lst, i)
+                collect_diagnostics(child, errors)
+                i := i + 1
+            }
+        }
+        k := k + 1
+    }
+
+    // Nodes
+    nodes := ["expression", "value", "condition", "left", "right"]
+    let (nlen, _) := sys.len(nodes)
+    j := 0
+    while j < nlen {
+        let (fname, _) := sys.list.get(nodes, j)
+        if sys.struct.has(node, fname) {
+            let (child, _) := sys.struct.get(node, fname)
+            collect_diagnostics(child, errors)
+        }
+        j := j + 1
+    }
+    return 0
+}
+
+func handle_definition(params, ast) {
+    let (pos, _) := sys.struct.get(params, "position")
+    let (line, _) := sys.struct.get(pos, "line")
+    let (col, _) := sys.struct.get(pos, "character")
+
+    node := find_node_at_pos(ast, line, col)
+    if node == 0 { return 0 }
+
+    let (kind, _) := sys.struct.get(node, "kind")
+
+    target_name := ""
+    if kind == NODE_EXPR_CALL {
+        let (name, _) := sys.struct.get(node, "function")
+        target_name := name
+    } else if kind == NODE_EXPR_VAR {
+        let (name, _) := sys.struct.get(node, "name")
+        target_name := name
+    } else {
+        return 0
+    }
+
+    // Scan AST for FUNC_DEF with name
+    // Simplistic scan of top-level children
+    let (children, _) := sys.struct.get(ast, "children")
+    let (len, _) := sys.len(children)
+    i := 0
+    while i < len {
+        let (child, _) := sys.list.get(children, i)
+        let (ckind, _) := sys.struct.get(child, "kind")
+        if ckind == NODE_FUNC_DEF {
+            let (cname, _) := sys.struct.get(child, "name")
+            if cname == target_name {
+                 let (range, _) := sys.struct.get(child, "range")
+                 return {
+                     uri: params.textDocument.uri, // Same file
+                     range: range
+                 }
+            }
+        }
+        i := i + 1
+    }
+
+    return 0
+}
+
+// --- Server Loop ---
+
+func read_header() {
+    content_len := 0
+    running := true
+    while running {
+        line := sys.io.read_line()
+        if line == "" { return -1 }
+
+        // Check for empty line (\r\n or \n)
+        is_empty := false
+        if line == "\r\n" { is_empty := true }
+        if line == "\n" { is_empty := true }
+
+        if is_empty {
+            running := false
+        } else {
+             // Check prefix "Content-Length:"
+             // Length 15
+             prefix := "Content-Length:"
+             let (len_line, _) := sys.len(line)
+             is_match := true
+             if len_line < 15 { is_match := false }
+             else {
+                 k := 0
+                 while k < 15 {
+                     let (c1, _) := sys.str.get(line, k)
+                     let (c2, _) := sys.str.get(prefix, k)
+                     if c1 != c2 { is_match := false }
+                     k := k + 1
+                 }
+             }
+
+             if is_match {
+                 // Extract number
+                 j := 15
+                 num_str := ""
+                 while j < len_line {
+                     let (c, _) := sys.str.get(line, j)
+                     if is_digit(c) {
+                         num_str := num_str + c
+                     }
+                     j := j + 1
+                 }
+                 if num_str != "" {
+                     content_len := sys.json.parse(num_str)
+                 }
+             }
+        }
+    }
+    return content_len
+}
+
+func send_json(obj) {
+    body := sys.json.stringify(obj)
+    let (l, _) := sys.len(body)
+    header := "Content-Length: " + int_to_str(l) + "\r\n\r\n"
+    sys.io.write(header + body)
+}
+
+func send_response(id, result) {
+    obj := { jsonrpc: "2.0", id: id, result: result }
+    send_json(obj)
+}
+
+func send_notification(method, params) {
+    obj := { jsonrpc: "2.0", method: method, params: params }
+    send_json(obj)
+}
+
+// Global state for document text/AST
+// We can't use global var easily. Pass state around?
+// Use a closure or object?
+// main loop will hold state.
+
+func run_server() {
+    sys.log("Ark LSP Server Running...")
+
+    current_doc_text := ""
+    current_ast := {}
+
+    while true {
+        len := read_header()
+        if len == -1 { sys.exit(0) }
+
+        if len > 0 {
+            body := sys.io.read_bytes(len)
+            msg := sys.json.parse(body)
+
+            let (method, _) := sys.struct.get(msg, "method")
+            sys.log("Method: " + method)
+
+            // Check ID
+            has_id := sys.struct.has(msg, "id")
+            id := 0
+            if has_id {
+                let (val_id, _) := sys.struct.get(msg, "id")
+                id := val_id
+            }
+
+            if method == "initialize" {
+                res := {
+                    capabilities: {
+                        textDocumentSync: 1,
+                        completionProvider: { triggerCharacters: ["."] },
+                        hoverProvider: true,
+                        definitionProvider: true
+                    },
+                    serverInfo: { name: "ark-lsp", version: "0.1.0" }
+                }
+                send_response(id, res)
+            } else if method == "textDocument/didOpen" {
+                let (params, _) := sys.struct.get(msg, "params")
+                let (doc, _) := sys.struct.get(params, "textDocument")
+                let (text, _) := sys.struct.get(doc, "text")
+                let (uri, _) := sys.struct.get(doc, "uri")
+
+                current_doc_text := text
+                tokens := lexer_tokenize(text)
+                current_ast := parse_program(tokens)
+
+                diagnostics := []
+                collect_diagnostics(current_ast, diagnostics)
+                send_notification("textDocument/publishDiagnostics", { uri: uri, diagnostics: diagnostics })
+
+            } else if method == "textDocument/didChange" {
+                let (params, _) := sys.struct.get(msg, "params")
+                let (changes, _) := sys.struct.get(params, "contentChanges")
+                let (first, _) := sys.list.get(changes, 0)
+                let (text, _) := sys.struct.get(first, "text")
+                let (doc, _) := sys.struct.get(params, "textDocument")
+                let (uri, _) := sys.struct.get(doc, "uri")
+
+                current_doc_text := text
+                tokens := lexer_tokenize(text)
+                current_ast := parse_program(tokens)
+
+                diagnostics := []
+                collect_diagnostics(current_ast, diagnostics)
+                send_notification("textDocument/publishDiagnostics", { uri: uri, diagnostics: diagnostics })
+
+            } else if method == "textDocument/completion" {
+                let (params, _) := sys.struct.get(msg, "params")
+                res := handle_completion(params, current_ast)
+                send_response(id, res)
+            } else if method == "textDocument/hover" {
+                let (params, _) := sys.struct.get(msg, "params")
+                res := handle_hover(params, current_ast)
+                if res != 0 { send_response(id, res) }
+                else { send_response(id, 0) } // Null
+            } else if method == "textDocument/definition" {
+                let (params, _) := sys.struct.get(msg, "params")
+                res := handle_definition(params, current_ast)
+                if res != 0 { send_response(id, res) }
+                else { send_response(id, 0) }
+            } else if method == "shutdown" {
+                send_response(id, 0) // Null
+            } else if method == "exit" {
+                sys.exit(0)
+            }
+        }
+    }
+}

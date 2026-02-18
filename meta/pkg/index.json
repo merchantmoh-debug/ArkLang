@@ -1,0 +1,42 @@
+{
+  "packages": {
+    "crypto": {
+      "versions": ["0.1.0", "0.2.0", "0.3.0"],
+      "latest": "0.3.0",
+      "description": "Cryptographic primitives: SHA-256, HMAC, base64",
+      "author": "ark-std"
+    },
+    "http": {
+      "versions": ["0.1.0", "0.2.0"],
+      "latest": "0.2.0",
+      "description": "HTTP client and server utilities",
+      "author": "ark-std"
+    },
+    "json": {
+      "versions": ["0.1.0"],
+      "latest": "0.1.0",
+      "description": "JSON parse and stringify",
+      "author": "ark-std"
+    },
+    "testing": {
+      "versions": ["0.1.0", "0.1.1"],
+      "latest": "0.1.1",
+      "description": "Test framework: assertions, runners, fixtures",
+      "author": "ark-std"
+    },
+    "cli": {
+      "versions": ["0.1.0"],
+      "latest": "0.1.0",
+      "description": "CLI argument parser and prompt utilities",
+      "author": "ark-std"
+    },
+    "collections": {
+      "versions": ["0.1.0"],
+      "latest": "0.1.0",
+      "description": "Advanced data structures: queue, stack, set, ordered map",
+      "author": "ark-std"
+    }
+  },
+  "registry_version": "1.0.0",
+  "updated_at": "2026-02-18T00:00:00Z"
+}

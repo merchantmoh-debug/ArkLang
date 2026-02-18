@@ -1,0 +1,42 @@
+func main() {
+    print("Testing String Comparison...")
+
+    s1 := "apple"
+    s2 := "banana"
+
+    // Create Ropes
+    r1 := "app" + "le"
+    r2 := "ban" + "ana"
+
+    if r1 == s1 {
+        print("PASS: r1 == s1")
+    } else {
+        print("FAIL: r1 != s1")
+    }
+
+    if r1 < r2 {
+        print("PASS: r1 < r2")
+    } else {
+        print("FAIL: r1 >= r2")
+    }
+
+    if r2 > r1 {
+        print("PASS: r2 > r1")
+    } else {
+        print("FAIL: r2 <= r1")
+    }
+
+    if r1 <= s1 {
+        print("PASS: r1 <= s1")
+    } else {
+        print("FAIL: r1 > s1")
+    }
+
+    if r1 >= s1 {
+        print("PASS: r1 >= s1")
+    } else {
+        print("FAIL: r1 < s1")
+    }
+}
+
+main()

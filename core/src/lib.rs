@@ -16,15 +16,31 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
+#![allow(unexpected_cfgs)]
+
 pub mod ast;
+pub mod blockchain;
 #[cfg(feature = "ipc")]
+#[allow(dead_code)]
 pub mod bridge;
+pub mod bytecode;
 pub mod checker;
-pub mod eval;
+pub mod compiler;
+pub mod consensus;
+pub mod crypto;
+pub mod debugger;
+#[cfg(test)]
+pub mod eval; // Deprecated by VM, enabled for tests
+pub mod ffi;
+pub mod governance;
 pub mod intrinsics;
 pub mod loader;
-pub mod repl;
+pub mod parser;
+// pub mod repl; // Deprecated interpreter REPL
+#[cfg(test)]
+pub mod bench_intrinsics;
 pub mod runtime;
 pub mod types;
+pub mod vm;
 pub mod wasm;
 pub use wasm::*;

@@ -2,14 +2,36 @@
 // The Architect: Functional Lexer Implementation
 // Objective: Convert source string into a list of Tokens using Structs.
 
+// --- Global Constants ---
+true := 1
+false := 0
+
 // --- Constants ---
+true := 1
+false := 0
+
 // Token Types
 TOKEN_EOF := 0
 TOKEN_IDENTIFIER := 1
 TOKEN_NUMBER := 2
 TOKEN_STRING := 3
-TOKEN_SYMBOL := 4
+TOKEN_SYMBOL := 4 // Generic Symbol or EQ (=)
 TOKEN_KEYWORD := 5
+
+// Specific Symbols (Must match Parser)
+TOKEN_EQ := 4         // = (Aliased to SYMBOL for now if generic)
+TOKEN_PLUS := 5       // +
+TOKEN_MINUS := 6      // -
+TOKEN_STAR := 7       // *
+TOKEN_SLASH := 8      // /
+TOKEN_LPAREN := 9     // (
+TOKEN_RPAREN := 10    // )
+TOKEN_LBRACE := 11    // {
+TOKEN_RBRACE := 12    // }
+TOKEN_COMMA := 13     // ,
+TOKEN_COLON := 14     // :
+TOKEN_SEMICOLON := 15 // ;
+TOKEN_ASSIGN := 16    // :=
 
 // Keywords (Must match Parser)
 TOKEN_KEYWORD_IF := 100
@@ -18,6 +40,11 @@ TOKEN_KEYWORD_WHILE := 102
 TOKEN_KEYWORD_FUNC := 103
 TOKEN_KEYWORD_RETURN := 104
 TOKEN_KEYWORD_LET := 105
+TOKEN_KEYWORD_CLASS := 106
+TOKEN_KEYWORD_TRUE := 107
+TOKEN_KEYWORD_FALSE := 108
+TOKEN_AND := 23
+TOKEN_OR := 24
 
 // --- Helpers ---
 
@@ -36,9 +63,10 @@ func is_whitespace(char_str) {
 // --- Lexer Struct & Methods ---
 
 func lexer_new(source) {
+    let (l, src) := sys.len(source)
     return {
-        source: source,
-        length: sys.len(source),
+        source: src,
+        length: l,
         pos: 0,
         line: 1,
         col: 1,
@@ -50,22 +78,8 @@ func lexer_peek(lexer) {
     if lexer.pos >= lexer.length {
         return "" // EOF
     }
-    // We need sys.str.get or indexing?
-    // "source[pos]" syntax compiles to `sys.list.get` (which handles strings in Python prototype?).
-    // In Rust `intrinsics.rs`, `sys.list.get` expects List.
-    // We need `sys.str.get` or `intrinsic_buffer_read`?
-    // Wait, source is String.
-    // I need `sys.str.get`!
-    // Python `sys.list.get` handles string indexing?
-    // Let's check `intrinsics.rs` -> `intrinsic_list_get` expects List.
-    // BLOCKER: No string indexing in Rust Core yet!
-    // I need to add `intrinsic_string_get` or make `list_get` polymorphic.
-    // Or use `sys.mem.read` if source is Buffer.
-    // The plan said "Input: Source Code (String)".
-    // I will use `sys.str.get(str, idx)` intrinsic.
-    // I need to implement it.
-    // For now, I will assume it exists and fix it in next step.
-    return sys.str.get(lexer.source, lexer.pos)
+    let (c, src) := sys.str.get(lexer.source, lexer.pos)
+    return c
 }
 
 func lexer_advance(lexer) {
@@ -77,8 +91,25 @@ func lexer_advance(lexer) {
     } else {
         lexer.col := lexer.col + 1
     }
-    // Return modified lexer because we modified fields in place?
-    // `lexer.pos := ...` updates the Struct in place (Rust `eval.rs` SetField).
+    // Check for comments (//)
+    if lexer.pos < lexer.length {
+        let (next_c, _src) := sys.str.get(lexer.source, lexer.pos)
+        if next_c == "/" {
+             if (lexer.pos + 1) < lexer.length {
+                 let (next_next_c, _src2) := sys.str.get(lexer.source, lexer.pos + 1)
+                 if next_next_c == "/" {
+                     // Skip until newline
+                     looping := 1
+                     while looping {
+                         lexer := lexer_advance(lexer)
+                         peek_c := lexer_peek(lexer)
+                         if peek_c == "\n" { looping := 0 }
+                         if peek_c == "" { looping := 0 }
+                     }
+                 }
+             }
+        }
+    }
     return lexer
 }
 
@@ -94,13 +125,30 @@ func lexer_add_token(lexer, type, value) {
 }
 
 func check_keyword(ident_str) {
-    if ident_str == "if" { return 100 }
-    if ident_str == "else" { return 101 }
-    if ident_str == "while" { return 102 }
-    if ident_str == "func" { return 103 }
-    if ident_str == "return" { return 104 }
-    if ident_str == "let" { return 105 }
-    return 1 // TOKEN_IDENTIFIER
+    if ident_str == "if" { return TOKEN_KEYWORD_IF }
+    if ident_str == "else" { return TOKEN_KEYWORD_ELSE }
+    if ident_str == "while" { return TOKEN_KEYWORD_WHILE }
+    if ident_str == "func" { return TOKEN_KEYWORD_FUNC }
+    if ident_str == "return" { return TOKEN_KEYWORD_RETURN }
+    if ident_str == "let" { return TOKEN_KEYWORD_LET }
+    if ident_str == "and" { return TOKEN_AND }
+    if ident_str == "or" { return TOKEN_OR }
+    if ident_str == "class" { return TOKEN_KEYWORD_CLASS }
+    if ident_str == "true" { return TOKEN_KEYWORD_TRUE }
+    if ident_str == "false" { return TOKEN_KEYWORD_FALSE }
+    return TOKEN_IDENTIFIER
+}
+
+func lexer_skip_comment(lexer) {
+    looping := true
+    while looping {
+        lexer := lexer_advance(lexer)
+        c := lexer_peek(lexer)
+        if (c == "\n") or (c == "") {
+            looping := false
+        }
+    }
+    return lexer
 }
 
 func lexer_scan(lexer) {
@@ -114,10 +162,7 @@ func lexer_scan(lexer) {
     
     if is_whitespace(char_str) {
         lexer := lexer_advance(lexer)
-        return lexer_scan(lexer) // Tail recursion? We don't have TCO. Loop in evaluator.
-        // Wait, Ark doesn't have loops in functions yet?
-        // It has `while` statement.
-        // So `lexer_scan` should be called in a loop in `main`.
+        return lexer_scan(lexer)
     }
     
     if is_digit(char_str) {
@@ -144,10 +189,55 @@ func lexer_scan(lexer) {
         lexer := lexer_add_token(lexer, token_type, ident_str)
         return lexer
     }
+
+    // Comments & Slash
+    if char_str == "/" {
+        if (lexer.pos + 1) < lexer.length {
+            let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
+            if next_char == "/" {
+                 lexer := lexer_skip_comment(lexer)
+                 return lexer_scan(lexer)
+            }
+        }
+        // Not a comment, it is slash
+        lexer := lexer_add_token(lexer, TOKEN_SLASH, "/")
+        lexer := lexer_advance(lexer)
+        return lexer
+    }
     
     // Symbols
-    lexer := lexer_add_token(lexer, TOKEN_SYMBOL, char_str)
+    type := TOKEN_SYMBOL
+    val := char_str
+    advanced := 0
+
+    if char_str == "+" { type := 5 }
+    if char_str == "-" { type := 6 }
+    if char_str == "*" { type := 7 }
+    // / handled above
+    if char_str == "(" { type := 9 }
+    if char_str == ")" { type := 10 }
+    if char_str == "{" { type := 11 }
+    if char_str == "}" { type := 12 }
+    if char_str == "," { type := 13 }
+    if char_str == ":" {
+         // Check :=
+         if (lexer.pos + 1) < lexer.length {
+             let (next, _) := sys.str.get(lexer.source, lexer.pos + 1)
+             if next == "=" {
+                 type := 16
+                 val := ":="
+                 advanced := 1
+             } else { type := 14 }
+         } else { type := 14 }
+    }
+    if char_str == ";" { type := 15 }
+    if char_str == "=" { type := 4 } // EQ
+
+    lexer := lexer_add_token(lexer, type, val)
     lexer := lexer_advance(lexer)
+    if advanced == 1 {
+        lexer := lexer_advance(lexer)
+    }
     return lexer
 }
 
@@ -155,18 +245,11 @@ func lexer_tokenize(source) {
     lexer := lexer_new(source)
     running := true
     while running {
-        // Need to check if EOF token added.
-        // But `lexer_scan` adds one token and returns.
-        // How do we know if done?
-        // Access last token?
-        count := sys.len(lexer.tokens)
+        let (count, tokens_ref) := sys.len(lexer.tokens)
+        lexer.tokens := tokens_ref
         if count > 0 {
             last_token := sys.list.get(lexer.tokens, count - 1)
-            // list.get returns [val, list]
-            // We need to extract val.
-            // Destructure!
             let (token_val, token_list) := last_token
-            // token_val is Struct.
             type := token_val.type
             if type == TOKEN_EOF {
                 running := false

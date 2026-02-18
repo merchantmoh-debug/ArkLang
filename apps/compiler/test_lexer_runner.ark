@@ -3,6 +3,9 @@
 // Objective: Convert source string into a list of Tokens using Structs.
 
 // --- Constants ---
+true := 1
+false := 0
+
 // Token Types
 TOKEN_EOF := 0
 TOKEN_IDENTIFIER := 1
@@ -10,6 +13,19 @@ TOKEN_NUMBER := 2
 TOKEN_STRING := 3
 TOKEN_SYMBOL := 4
 TOKEN_KEYWORD := 5
+
+// Specific Keywords
+TOKEN_KEYWORD_IF := 100
+TOKEN_KEYWORD_ELSE := 101
+TOKEN_KEYWORD_WHILE := 102
+TOKEN_KEYWORD_FUNC := 103
+TOKEN_KEYWORD_RETURN := 104
+TOKEN_KEYWORD_LET := 105
+TOKEN_KEYWORD_CLASS := 106
+TOKEN_KEYWORD_TRUE := 107
+TOKEN_KEYWORD_FALSE := 108
+TOKEN_AND := 23
+TOKEN_OR := 24
 
 // --- Helpers ---
 
@@ -23,6 +39,21 @@ func is_alpha(char_str) {
 
 func is_whitespace(char_str) {
     return (char_str == " ") || (char_str == "\n") || (char_str == "\t") || (char_str == "\r")
+}
+
+func check_keyword(ident_str) {
+    if ident_str == "if" { return TOKEN_KEYWORD_IF }
+    if ident_str == "else" { return TOKEN_KEYWORD_ELSE }
+    if ident_str == "while" { return TOKEN_KEYWORD_WHILE }
+    if ident_str == "func" { return TOKEN_KEYWORD_FUNC }
+    if ident_str == "return" { return TOKEN_KEYWORD_RETURN }
+    if ident_str == "let" { return TOKEN_KEYWORD_LET }
+    if ident_str == "and" { return TOKEN_AND }
+    if ident_str == "or" { return TOKEN_OR }
+    if ident_str == "class" { return TOKEN_KEYWORD_CLASS }
+    if ident_str == "true" { return TOKEN_KEYWORD_TRUE }
+    if ident_str == "false" { return TOKEN_KEYWORD_FALSE }
+    return TOKEN_IDENTIFIER
 }
 
 // --- Lexer Struct & Methods ---
@@ -44,8 +75,8 @@ func lexer_peek(lexer) {
     if lexer.pos >= lexer.length {
         return "" // EOF
     }
-    // Uses polymorphic sys.list.get via operator[]
-    return lexer.source[lexer.pos]
+    let (c, src) := sys.str.get(lexer.source, lexer.pos)
+    return c
 }
 
 func lexer_advance(lexer) {
@@ -70,6 +101,18 @@ func lexer_add_token(lexer, type, value) {
 
     lexer.tokens := sys.list.append(lexer.tokens, token)
     lexer.token_count := lexer.token_count + 1
+    return lexer
+}
+
+func lexer_skip_comment(lexer) {
+    looping := true
+    while looping {
+        lexer := lexer_advance(lexer)
+        c := lexer_peek(lexer)
+        if (c == "\n") || (c == "") {
+            looping := false
+        }
+    }
     return lexer
 }
 
@@ -122,17 +165,22 @@ func lexer_scan(lexer) {
                  looping := false
              }
         }
-        // Todo: Check keywords (func, let, if, etc)
-        // simple keyword check
-        type := TOKEN_IDENTIFIER
-        if ident_str == "func" { type := TOKEN_KEYWORD }
-        if ident_str == "let" { type := TOKEN_KEYWORD }
-        if ident_str == "if" { type := TOKEN_KEYWORD }
-        if ident_str == "while" { type := TOKEN_KEYWORD }
-        if ident_str == "return" { type := TOKEN_KEYWORD }
+        // Properly check keywords
+        type := check_keyword(ident_str)
 
         lexer := lexer_add_token(lexer, type, ident_str)
         return lexer
+    }
+
+    // Comments
+    if char_str == "/" {
+        if (lexer.pos + 1) < lexer.length {
+            let (next_char, _src) := sys.str.get(lexer.source, lexer.pos + 1)
+            if next_char == "/" {
+                 lexer := lexer_skip_comment(lexer)
+                 return lexer_scan(lexer)
+            }
+        }
     }
     
     // Symbols (single char for now)
@@ -167,26 +215,7 @@ func lexer_tokenize(source) {
         count := lexer.token_count
 
         if count > 0 {
-            // Extract from struct (consumes field)
-            toks := lexer.tokens
-            
-            // Get item (consumes list, returns [val, new_list])
-            // (token_struct, toks) := toks[count - 1] -> Syntax supported?
-            // "let (a, b) := ..." 
-            
-            let (last_token_pair, toks) := sys.list.get(toks, count - 1)
-            // Wait, sys.list.get returns [val, list]
-            // But 'val' might be token struct.
-            // Oh, I can just destructure the result of get.
-            // let (token_struct, toks) := toks[count - 1]
-            // But toks[index] syntactic sugar might not work with let destructure if parser isn't smart enough?
-            // Let's use direct intrinsic call or explicit step.
-            
-            full_res := toks[count - 1]
-            let (token_struct, toks) := full_res
-            
-            // Put back
-            lexer.tokens := toks
+            let (token_struct, toks_ref) := sys.list.get(lexer.tokens, count - 1)
             
             type := token_struct.type
             if type == TOKEN_EOF {
@@ -203,21 +232,20 @@ func lexer_tokenize(source) {
 
 // --- TEST RUNNER ---
 
-src := "x := 123 + y"
-// print("Source:", src)
-print("Source: x := 123 + y")
+// Use string with newline char in it (not escaped)
+src := "func let // comment \n if else class true false"
+// print("Source: " + src)
 
 tokens := lexer_tokenize(src)
 print("Tokens Generated:")
 
 // Print tokens pretty
-let (cnt, toks) := sys.len(tokens)
-tokens := toks
+let (cnt, toks_ref) := sys.len(tokens)
 count := cnt
+tokens := toks_ref
 i := 0
 while i < count {
-    // let (tok, _) := tokens[i]
-    let (tok, _ign) := tokens[i]
+    let (tok, _) := sys.list.get(tokens, i)
     print("Token:", tok)
     i := i + 1
 }

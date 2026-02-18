@@ -1,0 +1,20 @@
+import std.io
+import std.math
+
+// Test IO
+println("[Test] IO Module Loaded Successfully.")
+
+// Test Math
+x := 10
+y := 2
+p := math.pow(x, y)
+
+print("[Test] Math.pow(10, 2) = ")
+println(p)
+
+// Test Logic
+if p == 100 {
+    println("[SUCCESS] Math Verified.")
+} else {
+    println("[FAILURE] Math Calculation Wrong.")
+}

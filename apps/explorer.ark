@@ -1,0 +1,180 @@
+// apps/explorer.ark
+// Web Explorer for the Ark Blockchain (Mocked)
+
+import lib.std.string
+
+print("Starting Ark Explorer...")
+
+// --- Mock Data ---
+
+block_height := sys.chain.height()
+difficulty := 4
+last_block_hash := "00000000abcdef1234567890abcdef12"
+
+// Blocks
+b1 := { index: 10500, hash: "00000000abcdef1234567890abcdef12", prev: "00000000abcdef1234567890abcdef11", ts: 1678900000, txs_count: 2 }
+b2 := { index: 10499, hash: "00000000abcdef1234567890abcdef11", prev: "00000000abcdef1234567890abcdef10", ts: 1678899000, txs_count: 1 }
+
+blocks := [b1, b2]
+
+// Txs
+tx1 := { id: "tx123abc", from: "Alice", to: "Bob", amount: 50, sig: "s1gN4tur3..." }
+tx2 := { id: "tx456def", from: "Bob", to: "Charlie", amount: 10, sig: "s1gN4tur3_2..." }
+
+txs := [tx1, tx2]
+
+// --- Views ---
+
+func view_header(title) {
+    return "<html><head><title>" + title + "</title><style>body{font-family:sans-serif;padding:20px;background:#f4f4f4;} .container{max-width:800px;margin:0 auto;background:white;padding:20px;border-radius:8px;box-shadow:0 0 10px rgba(0,0,0,0.1);} h1{color:#333;border-bottom:2px solid #eee;padding-bottom:10px;} table{width:100%;border-collapse:collapse;margin-top:20px;} th, td{padding:10px;border:1px solid #ddd;text-align:left;} th{background:#f8f9fa;} a{color:#007bff;text-decoration:none;} a:hover{text-decoration:underline;}</style></head><body><div class='container'><h1>" + title + "</h1>"
+}
+
+func view_footer() {
+    return "<p style='margin-top:20px;text-align:center;color:#666;'><a href='/'>Home</a> | Ark Sovereign Stack v112.0</p></div></body></html>"
+}
+
+func view_home() {
+    html := view_header("Ark Explorer")
+
+    html := html + "<h2>Chain Stats</h2>"
+    html := html + "<table>"
+    html := html + "<tr><th>Height</th><td>" + sys.json.stringify(sys.chain.height()) + "</td></tr>"
+    html := html + "<tr><th>Difficulty</th><td>" + sys.json.stringify(difficulty) + "</td></tr>"
+    html := html + "<tr><th>Last Block</th><td>" + last_block_hash + "</td></tr>"
+    html := html + "</table>"
+
+    html := html + "<h2>Recent Blocks</h2>"
+    html := html + "<table><tr><th>Block #</th><th>Hash</th><th>Actions</th></tr>"
+
+    i := 0
+    l_blocks := len(blocks)
+    while i < l_blocks {
+        b := blocks[i]
+        html := html + "<tr>"
+        html := html + "<td>" + sys.json.stringify(b.index) + "</td>"
+        html := html + "<td>" + b.hash + "</td>"
+        html := html + "<td><a href='/block/" + sys.json.stringify(b.index) + "'>View</a></td>"
+        html := html + "</tr>"
+        i := i + 1
+    }
+    html := html + "</table>"
+
+    html := html + "<h2>Transactions</h2>"
+    html := html + "<table><tr><th>Tx ID</th><th>Amount</th><th>Actions</th></tr>"
+    j := 0
+    l_txs := len(txs)
+    while j < l_txs {
+        t := txs[j]
+        html := html + "<tr>"
+        html := html + "<td>" + t.id + "</td>"
+        html := html + "<td>" + sys.json.stringify(t.amount) + " ARK</td>"
+        html := html + "<td><a href='/tx/" + t.id + "'>View</a></td>"
+        html := html + "</tr>"
+        j := j + 1
+    }
+    html := html + "</table>"
+
+    html := html + view_footer()
+    return html
+}
+
+func view_block(idx_str) {
+    found := false
+    target_block := {}
+
+    i := 0
+    l_blocks := len(blocks)
+    while i < l_blocks {
+        b := blocks[i]
+        if sys.json.stringify(b.index) == idx_str {
+            target_block := b
+            found := true
+            i := l_blocks // break
+        }
+        i := i + 1
+    }
+
+    if found {
+        html := view_header("Block #" + idx_str)
+        html := html + "<table>"
+        html := html + "<tr><th>Hash</th><td>" + target_block.hash + "</td></tr>"
+        html := html + "<tr><th>Previous Hash</th><td>" + target_block.prev + "</td></tr>"
+        html := html + "<tr><th>Timestamp</th><td>" + sys.json.stringify(target_block.ts) + "</td></tr>"
+        html := html + "<tr><th>Tx Count</th><td>" + sys.json.stringify(target_block.txs_count) + "</td></tr>"
+        html := html + "</table>"
+        html := html + view_footer()
+        return html
+    }
+
+    return view_404()
+}
+
+func view_tx(id) {
+    found := false
+    target_tx := {}
+
+    i := 0
+    l_txs := len(txs)
+    while i < l_txs {
+        t := txs[i]
+        if t.id == id {
+            target_tx := t
+            found := true
+            i := l_txs // break
+        }
+        i := i + 1
+    }
+
+    if found {
+        html := view_header("Transaction " + id)
+        html := html + "<table>"
+        html := html + "<tr><th>From</th><td>" + target_tx.from + "</td></tr>"
+        html := html + "<tr><th>To</th><td>" + target_tx.to + "</td></tr>"
+        html := html + "<tr><th>Amount</th><td>" + sys.json.stringify(target_tx.amount) + " ARK</td></tr>"
+        html := html + "<tr><th>Signature</th><td>" + target_tx.sig + "</td></tr>"
+        html := html + "</table>"
+        html := html + view_footer()
+        return html
+    }
+
+    return view_404()
+}
+
+func view_404() {
+    return "<html><body><h1>404 Not Found</h1><p><a href='/'>Home</a></p></body></html>"
+}
+
+// --- Router ---
+
+func handle_request(path) {
+    print("Explorer Request: " + path)
+
+    if path == "/" {
+        return view_home()
+    }
+
+    if string.starts_with(path, "/block/") {
+        idx_str := string.slice(path, 7, len(path))
+        return view_block(idx_str)
+    }
+
+    if string.starts_with(path, "/tx/") {
+        id_str := string.slice(path, 4, len(path))
+        return view_tx(id_str)
+    }
+
+    return view_404()
+}
+
+// --- Main ---
+
+port := 8080
+// Using sys.net.http.serve because Explorer is simple GET-only interface
+sys.net.http.serve(port, handle_request)
+
+print("Explorer running on port " + sys.json.stringify(port))
+print("Press Ctrl+C to stop.")
+
+while 1 {
+    sys.time.sleep(1)
+}

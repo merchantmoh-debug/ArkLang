@@ -16,7 +16,7 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
-use crate::ast::ArkNode;
+use crate::ast::{ArkNode, AstError, MastNode};
 use serde_json::from_str;
 use thiserror::Error;
 
@@ -24,9 +24,35 @@ use thiserror::Error;
 pub enum LoadError {
     #[error("JSON Parse Error: {0}")]
     ParseError(#[from] serde_json::Error),
+    #[error("AST Error: {0}")]
+    AstError(#[from] AstError),
+    #[error("Integrity Error: Hash Mismatch. Expected {expected}, computed {computed}.")]
+    HashMismatch { expected: String, computed: String },
 }
 
-pub fn load_ark_program(json: &str) -> Result<ArkNode, LoadError> {
+pub fn load_ark_program(json: &str) -> Result<MastNode, LoadError> {
     let node: ArkNode = from_str(json)?;
-    Ok(node)
+    let mast = MastNode::new(node)?;
+
+    // The Immune System: Verify Integrity before returning
+    verify_mast_integrity(&mast)?;
+
+    Ok(mast)
+}
+
+fn verify_mast_integrity(mast: &MastNode) -> Result<(), LoadError> {
+    // Compute Hash using canonical JSON (matches Python compiler and MastNode::new)
+    let computed_hash = crate::ast::calculate_hash(&mast.content).map_err(LoadError::AstError)?;
+
+    // 3. Compare
+    if computed_hash != mast.hash {
+        return Err(LoadError::HashMismatch {
+            expected: mast.hash.clone(),
+            computed: computed_hash,
+        });
+    }
+
+    // 4. Recurse (if needed - currently MastNode wraps the whole tree, but if we had nested Masts, we'd check them here)
+    // For now, checks top-level signature which covers the content.
+    Ok(())
 }

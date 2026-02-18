@@ -1,0 +1,14 @@
+// @capabilities: fs_read, fs_write, exec
+file := "bench_temp.txt"
+content := "Some temporary content for IO benchmark."
+i := 0
+while i < 50 {
+    sys.fs.write(file, content)
+    res := sys.fs.read(file)
+    i := i + 1
+}
+// Cleanup
+if sys.exec("rm " + file) {
+    // success
+}
+print("Done")

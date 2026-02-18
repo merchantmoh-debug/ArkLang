@@ -1,130 +1,101 @@
-"""
-Router Agent - The orchestrator that analyzes tasks and delegates to specialists.
+import json
+import re
+import sys
+import os
+from typing import Dict, Any, Optional
 
-This agent acts as the "manager" in the swarm, analyzing user requests,
-determining which specialist agents to involve, and synthesizing final results.
-"""
+# Ensure project root is in python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from typing import Dict, List
 from src.agents.base_agent import BaseAgent
-
 
 class RouterAgent(BaseAgent):
     """
-    Router agent responsible for task analysis and delegation.
-    
-    The Router analyzes incoming tasks, determines which specialist workers
-    should handle them, coordinates multi-step workflows, and synthesizes
-    the final response from worker outputs.
+    Router Agent responsible for analyzing tasks and directing them
+    to the appropriate specialist agent.
     """
     
-    def __init__(self):
-        system_prompt = """You are the Router Agent, the coordinator of a multi-agent system.
+    def __init__(self, name: str = "Router", **kwargs):
+        system_prompt = (
+            "You are the Router Agent. Your job is to analyze the user's request and route it "
+            "to the most appropriate specialist agent.\n"
+            "Specialists:\n"
+            "- CoderAgent: Writes code, implements features, fixes bugs.\n"
+            "- ResearcherAgent: Searches the web, gathers information, analyzes data.\n"
+            "- ReviewerAgent: Reviews code, audits security, checks quality.\n\n"
+            "Routing Logic:\n"
+            "- 'write code', 'implement', 'fix bug' -> CoderAgent\n"
+            "- 'research', 'find', 'search', 'analyze' -> ResearcherAgent\n"
+            "- 'review', 'audit', 'check' -> ReviewerAgent\n"
+            "- Default -> CoderAgent\n\n"
+            "Output a JSON object with keys: 'destination', 'confidence' (0.0-1.0), 'reasoning'."
+        )
+        super().__init__(name=name, system_prompt=system_prompt, **kwargs)
 
-Your responsibilities:
-1. Analyze user tasks and determine which specialist agents to involve
-2. Break down complex tasks into subtasks for different specialists
-3. Coordinate the workflow between agents
-4. Synthesize final results from multiple specialists
-
-Available specialist agents:
-- coder: Writes and refactors code, creates files, implements features
-- reviewer: Reviews code quality, checks for security issues, analyzes logs
-- researcher: Gathers information, performs web searches, analyzes data
-
-When analyzing a task, respond with a delegation plan in this format:
-DELEGATION:
-- agent: <agent_name>
-- task: <specific task for that agent>
-
-You may delegate to multiple agents in sequence or parallel."""
-        
-        super().__init__(role="router", system_prompt=system_prompt)
-    
-    def analyze_and_delegate(self, user_task: str) -> List[Dict[str, str]]:
+    async def run(self, task: str) -> Dict[str, Any]:
         """
-        Analyze a user task and create a delegation plan.
+        Analyze the task and return routing decision.
+        """
+        self.log("INFO", f"Analyzing task: {task}")
         
-        Args:
-            user_task: The task provided by the user.
+        # 1. Ask LLM for decision
+        context = f"Task: {task}"
+        response_text = await self.think(context)
+        
+        decision = self._parse_response(response_text)
+        
+        # 2. Fallback to heuristic if LLM failed or returned invalid JSON (e.g. DummyClient)
+        if not decision:
+            self.log("WARNING", "LLM response parsing failed or empty. Using heuristics.")
+            decision = self._apply_heuristics(task)
             
-        Returns:
-            List of delegation instructions, each containing 'agent' and 'task'.
-        """
-        analysis = self.execute(user_task)
-        
-        # Parse the delegation plan from the response
-        delegations = []
-        lines = analysis.split('\n')
-        current_delegation = {}
-        
-        for line in lines:
-            line = line.strip()
-            if line.startswith('- agent:'):
-                if current_delegation:
-                    delegations.append(current_delegation)
-                current_delegation = {'agent': line.split(':', 1)[1].strip()}
-            elif line.startswith('- task:') and current_delegation:
-                current_delegation['task'] = line.split(':', 1)[1].strip()
-        
-        if current_delegation and 'task' in current_delegation:
-            delegations.append(current_delegation)
-        
-        # Fallback: if no delegations parsed, use simple keyword matching
-        if not delegations:
-            delegations = self._simple_delegate(user_task)
-        
-        return delegations
-    
-    def _simple_delegate(self, task: str) -> List[Dict[str, str]]:
-        """
-        Simple keyword-based delegation as fallback.
-        
-        Args:
-            task: The task to analyze.
-            
-        Returns:
-            List of delegations based on keywords.
-        """
+        self.log("INFO", f"Routing decision: {decision.get('destination')} (Confidence: {decision.get('confidence')})")
+        return decision
+
+    def _parse_response(self, text: str) -> Optional[Dict[str, Any]]:
+        """Extract JSON from LLM response."""
+        try:
+            # Attempt to find JSON block
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if match:
+                data = json.loads(match.group(0))
+                if "destination" in data:
+                    return data
+        except Exception as e:
+            self.log("DEBUG", f"JSON parsing failed: {e}")
+        return None
+
+    def _apply_heuristics(self, task: str) -> Dict[str, Any]:
+        """Apply keyword-based routing rules."""
         task_lower = task.lower()
-        delegations = []
         
-        # Check for code-related keywords
-        if any(word in task_lower for word in ['code', 'implement', 'build', 'create', 'write', 'function']):
-            delegations.append({'agent': 'coder', 'task': task})
+        # Heuristics based on keyword presence
+        # Prioritize specifically requested actions
         
-        # Check for review-related keywords
-        if any(word in task_lower for word in ['review', 'check', 'security', 'quality', 'analyze']):
-            delegations.append({'agent': 'reviewer', 'task': task})
+        if any(kw in task_lower for kw in ["review", "audit", "check code", "review code"]):
+            return {"destination": "ReviewerAgent", "confidence": 0.9, "reasoning": "Keyword match: review/audit"}
         
-        # Check for research-related keywords
-        if any(word in task_lower for word in ['research', 'search', 'find', 'information', 'learn']):
-            delegations.append({'agent': 'researcher', 'task': task})
-        
-        # Default to coder if no matches
-        if not delegations:
-            delegations.append({'agent': 'coder', 'task': task})
-        
-        return delegations
-    
-    def synthesize_results(self, delegations: List[Dict[str, str]], results: List[str]) -> str:
-        """
-        Synthesize final response from multiple agent results.
-        
-        Args:
-            delegations: The original delegation plan.
-            results: Results from each delegated agent.
+        if any(kw in task_lower for kw in ["research", "find", "search", "analyze", "look up"]):
+            return {"destination": "ResearcherAgent", "confidence": 0.9, "reasoning": "Keyword match: research/search"}
             
-        Returns:
-            Final synthesized response.
-        """
-        synthesis_prompt = f"""Synthesize a final response based on the following agent outputs:
+        if any(kw in task_lower for kw in ["write code", "implement", "fix bug", "create function", "script", "program"]):
+            return {"destination": "CoderAgent", "confidence": 0.9, "reasoning": "Keyword match: coding terms"}
 
-"""
-        for i, (delegation, result) in enumerate(zip(delegations, results), 1):
-            synthesis_prompt += f"{i}. [{delegation['agent']}] {delegation['task']}\n"
-            synthesis_prompt += f"   Result: {result}\n\n"
+        return {"destination": "CoderAgent", "confidence": 0.5, "reasoning": "Default fallback"}
+
+if __name__ == "__main__":
+    import asyncio
+    async def main():
+        router = RouterAgent()
+        print("Testing RouterAgent...")
+        # Test 1: Code
+        res1 = await router.run("Write a python script to calculate pi")
+        print(f"Task 1 Result: {res1}")
+        # Test 2: Research
+        res2 = await router.run("Search for the latest Ark Core version")
+        print(f"Task 2 Result: {res2}")
+        # Test 3: Review
+        res3 = await router.run("Audit this code for security flaws")
+        print(f"Task 3 Result: {res3}")
         
-        synthesis_prompt += "Provide a concise final report summarizing what was accomplished."
-        
-        return self.execute(synthesis_prompt)
+    asyncio.run(main())
