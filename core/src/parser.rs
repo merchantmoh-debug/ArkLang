@@ -374,7 +374,7 @@ impl Lexer {
                 if c.is_ascii_digit() {
                     num.push(c);
                     self.advance();
-                } else if c == '.' && self.peek_ahead(1).map_or(false, |n| n.is_ascii_digit()) {
+                } else if c == '.' && self.peek_ahead(1).is_some_and(|n| n.is_ascii_digit()) {
                     is_float = true;
                     num.push(c);
                     self.advance();

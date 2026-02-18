@@ -103,6 +103,9 @@ pub struct CallFrame {
     pub chunk: Arc<Chunk>,
 }
 
+/// Type alias for VM debug hook callback.
+pub type DebugHookFn<'a> = dyn FnMut(&[Value], &[Scope], usize, &Chunk) -> DebugAction + 'a;
+
 pub struct VM<'a> {
     pub heap: GraphArena,
     pub stack: Vec<Value>,
@@ -114,7 +117,7 @@ pub struct VM<'a> {
     pub step_count: u64,
     pub trace: bool,
     /// Optional debug hook: called before each opcode, receives (ip). Returns DebugAction.
-    pub debug_hook: Option<Box<dyn FnMut(&[Value], &[Scope], usize, &Chunk) -> DebugAction + 'a>>,
+    pub debug_hook: Option<Box<DebugHookFn<'a>>>,
 }
 
 impl<'a> VM<'a> {

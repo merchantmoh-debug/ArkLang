@@ -42,15 +42,21 @@ pub struct DebugState {
     pub stepping: bool,
 }
 
-impl DebugState {
-    pub fn new() -> Self {
+impl Default for DebugState {
+    fn default() -> Self {
         Self {
             breakpoints: HashSet::new(),
-            step_mode: StepMode::StepInto, // Start paused at first line
+            step_mode: StepMode::StepInto,
             last_line: u32::MAX,
             step_over_depth: 0,
             stepping: true,
         }
+    }
+}
+
+impl DebugState {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Add a breakpoint at the given line number
@@ -96,30 +102,13 @@ impl DebugState {
         // Check step mode
         match self.step_mode {
             StepMode::Continue => false,
-            StepMode::StepInto => {
-                if self.stepping && current_line != self.last_line {
-                    true
-                } else {
-                    false
-                }
-            }
+            StepMode::StepInto => self.stepping && current_line != self.last_line,
             StepMode::StepOver => {
-                if self.stepping
+                self.stepping
                     && frame_depth <= self.step_over_depth
                     && current_line != self.last_line
-                {
-                    true
-                } else {
-                    false
-                }
             }
-            StepMode::StepOut => {
-                if self.stepping && frame_depth < self.step_over_depth {
-                    true
-                } else {
-                    false
-                }
-            }
+            StepMode::StepOut => self.stepping && frame_depth < self.step_over_depth,
         }
     }
 }
@@ -134,7 +123,7 @@ pub fn format_value(val: &Value) -> String {
         Value::Function(_) => "<function>".to_string(),
         Value::NativeFunction(_) => "<native fn>".to_string(),
         Value::List(items) => {
-            let inner: Vec<String> = items.iter().map(|v| format_value(v)).collect();
+            let inner: Vec<String> = items.iter().map(format_value).collect();
             format!("[{}]", inner.join(", "))
         }
         Value::Buffer(buf) => format!("<buffer {} bytes>", buf.len()),

@@ -33,7 +33,7 @@ use std::cell::RefCell;
 
 // Thread-local buffer to capture print output in WASM
 thread_local! {
-    static OUTPUT_BUFFER: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    static OUTPUT_BUFFER: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Append a line to the WASM output buffer (called by VM's print intrinsic).
