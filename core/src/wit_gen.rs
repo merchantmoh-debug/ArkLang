@@ -54,7 +54,7 @@ pub fn ark_type_to_wit(ty: &ArkType) -> String {
             )
         }
         ArkType::Function(inputs, output) => {
-            let params: Vec<String> = inputs.iter().map(|t| ark_type_to_wit(t)).collect();
+            let params: Vec<String> = inputs.iter().map(ark_type_to_wit).collect();
             let ret = ark_type_to_wit(output);
             format!("/* func({}) -> {} */", params.join(", "), ret)
         }

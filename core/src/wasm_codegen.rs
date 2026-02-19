@@ -64,17 +64,29 @@ const WASI_PATH_OPEN_TYPE_IDX: u32 = 4; // (i32,i32,i32,i32,i32,i64,i64,i32,i32)
 const WASI_FD_CLOSE_TYPE_IDX: u32 = 5; // (i32)->i32
 
 // Import function indices (0..10)
+#[allow(dead_code)]
 const WASI_FD_WRITE_FUNC_IDX: u32 = 0;
+#[allow(dead_code)]
 const WASI_FD_READ_FUNC_IDX: u32 = 1;
+#[allow(dead_code)]
 const WASI_CLOCK_TIME_GET_FUNC_IDX: u32 = 2;
+#[allow(dead_code)]
 const WASI_RANDOM_GET_FUNC_IDX: u32 = 3;
+#[allow(dead_code)]
 const WASI_ARGS_GET_FUNC_IDX: u32 = 4;
+#[allow(dead_code)]
 const WASI_ARGS_SIZES_GET_FUNC_IDX: u32 = 5;
+#[allow(dead_code)]
 const WASI_ENVIRON_GET_FUNC_IDX: u32 = 6;
+#[allow(dead_code)]
 const WASI_ENVIRON_SIZES_GET_FUNC_IDX: u32 = 7;
+#[allow(dead_code)]
 const WASI_PROC_EXIT_FUNC_IDX: u32 = 8;
+#[allow(dead_code)]
 const WASI_PATH_OPEN_FUNC_IDX: u32 = 9;
+#[allow(dead_code)]
 const WASI_FD_CLOSE_FUNC_IDX: u32 = 10;
+#[allow(dead_code)]
 const WASI_IMPORT_COUNT: u32 = 11;
 
 // Ark Host type indices (extend after WASI types, pushed in register_wasi_imports)
