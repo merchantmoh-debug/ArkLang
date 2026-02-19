@@ -53,7 +53,7 @@
 ### Prerequisites
 
 - **Rust 1.80+** — For the Rust VM core. [Install Rust](https://rustup.rs/)
-- **Python 3.11+** — For the bootstrap compiler and tooling.
+- **Python 3.8+** — For the bootstrap compiler and tooling (3.10+ recommended).
 - **Git** — To clone the repo.
 
 ### From Source
