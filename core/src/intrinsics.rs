@@ -782,7 +782,10 @@ fn check_path_security(path: &str, is_write: bool) -> Result<(), RuntimeError> {
 
                 for prefix in protected_prefixes {
                     if rel_str.starts_with(prefix) {
-                        println!("[Ark:FS] Security Violation: Write to protected directory '{}' denied.", prefix);
+                        println!(
+                            "[Ark:FS] Security Violation: Write to protected directory '{}' denied.",
+                            prefix
+                        );
                         return Err(RuntimeError::NotExecutable);
                     }
                 }
@@ -1335,6 +1338,24 @@ fn print_value(v: &Value) {
         Value::PVec(pv) => print!("{}", pv),
         Value::PMap(pm) => print!("{}", pm),
         Value::Return(val) => print_value(val),
+        Value::EnumValue {
+            enum_name,
+            variant,
+            fields,
+        } => {
+            if fields.is_empty() {
+                print!("{}::{}", enum_name, variant);
+            } else {
+                print!("{}::{}(", enum_name, variant);
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        print!(", ");
+                    }
+                    print_value(field);
+                }
+                print!(")");
+            }
+        }
     }
 }
 #[cfg(not(target_arch = "wasm32"))]

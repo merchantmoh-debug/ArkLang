@@ -692,6 +692,18 @@ pub fn format_value_adn(v: &Value) -> String {
         Value::Buffer(b) => format!("#buf[{} bytes]", b.len()),
         Value::LinearObject { typename, id, .. } => format!("#<linear:{} {}>", typename, id),
         Value::Return(v) => format_value_adn(v),
+        Value::EnumValue {
+            enum_name,
+            variant,
+            fields,
+        } => {
+            if fields.is_empty() {
+                format!("{}::{}", enum_name, variant)
+            } else {
+                let field_strs: Vec<String> = fields.iter().map(format_value_adn).collect();
+                format!("{}::{}({})", enum_name, variant, field_strs.join(", "))
+            }
+        }
     }
 }
 
