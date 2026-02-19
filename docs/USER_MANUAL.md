@@ -66,12 +66,17 @@ cd ark-compiler
 # Build the Rust VM
 cd core && cargo build --release && cd ..
 
-# Install Python deps
-pip install -r requirements.txt
+# Install Python deps (pick one)
+uv sync                         # ⚡ Recommended — fast, deterministic
+pip install -r requirements.txt  # Also works
 
 # Verify
 python meta/ark.py version
 ```
+
+> **Don't have uv?** Install it in one line:
+> - **macOS/Linux:** `curl -LsSf https://astral.sh/uv/install.sh | sh`
+> - **Windows:** `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 
 ### Docker
 

@@ -289,7 +289,7 @@ docker build -t ark-compiler .
 docker run -it --rm ark-compiler
 ```
 
-### From Source
+### From Source (Recommended)
 
 ```bash
 git clone https://github.com/merchantmoh-debug/ark-compiler.git
@@ -298,13 +298,17 @@ cd ark-compiler
 # Build the Rust compiler
 cd core && cargo build --release && cd ..
 
-# Install Python tooling
-pip install -r requirements.txt
+# Install Python tooling (pick one)
+uv sync                         # ⚡ Recommended — fast, deterministic
+pip install -r requirements.txt  # Also works
 
 # Run your first program
 echo 'print("Hello from Ark!")' > hello.ark
 python meta/ark.py run hello.ark
 ```
+
+> **Don't have uv?** Install it in one line: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+> Or on Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 
 ### Try the Examples
 

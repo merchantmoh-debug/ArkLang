@@ -1,0 +1,65 @@
+[project]
+name = "ark-compiler"
+version = "112.0.0"
+description = "The Ark Programming Language — Sovereign Computing Platform"
+readme = "README.md"
+license = "AGPL-3.0-only"
+requires-python = ">=3.8"
+authors = [{ name = "Mohamad Al-Zawahreh", email = "merchantmoh@proton.me" }]
+keywords = ["compiler", "language", "sovereign", "blockchain", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Interpreters",
+]
+
+# ─── Core Dependencies ────────────────────────────────────────────────────────
+# These are the minimum deps needed to run `ark run <file.ark>`.
+# Optional heavy deps (torch, z3-solver) are in [project.optional-dependencies].
+dependencies = [
+    "lark>=1.1.0",           # Parser (EBNF grammar)
+    "prompt_toolkit>=3.0.0", # REPL
+    "pygments>=2.15.0",      # Syntax highlighting
+    "requests>=2.28.0",      # HTTP networking intrinsics
+    "psutil>=5.9.0",         # System monitoring
+]
+
+[project.optional-dependencies]
+# Full install: `uv pip install -e ".[all]"` or `pip install -e ".[all]"`
+crypto = [
+    "cryptography>=41.0.0", # AES-GCM, Fernet (agent memory encryption)
+]
+ai = [
+    "google-genai>=0.3.0",      # Gemini API
+    "pydantic>=2.0.0",          # Agent framework models
+    "pydantic-settings>=2.0.0", # Config management
+]
+verify = [
+    "z3-solver>=4.12.0", # Formal verification (@verify intrinsic)
+]
+all = ["ark-compiler[crypto,ai,verify]"]
+
+[project.scripts]
+ark = "meta.ark:main"
+
+[project.urls]
+Homepage = "https://github.com/merchantmoh-debug/ark-compiler"
+Documentation = "https://github.com/merchantmoh-debug/ark-compiler/tree/main/docs"
+Repository = "https://github.com/merchantmoh-debug/ark-compiler"
+Issues = "https://github.com/merchantmoh-debug/ark-compiler/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.backends"
+
+[tool.hatch.build.targets.wheel]
+packages = ["meta"]
