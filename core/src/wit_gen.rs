@@ -65,6 +65,8 @@ pub fn ark_type_to_wit(ty: &ArkType) -> String {
         ArkType::Optional(inner) => format!("option<{}>", ark_type_to_wit(inner)),
         ArkType::Any => "/* any */ s64".to_string(),
         ArkType::Unknown => "/* unknown */ s64".to_string(),
+        // Enum and Trait types map to named types
+        ArkType::Enum(name) | ArkType::Trait(name) => to_wit_ident(name),
         // Legacy linear types map to their inner name
         ArkType::Linear(name) | ArkType::Affine(name) | ArkType::Shared(name) => to_wit_ident(name),
     }

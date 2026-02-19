@@ -381,10 +381,12 @@ fn link_wasi_stubs(linker: &mut Linker<HostState>) -> Result<(), WasmRunError> {
                     let argc_off = argc_ptr as usize;
                     let buf_off = argv_buf_size_ptr as usize;
                     if argc_off + 4 <= data.len() {
-                        data[argc_off..argc_off + 4].copy_from_slice(&0u32.to_le_bytes()); // 0 args
+                        data[argc_off..argc_off + 4].copy_from_slice(&0u32.to_le_bytes());
+                        // 0 args
                     }
                     if buf_off + 4 <= data.len() {
-                        data[buf_off..buf_off + 4].copy_from_slice(&0u32.to_le_bytes()); // 0 buf size
+                        data[buf_off..buf_off + 4].copy_from_slice(&0u32.to_le_bytes());
+                        // 0 buf size
                     }
                 }
                 0

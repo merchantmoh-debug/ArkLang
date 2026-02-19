@@ -3639,7 +3639,7 @@ mod tests {
         assert_eq!(wasm[1], 0x61); // 'a'
         assert_eq!(wasm[2], 0x73); // 's'
         assert_eq!(wasm[3], 0x6d); // 'm'
-        // Version: 1
+                                   // Version: 1
         assert_eq!(wasm[4], 0x01);
         assert_eq!(wasm[5], 0x00);
         assert_eq!(wasm[6], 0x00);
