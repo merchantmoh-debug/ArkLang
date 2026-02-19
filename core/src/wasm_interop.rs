@@ -227,9 +227,9 @@ pub fn intrinsic_wasm_exports(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
 /// sys.wasm.call(handle, function_name, args_list) → Value
 ///
-/// Call an exported function in a loaded WASM module.
-/// Currently returns a stub result — full wasmtime execution requires
-/// the `wasm-interop` feature flag (not yet enabled).
+/// Call an exported function in a loaded WASM module via wasmtime.
+/// Converts Ark Value arguments to i64, invokes the function, and
+/// converts the result back to a Value.
 pub fn intrinsic_wasm_call(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 3 {
         return Err(RuntimeError::InvalidOperation(
@@ -252,7 +252,7 @@ pub fn intrinsic_wasm_call(args: Vec<Value>) -> Result<Value, RuntimeError> {
             ));
         }
     };
-    let _call_args = match &args[2] {
+    let call_args = match &args[2] {
         Value::List(l) => l.clone(),
         _ => {
             return Err(RuntimeError::InvalidOperation(
@@ -261,32 +261,50 @@ pub fn intrinsic_wasm_call(args: Vec<Value>) -> Result<Value, RuntimeError> {
         }
     };
 
-    let registry = WASM_REGISTRY.lock().unwrap();
-    match registry.get(&handle) {
-        Some(module) => {
-            // Verify the function exists in exports
-            if !module.exports.contains(&func_name) {
+    // Convert Ark Values to i64 for WASM
+    let i64_args: Vec<i64> = call_args
+        .iter()
+        .map(|v| match v {
+            Value::Integer(n) => Ok(*n),
+            Value::Boolean(b) => Ok(if *b { 1i64 } else { 0i64 }),
+            _ => Err(RuntimeError::InvalidOperation(format!(
+                "sys.wasm.call: argument {:?} cannot be converted to i64",
+                v
+            ))),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Get the module bytes from the registry
+    let wasm_bytes = {
+        let registry = WASM_REGISTRY.lock().unwrap();
+        match registry.get(&handle) {
+            Some(module) => {
+                // Verify the function exists in exports
+                if !module.exports.contains(&func_name) {
+                    return Err(RuntimeError::InvalidOperation(format!(
+                        "sys.wasm.call: function '{}' not found in module '{}'. Available: {:?}",
+                        func_name, module.path, module.exports
+                    )));
+                }
+                Arc::clone(&module.bytes)
+            }
+            None => {
                 return Err(RuntimeError::InvalidOperation(format!(
-                    "sys.wasm.call: function '{}' not found in module '{}'. Available: {:?}",
-                    func_name, module.path, module.exports
+                    "sys.wasm.call: no module with handle {}",
+                    handle
                 )));
             }
-
-            // Stub: full execution requires wasmtime feature
-            // When wasmtime is available, this would instantiate the module,
-            // convert args to WASM values, call the function, and convert results back.
-            Err(RuntimeError::InvalidOperation(format!(
-                "sys.wasm.call: execution of '{}' requires the 'wasm-interop' feature. \
-                 Module loaded from '{}' with {} exports. \
-                 Enable with: cargo build --features wasm-interop",
-                func_name,
-                module.path,
-                module.exports.len()
-            )))
         }
-        None => Err(RuntimeError::InvalidOperation(format!(
-            "sys.wasm.call: no module with handle {}",
-            handle
+    };
+    // Registry lock is dropped here before the potentially long execution
+
+    // Execute via wasmtime
+    match crate::wasm_runner::call_exported(&wasm_bytes, &func_name, &i64_args) {
+        Ok(Some(result)) => Ok(Value::Integer(result)),
+        Ok(None) => Ok(Value::Unit),
+        Err(e) => Err(RuntimeError::InvalidOperation(format!(
+            "sys.wasm.call: execution failed: {}",
+            e
         ))),
     }
 }
@@ -385,6 +403,83 @@ mod tests {
     fn test_wasm_call_bad_args() {
         let args = vec![Value::Integer(1)];
         let result = intrinsic_wasm_call(args);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_wasm_call_real_execution() {
+        // Compile an Ark program with an exported function
+        let source = "func add(a, b) { return a + b }\nprint(0)";
+        let ast = crate::parser::parse_source(source, "test.ark").expect("parse failed");
+        let wasm_bytes =
+            crate::wasm_codegen::WasmCodegen::compile_to_bytes(&ast).expect("compile failed");
+
+        // Write to temp file, load, call, verify
+        let tmp_path = std::env::temp_dir().join("ark_interop_test.wasm");
+        std::fs::write(&tmp_path, &wasm_bytes).expect("write failed");
+
+        // Load the module
+        let load_result =
+            intrinsic_wasm_load(vec![Value::String(tmp_path.to_string_lossy().to_string())])
+                .expect("load failed");
+
+        let handle = match load_result {
+            Value::Integer(h) => h,
+            _ => panic!("expected Integer handle"),
+        };
+
+        // Call the 'add' function with args [10, 20]
+        let call_result = intrinsic_wasm_call(vec![
+            Value::Integer(handle),
+            Value::String("add".to_string()),
+            Value::List(vec![Value::Integer(10), Value::Integer(20)]),
+        ])
+        .expect("call failed");
+
+        assert_eq!(call_result, Value::Integer(30), "add(10, 20) should be 30");
+
+        // Clean up
+        intrinsic_wasm_drop(vec![Value::Integer(handle)]).unwrap();
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
+    #[test]
+    fn test_wasm_call_missing_export() {
+        let source = "print(1)";
+        let ast = crate::parser::parse_source(source, "test.ark").expect("parse failed");
+        let wasm_bytes =
+            crate::wasm_codegen::WasmCodegen::compile_to_bytes(&ast).expect("compile failed");
+
+        let tmp_path = std::env::temp_dir().join("ark_interop_missing.wasm");
+        std::fs::write(&tmp_path, &wasm_bytes).expect("write failed");
+
+        let handle =
+            match intrinsic_wasm_load(vec![Value::String(tmp_path.to_string_lossy().to_string())])
+                .unwrap()
+            {
+                Value::Integer(h) => h,
+                _ => panic!("expected handle"),
+            };
+
+        let result = intrinsic_wasm_call(vec![
+            Value::Integer(handle),
+            Value::String("nonexistent".to_string()),
+            Value::List(vec![]),
+        ]);
+        assert!(result.is_err(), "calling nonexistent export should fail");
+
+        intrinsic_wasm_drop(vec![Value::Integer(handle)]).unwrap();
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+
+    #[test]
+    fn test_wasm_call_non_integer_args() {
+        let result = intrinsic_wasm_call(vec![
+            Value::Integer(1),
+            Value::String("foo".to_string()),
+            Value::List(vec![Value::String("not_a_number".to_string())]),
+        ]);
+        // Should fail because string args can't be converted to i64
         assert!(result.is_err());
     }
 }

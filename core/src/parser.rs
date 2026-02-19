@@ -25,7 +25,8 @@
 //! Grammar reference: `meta/ark.lark` (138-line EBNF)
 
 use crate::ast::{
-    ArkNode, Expression, FunctionDef, Import, MastNode, Pattern, Statement, StructDecl,
+    ArkNode, EnumDecl, EnumVariantDef, Expression, FunctionDef, ImplBlock, Import, MastNode,
+    Pattern, Statement, StructDecl, TraitDecl, TraitMethodSig,
 };
 use crate::types::ArkType;
 use thiserror::Error;
@@ -112,6 +113,12 @@ pub enum TokenKind {
     Await,
     And,
     Or,
+    Enum,
+    Trait,
+    Impl,
+
+    // Annotations
+    Attribute(String), // #[export], #[golem::handler], etc.
 
     // Operators
     Plus,
@@ -427,6 +434,9 @@ impl Lexer {
                 "await" => TokenKind::Await,
                 "and" => TokenKind::And,
                 "or" => TokenKind::Or,
+                "enum" => TokenKind::Enum,
+                "trait" => TokenKind::Trait,
+                "impl" => TokenKind::Impl,
                 _ => TokenKind::Identifier(ident),
             };
             return Ok(Token::new(kind, start_line, start_col));
@@ -580,6 +590,38 @@ impl Lexer {
             ']' => TokenKind::RBracket,
             ',' => TokenKind::Comma,
             ';' => TokenKind::Semicolon,
+            '#' => {
+                // Attribute annotation: #[identifier] or #[path::path]
+                if self.peek() == Some('[') {
+                    self.advance(); // consume '['
+                    let mut attr_name = String::new();
+                    while let Some(c) = self.peek() {
+                        if c == ']' {
+                            self.advance(); // consume ']'
+                            break;
+                        } else {
+                            attr_name.push(c);
+                            self.advance();
+                        }
+                    }
+                    if attr_name.is_empty() {
+                        return Err(ParseError::Syntax {
+                            message: "Empty attribute annotation #[]".into(),
+                            line: start_line,
+                            col: start_col,
+                            file: String::new(),
+                        });
+                    }
+                    TokenKind::Attribute(attr_name)
+                } else {
+                    return Err(ParseError::Syntax {
+                        message: "Unexpected '#'. Did you mean '#[attribute]'?".into(),
+                        line: start_line,
+                        col: start_col,
+                        file: String::new(),
+                    });
+                }
+            }
             _ => {
                 return Err(ParseError::Syntax {
                     message: format!("Unexpected character: '{}'", ch),
@@ -687,16 +729,68 @@ impl Parser {
     }
 
     fn parse_top_level_item(&mut self) -> Result<Statement, ParseError> {
+        // Collect any leading #[attribute] annotations
+        let mut attrs = Vec::new();
+        while let TokenKind::Attribute(name) = &self.peek().kind {
+            attrs.push(name.clone());
+            self.advance();
+        }
+
         match &self.peek().kind {
-            TokenKind::Func => self.parse_function_def(),
-            TokenKind::Class => self.parse_class_def(),
-            _ => self.parse_statement(),
+            TokenKind::Func => self.parse_function_def_with_attrs(attrs),
+            TokenKind::Class => {
+                if !attrs.is_empty() {
+                    // For now, attributes on classes are ignored with a warning
+                    println!("Warning: attributes on class declarations are not yet supported");
+                }
+                self.parse_class_def()
+            }
+            TokenKind::Enum => {
+                if !attrs.is_empty() {
+                    println!("Warning: attributes on enum declarations are not yet supported");
+                }
+                self.parse_enum_def()
+            }
+            TokenKind::Trait => {
+                if !attrs.is_empty() {
+                    println!("Warning: attributes on trait declarations are not yet supported");
+                }
+                self.parse_trait_def()
+            }
+            TokenKind::Impl => {
+                if !attrs.is_empty() {
+                    println!("Warning: attributes on impl blocks are not yet supported");
+                }
+                self.parse_impl_block()
+            }
+            _ => {
+                if !attrs.is_empty() {
+                    let tok = self.peek().clone();
+                    return Err(ParseError::Syntax {
+                        message: format!(
+                            "Attributes can only be applied to function or class definitions, found {:?}",
+                            tok.kind
+                        ),
+                        line: tok.line,
+                        col: tok.col,
+                        file: self.file.clone(),
+                    });
+                }
+                self.parse_statement()
+            }
         }
     }
 
     // ─── Function Definition ─────────────────────────────────────────────
 
     fn parse_function_def(&mut self) -> Result<Statement, ParseError> {
+        self.parse_function_def_with_attrs(vec![])
+    }
+
+    fn parse_function_def_with_attrs(
+        &mut self,
+        attributes: Vec<String>,
+    ) -> Result<Statement, ParseError> {
         self.expect(&TokenKind::Func)?;
 
         let name_tok = self.peek().clone();
@@ -747,6 +841,7 @@ impl Parser {
             inputs: params,
             output: ArkType::Any,
             body: Box::new(mast),
+            attributes,
         }))
     }
 
@@ -788,6 +883,242 @@ impl Parser {
         Ok(Statement::StructDecl(StructDecl { name, fields }))
     }
 
+    // ─── Enum Definition ─────────────────────────────────────────────────
+    // enum Color { Red, Green, Blue(Int) }
+
+    fn parse_enum_def(&mut self) -> Result<Statement, ParseError> {
+        self.expect(&TokenKind::Enum)?;
+
+        let name_tok = self.peek().clone();
+        let name = match &name_tok.kind {
+            TokenKind::Identifier(n) => n.clone(),
+            _ => return Err(ParseError::unexpected("enum name", &name_tok, &self.file)),
+        };
+        self.advance();
+
+        self.expect(&TokenKind::LBrace)?;
+
+        let mut variants = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.at_end() {
+            let v_tok = self.peek().clone();
+            let v_name = match &v_tok.kind {
+                TokenKind::Identifier(n) => n.clone(),
+                _ => return Err(ParseError::unexpected("variant name", &v_tok, &self.file)),
+            };
+            self.advance();
+
+            // Optional tuple fields: Variant(Type1, Type2)
+            let mut fields = Vec::new();
+            if self.check(&TokenKind::LParen) {
+                self.advance(); // consume (
+                if !self.check(&TokenKind::RParen) {
+                    loop {
+                        let ty = self.parse_type_annotation()?;
+                        fields.push(ty);
+                        if !self.match_tok(&TokenKind::Comma) {
+                            break;
+                        }
+                    }
+                }
+                self.expect(&TokenKind::RParen)?;
+            }
+
+            variants.push(EnumVariantDef {
+                name: v_name,
+                fields,
+            });
+
+            // Optional comma between variants
+            self.match_tok(&TokenKind::Comma);
+        }
+
+        self.expect(&TokenKind::RBrace)?;
+
+        Ok(Statement::EnumDecl(EnumDecl { name, variants }))
+    }
+
+    // ─── Trait Definition ────────────────────────────────────────────────
+    // trait Drawable { func draw(self) -> Unit }
+
+    fn parse_trait_def(&mut self) -> Result<Statement, ParseError> {
+        self.expect(&TokenKind::Trait)?;
+
+        let name_tok = self.peek().clone();
+        let name = match &name_tok.kind {
+            TokenKind::Identifier(n) => n.clone(),
+            _ => return Err(ParseError::unexpected("trait name", &name_tok, &self.file)),
+        };
+        self.advance();
+
+        self.expect(&TokenKind::LBrace)?;
+
+        let mut methods = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.at_end() {
+            let _doc = self.try_doc_comment();
+            self.expect(&TokenKind::Func)?;
+
+            let m_tok = self.peek().clone();
+            let m_name = match &m_tok.kind {
+                TokenKind::Identifier(n) => n.clone(),
+                _ => return Err(ParseError::unexpected("method name", &m_tok, &self.file)),
+            };
+            self.advance();
+
+            // Parameters
+            self.expect(&TokenKind::LParen)?;
+            let mut inputs = Vec::new();
+            if !self.check(&TokenKind::RParen) {
+                loop {
+                    let p_tok = self.peek().clone();
+                    let p_name = match &p_tok.kind {
+                        TokenKind::Identifier(n) => n.clone(),
+                        _ => return Err(ParseError::unexpected("param name", &p_tok, &self.file)),
+                    };
+                    self.advance();
+
+                    let ty = if self.match_tok(&TokenKind::Colon) {
+                        self.parse_type_annotation()?
+                    } else {
+                        ArkType::Any
+                    };
+                    inputs.push((p_name, ty));
+
+                    if !self.match_tok(&TokenKind::Comma) {
+                        break;
+                    }
+                }
+            }
+            self.expect(&TokenKind::RParen)?;
+
+            // Optional return type
+            let output = if self.match_tok(&TokenKind::Arrow) {
+                self.parse_type_annotation()?
+            } else {
+                ArkType::Any
+            };
+
+            methods.push(TraitMethodSig {
+                name: m_name,
+                inputs,
+                output,
+            });
+
+            // Skip optional semicolons/newlines
+            self.match_tok(&TokenKind::Semicolon);
+        }
+
+        self.expect(&TokenKind::RBrace)?;
+
+        Ok(Statement::TraitDecl(TraitDecl { name, methods }))
+    }
+
+    // ─── Impl Block ─────────────────────────────────────────────────────
+    // impl Drawable for Circle { func draw(self) { ... } }
+    // impl Circle { func area(self) { ... } }
+
+    fn parse_impl_block(&mut self) -> Result<Statement, ParseError> {
+        self.expect(&TokenKind::Impl)?;
+
+        let first_tok = self.peek().clone();
+        let first_name = match &first_tok.kind {
+            TokenKind::Identifier(n) => n.clone(),
+            _ => {
+                return Err(ParseError::unexpected(
+                    "type or trait name",
+                    &first_tok,
+                    &self.file,
+                ));
+            }
+        };
+        self.advance();
+
+        // Check for "for" keyword → impl Trait for Type
+        let (trait_name, target_type) = if self.check(&TokenKind::For) {
+            self.advance(); // consume "for"
+            let type_tok = self.peek().clone();
+            let tname = match &type_tok.kind {
+                TokenKind::Identifier(n) => n.clone(),
+                _ => return Err(ParseError::unexpected("type name", &type_tok, &self.file)),
+            };
+            self.advance();
+            (Some(first_name), tname)
+        } else {
+            (None, first_name)
+        };
+
+        self.expect(&TokenKind::LBrace)?;
+
+        let mut methods = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.at_end() {
+            let _doc = self.try_doc_comment();
+            let method = self.parse_function_def()?;
+            if let Statement::Function(func_def) = method {
+                methods.push(func_def);
+            }
+        }
+
+        self.expect(&TokenKind::RBrace)?;
+
+        Ok(Statement::ImplBlock(ImplBlock {
+            trait_name,
+            target_type,
+            methods,
+        }))
+    }
+
+    // ─── Type Annotation ─────────────────────────────────────────────────
+    // Parses: Int, Str, Bool, Float, Unit, Any, List<T>, Map<K,V>, T?, UserType
+
+    fn parse_type_annotation(&mut self) -> Result<ArkType, ParseError> {
+        let tok = self.peek().clone();
+        let ty = match &tok.kind {
+            TokenKind::Identifier(name) => {
+                let name = name.clone();
+                self.advance();
+                match name.as_str() {
+                    "Int" => ArkType::Integer,
+                    "Float" => ArkType::Float,
+                    "Str" | "String" => ArkType::String,
+                    "Bool" => ArkType::Boolean,
+                    "Unit" => ArkType::Unit,
+                    "Any" => ArkType::Any,
+                    "List" => {
+                        if self.match_tok(&TokenKind::Lt) {
+                            let inner = self.parse_type_annotation()?;
+                            self.expect(&TokenKind::Gt)?;
+                            ArkType::List(Box::new(inner))
+                        } else {
+                            ArkType::List(Box::new(ArkType::Any))
+                        }
+                    }
+                    "Map" => {
+                        if self.match_tok(&TokenKind::Lt) {
+                            let key = self.parse_type_annotation()?;
+                            self.expect(&TokenKind::Comma)?;
+                            let val = self.parse_type_annotation()?;
+                            self.expect(&TokenKind::Gt)?;
+                            ArkType::Map(Box::new(key), Box::new(val))
+                        } else {
+                            ArkType::Map(Box::new(ArkType::Any), Box::new(ArkType::Any))
+                        }
+                    }
+                    // Any other identifier is a user-defined type (struct or enum)
+                    other => ArkType::Struct(other.to_string(), vec![]),
+                }
+            }
+            _ => {
+                return Err(ParseError::unexpected("type name", &tok, &self.file));
+            }
+        };
+
+        // Optional `?` for Optional<T>
+        if self.check(&TokenKind::Bang) {
+            // We don't have a `?` token, skip optional for now
+        }
+
+        Ok(ty)
+    }
+
     // ─── Statements ──────────────────────────────────────────────────────
 
     fn parse_statement(&mut self) -> Result<Statement, ParseError> {
@@ -809,6 +1140,9 @@ impl Parser {
                 Ok(Statement::Continue)
             }
             TokenKind::Func => self.parse_function_def(),
+            TokenKind::Enum => self.parse_enum_def(),
+            TokenKind::Trait => self.parse_trait_def(),
+            TokenKind::Impl => self.parse_impl_block(),
             _ => self.parse_expr_or_assign(),
         }
     }
@@ -1787,6 +2121,80 @@ mod tests {
         let ast = parse_source(source, "test.ark").unwrap();
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             assert_eq!(stmts.len(), 2);
+        }
+    }
+    // ═══════════════════════════════════════════════════════════════════════
+    // Phase 13: Attribute Parsing Tests
+    // ═══════════════════════════════════════════════════════════════════════
+
+    #[test]
+    fn test_parse_attribute_export() {
+        let source = r#"
+            #[export]
+            func add(a, b) {
+                return a
+            }
+        "#;
+        let ast = parse_source(source, "test.ark").unwrap();
+        if let ArkNode::Statement(Statement::Block(stmts)) = ast {
+            assert_eq!(stmts.len(), 1);
+            if let Statement::Function(ref func_def) = stmts[0] {
+                assert_eq!(func_def.name, "add");
+                assert_eq!(func_def.attributes, vec!["export".to_string()]);
+            } else {
+                panic!("Expected Function statement");
+            }
+        } else {
+            panic!("Expected Block");
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_attributes() {
+        let source = r#"
+            #[export]
+            #[golem::handler]
+            func serve(req) {
+                return req
+            }
+        "#;
+        let ast = parse_source(source, "test.ark").unwrap();
+        if let ArkNode::Statement(Statement::Block(stmts)) = ast {
+            assert_eq!(stmts.len(), 1);
+            if let Statement::Function(ref func_def) = stmts[0] {
+                assert_eq!(func_def.name, "serve");
+                assert_eq!(func_def.attributes.len(), 2);
+                assert_eq!(func_def.attributes[0], "export");
+                assert_eq!(func_def.attributes[1], "golem::handler");
+            } else {
+                panic!("Expected Function statement");
+            }
+        } else {
+            panic!("Expected Block");
+        }
+    }
+
+    #[test]
+    fn test_parse_no_attributes_backward_compat() {
+        let source = r#"
+            func plain(x) {
+                return x
+            }
+        "#;
+        let ast = parse_source(source, "test.ark").unwrap();
+        if let ArkNode::Statement(Statement::Block(stmts)) = ast {
+            assert_eq!(stmts.len(), 1);
+            if let Statement::Function(ref func_def) = stmts[0] {
+                assert_eq!(func_def.name, "plain");
+                assert!(
+                    func_def.attributes.is_empty(),
+                    "No-attribute func should have empty attributes"
+                );
+            } else {
+                panic!("Expected Function statement");
+            }
+        } else {
+            panic!("Expected Block");
         }
     }
 }

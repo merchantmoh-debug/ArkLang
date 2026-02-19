@@ -46,6 +46,12 @@ pub mod runtime;
 pub mod types;
 pub mod vm;
 pub mod wasm;
+pub mod wasm_codegen;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod wasm_host_imports;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod wasm_interop;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod wasm_runner;
+pub mod wit_gen;
 pub use wasm::*;

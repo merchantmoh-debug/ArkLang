@@ -34,10 +34,14 @@ use ark_0_zheng::parser;
 use ark_0_zheng::persistent::{PMap, PVec};
 use ark_0_zheng::runtime::Value;
 use ark_0_zheng::vm::VM;
+use ark_0_zheng::wasm_codegen::WasmCodegen;
+use ark_0_zheng::wasm_runner;
+use ark_0_zheng::wit_gen;
 use std::cell::RefCell;
 use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
+use std::path::Path;
 use std::process;
 use std::rc::Rc;
 
@@ -54,6 +58,9 @@ fn main() {
 
     match command {
         "run" => cmd_run(&args[2..]),
+        "run-wasm" => cmd_run_wasm(&args[2..]),
+        "build" => cmd_build(&args[2..]),
+        "wit" => cmd_wit(&args[2..]),
         "debug" => cmd_debug(&args[2..]),
         "repl" => cmd_repl(),
         "adn" => cmd_adn(&args[2..]),
@@ -80,6 +87,10 @@ fn print_usage() {
     println!();
     println!("Usage:");
     println!("  ark run <file.ark|file.json>    Parse and execute a program");
+    println!("  ark run-wasm <file.wasm>        Execute a compiled WASM binary via wasmtime");
+    println!("  ark build <file.ark> [-o out]    Compile to native WASM binary");
+    println!("  ark build <file.ark> --run       Compile and immediately execute");
+    println!("  ark wit <file.ark>               Generate WIT interface definition");
     println!("  ark repl                        Interactive REPL with persistent state");
     println!("  ark debug <file.ark>            Interactive step-through debugger");
     println!("  ark adn <file.ark>              Parse and output as ADN (Ark Data Notation)");
@@ -87,6 +98,197 @@ fn print_usage() {
     println!("  ark parse <file.ark>            Parse and dump AST as JSON");
     println!("  ark version                     Print version info");
     println!("  ark help                        Print this help message");
+}
+
+// =============================================================================
+// BUILD — Compile Ark source to native WASM binary
+// =============================================================================
+
+/// Compile an Ark program to a native .wasm binary.
+///
+/// Usage:
+///   ark build <file.ark> [-o output.wasm]
+///
+/// If -o is not specified, output defaults to <file>.wasm.
+fn cmd_build(args: &[String]) {
+    if args.is_empty() {
+        eprintln!("Error: 'build' requires a file argument");
+        eprintln!("Usage: ark build <file.ark> [-o output.wasm] [--run]");
+        process::exit(1);
+    }
+
+    let filename = &args[0];
+    let run_after = args.iter().any(|a| a == "--run");
+
+    // Parse -o flag
+    let output_path = if args.len() >= 3 && args[1] == "-o" {
+        args[2].clone()
+    } else {
+        // Default: replace .ark extension with .wasm
+        let path = Path::new(filename);
+        path.with_extension("wasm").to_string_lossy().to_string()
+    };
+
+    let source = fs::read_to_string(filename).unwrap_or_else(|e| {
+        eprintln!("Error: Cannot read '{}': {}", filename, e);
+        process::exit(1);
+    });
+
+    // Parse source
+    let ast = match parser::parse_source(&source, filename) {
+        Ok(node) => node,
+        Err(e) => {
+            eprintln!("{}", e);
+            process::exit(1);
+        }
+    };
+
+    // Compile to WASM
+    println!("Compiling {} → {}", filename, output_path);
+    match WasmCodegen::compile_to_bytes(&ast) {
+        Ok(wasm_bytes) => {
+            // Validate the binary before writing
+            if let Err(e) = wit_gen::validate_wasm(&wasm_bytes) {
+                eprintln!("WASM Validation Error: {}", e);
+                eprintln!("The compiled binary is malformed — this is a compiler bug.");
+                process::exit(1);
+            }
+
+            fs::write(&output_path, &wasm_bytes).unwrap_or_else(|e| {
+                eprintln!("Error: Cannot write '{}': {}", output_path, e);
+                process::exit(1);
+            });
+            println!(
+                "✓ WASM binary written: {} ({} bytes, validated)",
+                output_path,
+                wasm_bytes.len()
+            );
+
+            // If --run flag, execute the compiled WASM immediately
+            if run_after {
+                println!("\n--- Running WASM via wasmtime ---");
+                match wasm_runner::run_wasm(&wasm_bytes) {
+                    Ok(output) => {
+                        if !output.stdout.is_empty() {
+                            print!("{}", output.stdout);
+                        }
+                        println!("--- WASM execution complete ---");
+                    }
+                    Err(e) => {
+                        eprintln!("WASM Execution Error: {}", e);
+                        process::exit(1);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("WASM Compilation Error: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+// =============================================================================
+// RUN-WASM — Execute a compiled WASM binary via wasmtime
+// =============================================================================
+
+/// Execute a compiled WASM binary using the wasmtime runtime.
+///
+/// Usage:
+///   ark run-wasm <file.wasm>
+fn cmd_run_wasm(args: &[String]) {
+    if args.is_empty() {
+        eprintln!("Error: 'run-wasm' requires a .wasm file argument");
+        eprintln!("Usage: ark run-wasm <file.wasm>");
+        process::exit(1);
+    }
+
+    let filename = &args[0];
+    let wasm_bytes = fs::read(filename).unwrap_or_else(|e| {
+        eprintln!("Error: Cannot read '{}': {}", filename, e);
+        process::exit(1);
+    });
+
+    println!("Executing {} via wasmtime...", filename);
+
+    match wasm_runner::run_wasm(&wasm_bytes) {
+        Ok(output) => {
+            if !output.stdout.is_empty() {
+                print!("{}", output.stdout);
+            }
+            println!(
+                "✓ WASM execution complete ({} bytes of raw stdout)",
+                output.stdout_raw.len()
+            );
+        }
+        Err(e) => {
+            eprintln!("WASM Execution Error: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+// =============================================================================
+// WIT — Generate WIT interface definition
+// =============================================================================
+
+/// Generate a WIT interface definition from an Ark source file.
+///
+/// Usage:
+///   ark wit <file.ark> [-o output.wit]
+fn cmd_wit(args: &[String]) {
+    if args.is_empty() {
+        eprintln!("Error: 'wit' requires a file argument");
+        eprintln!("Usage: ark wit <file.ark> [-o output.wit]");
+        process::exit(1);
+    }
+
+    let filename = &args[0];
+
+    // Parse -o flag
+    let output_path = if args.len() >= 3 && args[1] == "-o" {
+        Some(args[2].clone())
+    } else {
+        None
+    };
+
+    let source = fs::read_to_string(filename).unwrap_or_else(|e| {
+        eprintln!("Error: Cannot read '{}': {}", filename, e);
+        process::exit(1);
+    });
+
+    let ast = match parser::parse_source(&source, filename) {
+        Ok(node) => node,
+        Err(e) => {
+            eprintln!("{}", e);
+            process::exit(1);
+        }
+    };
+
+    // Derive package name from filename
+    let stem = Path::new(filename)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("program");
+    let package_name = format!("ark:{}", stem.replace('_', "-"));
+
+    match wit_gen::generate_wit(&ast, &package_name) {
+        Ok(wit_text) => {
+            if let Some(ref path) = output_path {
+                fs::write(path, &wit_text).unwrap_or_else(|e| {
+                    eprintln!("Error: Cannot write '{}': {}", path, e);
+                    process::exit(1);
+                });
+                println!("✓ WIT definition written: {}", path);
+            } else {
+                println!("{}", wit_text);
+            }
+        }
+        Err(e) => {
+            eprintln!("WIT Generation Error: {}", e);
+            process::exit(1);
+        }
+    }
 }
 
 /// Run an Ark program from either .ark source or .json MAST

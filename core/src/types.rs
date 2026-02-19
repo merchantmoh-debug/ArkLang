@@ -39,6 +39,8 @@ pub enum ArkType {
     Unit,                                   // void/nil
     Any,                                    // dynamic type
     Unknown,                                // not yet inferred
+    Enum(String),                           // enum by name
+    Trait(String),                          // trait by name
 }
 
 impl ArkType {
@@ -101,6 +103,10 @@ impl ArkType {
                 }
                 true
             }
+            // Enum / Trait compatibility
+            (ArkType::Enum(n1), ArkType::Enum(n2)) => n1 == n2,
+            (ArkType::Trait(n1), ArkType::Trait(n2)) => n1 == n2,
+
             // Legacy compatibility
             (ArkType::Linear(s1), ArkType::Linear(s2)) => s1 == s2,
             (ArkType::Affine(s1), ArkType::Affine(s2)) => s1 == s2,
@@ -152,6 +158,8 @@ impl fmt::Display for ArkType {
                 write!(f, ") -> {}", ret)
             }
             ArkType::Struct(name, _) => write!(f, "{}", name),
+            ArkType::Enum(name) => write!(f, "enum {}", name),
+            ArkType::Trait(name) => write!(f, "trait {}", name),
 
             // Legacy
             ArkType::Linear(s) => write!(f, "Linear({})", s),

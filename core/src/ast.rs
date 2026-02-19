@@ -110,11 +110,46 @@ pub struct StructDecl {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct EnumDecl {
+    pub name: String,
+    pub variants: Vec<EnumVariantDef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct EnumVariantDef {
+    pub name: String,
+    pub fields: Vec<ArkType>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct TraitDecl {
+    pub name: String,
+    pub methods: Vec<TraitMethodSig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct TraitMethodSig {
+    pub name: String,
+    pub inputs: Vec<(String, ArkType)>,
+    pub output: ArkType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct ImplBlock {
+    pub trait_name: Option<String>,
+    pub target_type: String,
+    pub methods: Vec<FunctionDef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct FunctionDef {
     pub name: String, // Human readable hint, actual ID is hash
     pub inputs: Vec<(String, ArkType)>,
     pub output: ArkType,
     pub body: Box<MastNode>, // Pointer to the body logic
+    /// Attributes attached to this function (e.g., "export", "golem::handler")
+    #[serde(default)]
+    pub attributes: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -122,6 +157,11 @@ pub enum Pattern {
     Literal(String),
     Variable(String),
     Wildcard,
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        bindings: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -165,6 +205,9 @@ pub enum Statement {
     // New Nodes
     Import(Import),
     StructDecl(StructDecl),
+    EnumDecl(EnumDecl),
+    TraitDecl(TraitDecl),
+    ImplBlock(ImplBlock),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -187,5 +230,14 @@ pub enum Expression {
     Match {
         scrutinee: Box<Expression>,
         arms: Vec<(Pattern, Expression)>,
+    },
+    Lambda {
+        params: Vec<String>,
+        body: Vec<Statement>,
+    },
+    EnumInit {
+        enum_name: String,
+        variant: String,
+        args: Vec<Expression>,
     },
 }

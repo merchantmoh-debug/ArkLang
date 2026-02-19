@@ -55,6 +55,9 @@ pub enum OpCode {
     MakeStruct(usize),
     GetField(String),
     SetField(String),
+
+    // Enums
+    MakeEnum(String, String, usize), // (enum_name, variant, field_count)
 }
 
 #[derive(Debug, Clone)]

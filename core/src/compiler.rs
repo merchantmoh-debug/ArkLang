@@ -125,6 +125,9 @@ fn fold_stmt(stmt: &Statement) -> Statement {
             field: field.clone(),
             value: fold_expr(value),
         },
+        Statement::EnumDecl(e) => Statement::EnumDecl(e.clone()),
+        Statement::TraitDecl(t) => Statement::TraitDecl(t.clone()),
+        Statement::ImplBlock(i) => Statement::ImplBlock(i.clone()),
     }
 }
 
@@ -601,8 +604,34 @@ impl Compiler {
                 self.chunk.write(OpCode::Store(obj_name.clone()));
                 Ok(())
             }
-            Statement::Import(_) | Statement::StructDecl(_) => {
-                println!("Compiler Warning: Unhandled Statement");
+            Statement::Import(_)
+            | Statement::StructDecl(_)
+            | Statement::EnumDecl(_)
+            | Statement::TraitDecl(_) => {
+                // Metadata-only declarations, no bytecode emitted
+                Ok(())
+            }
+            Statement::ImplBlock(impl_blk) => {
+                // Compile impl methods as TypeName::method_name
+                for method in &impl_blk.methods {
+                    let mut func_compiler = Compiler::new();
+                    for (arg_name, _) in method.inputs.iter().rev() {
+                        func_compiler.chunk.write(OpCode::Store(arg_name.clone()));
+                        if let Some(scope) = func_compiler.scopes.last_mut() {
+                            scope.insert(arg_name.clone());
+                        }
+                    }
+                    func_compiler.visit(&method.body.content, true)?;
+                    func_compiler.chunk.write(OpCode::Ret);
+                    let compiled_chunk = func_compiler.chunk;
+                    let func_val = Value::Function(Arc::new(compiled_chunk));
+                    let qualified_name = format!("{}::{}", impl_blk.target_type, method.name);
+                    self.chunk.write(OpCode::Push(func_val));
+                    self.chunk.write(OpCode::Store(qualified_name.clone()));
+                    if let Some(scope) = self.scopes.last_mut() {
+                        scope.insert(qualified_name);
+                    }
+                }
                 Ok(())
             }
             Statement::For { .. } | Statement::Break | Statement::Continue => {
@@ -789,6 +818,30 @@ impl Compiler {
                         self.chunk.write(OpCode::Call(args.len()));
                     }
                 }
+                Ok(())
+            }
+            Expression::Lambda { params: _, body } => {
+                // Compile lambda body inline (basic support)
+                for stmt in body {
+                    self.visit_stmt(stmt, false)?;
+                }
+                self.chunk.write(OpCode::Push(Value::Unit));
+                Ok(())
+            }
+            Expression::EnumInit {
+                enum_name,
+                variant,
+                args,
+            } => {
+                // Push field values, then emit MakeEnum
+                for arg in args {
+                    self.visit_expr(arg)?;
+                }
+                self.chunk.write(OpCode::MakeEnum(
+                    enum_name.clone(),
+                    variant.clone(),
+                    args.len(),
+                ));
                 Ok(())
             }
         }

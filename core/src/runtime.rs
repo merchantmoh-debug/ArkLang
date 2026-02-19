@@ -23,8 +23,8 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering},
     Mutex,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use thiserror::Error;
 
@@ -267,6 +267,12 @@ pub enum Value {
     PMap(PMap),
     /// Control Flow: Return value wrapper
     Return(Box<Value>),
+    /// Enum variant with optional fields
+    EnumValue {
+        enum_name: String,
+        variant: String,
+        fields: Vec<Value>,
+    },
 }
 
 pub type NativeFn = fn(Vec<Value>) -> Result<Value, RuntimeError>;
@@ -287,6 +293,18 @@ impl PartialEq for Value {
             (Value::PVec(a), Value::PVec(b)) => a == b,
             (Value::PMap(a), Value::PMap(b)) => a == b,
             (Value::Return(a), Value::Return(b)) => a == b,
+            (
+                Value::EnumValue {
+                    enum_name: en1,
+                    variant: v1,
+                    fields: f1,
+                },
+                Value::EnumValue {
+                    enum_name: en2,
+                    variant: v2,
+                    fields: f2,
+                },
+            ) => en1 == en2 && v1 == v2 && f1 == f2,
             _ => false,
         }
     }
@@ -307,6 +325,7 @@ impl Value {
                 true
             }
             Value::Return(val) => val.is_linear(), // Recursive check
+            Value::EnumValue { .. } => false,
         }
     }
 }

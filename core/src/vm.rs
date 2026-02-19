@@ -420,6 +420,23 @@ impl<'a> VM<'a> {
                         return Ok(val);
                     }
                 }
+
+                OpCode::MakeEnum(enum_name, variant, field_count) => {
+                    let mut fields = Vec::with_capacity(*field_count);
+                    for _ in 0..*field_count {
+                        let val = self
+                            .stack
+                            .pop()
+                            .ok_or_else(|| ArkError::StackUnderflow("MakeEnum".to_string()))?;
+                        fields.push(val);
+                    }
+                    fields.reverse(); // Fields were pushed left-to-right
+                    self.push(Value::EnumValue {
+                        enum_name: enum_name.clone(),
+                        variant: variant.clone(),
+                        fields,
+                    })?;
+                }
             }
         }
     }
