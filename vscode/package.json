@@ -1,0 +1,51 @@
+{
+  "name": "ark-lang",
+  "displayName": "Ark Language",
+  "description": "Language support for Ark — the sovereign compiler with linear types, persistent data structures, and ADN serialization.",
+  "version": "1.3.0",
+  "publisher": "sovereign-systems",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "ark",
+    "sovereign",
+    "linear-types",
+    "compiler"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sovereign-systems/ark-compiler-prime"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "ark",
+        "aliases": [
+          "Ark",
+          "ark"
+        ],
+        "extensions": [
+          ".ark"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/ark-light.png",
+          "dark": "./icons/ark-dark.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ark",
+        "scopeName": "source.ark",
+        "path": "./syntaxes/ark.tmLanguage.json"
+      }
+    ]
+  },
+  "main": "./out/extension.js"
+}

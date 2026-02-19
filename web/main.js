@@ -331,7 +331,57 @@ function setupUI() {
 
 // --- System Monitor ---
 function initSystemMonitor() {
-    const pollInterval = 2000;
+    const pollInterval = 1000; // Faster polling for visualizer
+    const canvas = document.getElementById('neural-canvas');
+    const ctx = canvas ? canvas.getContext('2d') : null;
+
+    // Waveform history
+    const historySize = 30;
+    let cpuHistory = new Array(historySize).fill(0);
+    let neuralHistory = new Array(historySize).fill(0);
+
+    function drawWaveform() {
+        if (!ctx) return;
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        // Draw Grid
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < w; i += 20) { ctx.moveTo(i, 0); ctx.lineTo(i, h); }
+        for (let j = 0; j < h; j += 20) { ctx.moveTo(0, j); ctx.lineTo(w, j); }
+        ctx.stroke();
+
+        // Draw CPU (Blue)
+        drawPath(cpuHistory, '#00d2ff', 2);
+
+        // Draw Neural (Green/Gold)
+        drawPath(neuralHistory, '#ffd700', 1.5);
+    }
+
+    function drawPath(data, color, width) {
+        if (!ctx) return;
+        ctx.beginPath();
+        const w = canvas.width;
+        const h = canvas.height;
+        const step = w / (data.length - 1);
+
+        data.forEach((val, i) => {
+            const x = i * step;
+            const y = h - (val / 100) * h;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.shadowBlur = 0; // Reset
+    }
 
     async function updateStats() {
         try {
@@ -344,10 +394,18 @@ function initSystemMonitor() {
             updateVal('stat-disk', stats.disk + '%', stats.disk > 90);
             updateVal('stat-neural', stats.neural, false);
 
+            // Update Histories
+            cpuHistory.shift();
+            cpuHistory.push(stats.cpu);
+            neuralHistory.shift();
+            neuralHistory.push(stats.neural);
+
+            drawWaveform();
+
             // Adjust pulse speed based on neural activity
             const pulse = document.getElementById('monitor-pulse');
             if (pulse) {
-                const duration = Math.max(0.5, 2 - (stats.neural / 100));
+                const duration = Math.max(0.2, 2 - (stats.neural / 50));
                 pulse.style.animationDuration = `${duration}s`;
             }
 

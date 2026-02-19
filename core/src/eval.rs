@@ -254,10 +254,11 @@ impl Interpreter {
                 scope.set(func_def.name.clone(), Value::Unit);
                 Ok(Value::Unit)
             }
-            Statement::StructDecl(_) => {
-                println!(
-                    "Interpreter Warning: New AST nodes Import/StructDecl not supported in tree-walker."
-                );
+            Statement::StructDecl(_)
+            | Statement::EnumDecl(_)
+            | Statement::TraitDecl(_)
+            | Statement::ImplBlock(_) => {
+                // Metadata-only declarations, not directly evaluated in tree-walker
                 Ok(Value::Unit)
             }
         }
@@ -456,6 +457,32 @@ impl Interpreter {
                 Ok(Value::List(values))
             }
             Expression::Integer(i) => Ok(Value::Integer(*i)),
+            Expression::Lambda { params: _, body } => {
+                // Evaluate lambda body inline (basic interpreter support)
+                let mut last_val = Value::Unit;
+                for stmt in body {
+                    last_val = self.eval_statement(stmt, scope)?;
+                    if let Value::Return(_) = last_val {
+                        return Ok(last_val);
+                    }
+                }
+                Ok(last_val)
+            }
+            Expression::EnumInit {
+                enum_name,
+                variant,
+                args,
+            } => {
+                let mut fields = Vec::new();
+                for arg in args {
+                    fields.push(self.eval_expression(arg, scope)?);
+                }
+                Ok(Value::EnumValue {
+                    enum_name: enum_name.clone(),
+                    variant: variant.clone(),
+                    fields,
+                })
+            }
         }
     }
 
@@ -488,6 +515,24 @@ impl Interpreter {
                 true
             }
             Pattern::Wildcard => true,
+            Pattern::EnumVariant {
+                enum_name: _,
+                variant,
+                bindings,
+            } => {
+                if let Value::EnumValue {
+                    variant: v, fields, ..
+                } = val
+                {
+                    if v == variant && fields.len() >= bindings.len() {
+                        for (binding, field_val) in bindings.iter().zip(fields.iter()) {
+                            scope.set(binding.clone(), field_val.clone());
+                        }
+                        return true;
+                    }
+                }
+                false
+            }
         }
     }
 }

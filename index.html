@@ -256,10 +256,10 @@
     </div>
 
     <div class="main">
-        <!-- Snake Game Card -->
+        <!-- Snake Game Card — Powered by Ark -->
         <div class="card">
             <div class="card-header">
-                <h2>🐍 Snake Game (Ark Demo)</h2>
+                <h2>🐍 Snake Game <span style="font-size:0.65em;color:var(--accent);font-weight:400;">(Running snake_browser.ark)</span></h2>
                 <span class="game-status" id="score">Score: 0</span>
             </div>
             <div class="card-body game-wrap">
@@ -267,8 +267,10 @@
                 <div class="game-controls">
                     <button class="btn" onclick="togglePause()">Pause (P)</button>
                     <button class="btn" onclick="restartGame()">Restart (R)</button>
+                    <button class="btn" onclick="toggleArkSource()" style="margin-left:8px;" id="btn-src">View Ark Source</button>
                 </div>
-                <div class="game-status" id="status">Use Arrow Keys or WASD to play</div>
+                <div class="game-status" id="status">Loading Ark runtime...</div>
+                <pre id="ark-source" style="display:none;background:#0d0d14;border:1px solid #1a1a2e;border-radius:6px;padding:12px;margin-top:10px;max-height:320px;overflow-y:auto;font-size:12px;color:#8af;text-align:left;white-space:pre;tab-size:4;"></pre>
             </div>
         </div>
 
@@ -341,175 +343,414 @@ print("The answer is: " + x)
 
     <script>
         // ══════════════════════════════════════════════════════════════
-        // SNAKE GAME — Pure JavaScript, guaranteed to work
+        // SNAKE GAME — Powered by Ark (snake_browser.ark → MAST → eval)
+        // The game logic is 100% Ark. This evaluator executes the AST
+        // output by the Ark Rust parser. JS only renders to canvas.
         // ══════════════════════════════════════════════════════════════
         const canvas = document.getElementById('game');
         const ctx = canvas.getContext('2d');
         const GRID = 20;
         const CELL = canvas.width / GRID;
 
-        let snake, apple, dir, nextDir, score, gameOver, paused, loop_id;
+        // ── Ark MAST Evaluator ──────────────────────────────────────
+        // A faithful tree-walking interpreter for the Ark AST format.
+        // Handles: Block, Function, Let, LetDestructure, If, While,
+        //          Return, SetField, Expression, Variable, Literal,
+        //          Call, GetField, List, StructInit + all intrinsics.
 
-        function initGame() {
-            snake = [[10, 12], [10, 11], [10, 10]];
-            apple = [5, 5];
-            dir = [0, -1]; // up
-            nextDir = [0, -1];
-            score = 0;
-            gameOver = false;
-            paused = false;
-            document.getElementById('score').textContent = 'Score: 0';
-            document.getElementById('status').textContent = 'Use Arrow Keys or WASD to play';
+        class ReturnSignal { constructor(v) { this.value = v; } }
+
+        const INTRINSICS = {
+            'intrinsic_add': (a, b) => toNum(a) + toNum(b),
+            'intrinsic_sub': (a, b) => toNum(a) - toNum(b),
+            'intrinsic_mul': (a, b) => toNum(a) * toNum(b),
+            'intrinsic_mod': (a, b) => { const B = toNum(b); return B === 0 ? 0 : ((toNum(a) % B) + B) % B; },
+            'intrinsic_eq':  (a, b) => { if (typeof a === 'string' || typeof b === 'string') return String(a) === String(b) ? 1 : 0; return toNum(a) === toNum(b) ? 1 : 0; },
+            'intrinsic_ne':  (a, b) => { if (typeof a === 'string' || typeof b === 'string') return String(a) !== String(b) ? 1 : 0; return toNum(a) !== toNum(b) ? 1 : 0; },
+            'intrinsic_lt':  (a, b) => toNum(a) < toNum(b) ? 1 : 0,
+            'intrinsic_le':  (a, b) => toNum(a) <= toNum(b) ? 1 : 0,
+            'intrinsic_gt':  (a, b) => toNum(a) > toNum(b) ? 1 : 0,
+            'intrinsic_ge':  (a, b) => toNum(a) >= toNum(b) ? 1 : 0,
+            'intrinsic_and': (a, b) => (isTruthy(a) && isTruthy(b)) ? 1 : 0,
+            'intrinsic_or':  (a, b) => (isTruthy(a) || isTruthy(b)) ? 1 : 0,
+            'intrinsic_not': (a) => isTruthy(a) ? 0 : 1,
+            'add': (a, b) => toNum(a) + toNum(b),
+            'sub': (a, b) => toNum(a) - toNum(b),
+            'mul': (a, b) => toNum(a) * toNum(b),
+            'sys.len': (list) => Array.isArray(list) ? [list.length, null] : [0, null],
+            'sys.list.get': (list, idx) => Array.isArray(list) ? [list[toNum(idx)] ?? null, null] : [null, 'not a list'],
+            'sys.list.append': (list, val) => { if (Array.isArray(list)) list.push(deepClone(val)); return null; },
+            'print': (...args) => { console.log('[Ark]', ...args); return null; },
+        };
+
+        function toNum(v) { return typeof v === 'number' ? v : (typeof v === 'string' ? (Number(v) || 0) : (v ? 1 : 0)); }
+        function isTruthy(v) { return v !== 0 && v !== null && v !== undefined && v !== '' && v !== false; }
+        function deepClone(v) {
+            if (Array.isArray(v)) return v.map(deepClone);
+            if (v && typeof v === 'object') {
+                const o = {}; for (const k in v) o[k] = deepClone(v[k]); return o;
+            }
+            return v;
         }
 
-        function spawnApple() {
-            let pos;
-            do {
-                pos = [Math.floor(Math.random() * GRID), Math.floor(Math.random() * GRID)];
-            } while (snake.some(s => s[0] === pos[0] && s[1] === pos[1]));
-            apple = pos;
+        function evalExpr(expr, scope) {
+            if (expr === null || expr === undefined) return null;
+
+            // Literal: "42" or "ArrowUp"
+            if (typeof expr === 'string') return expr;
+            if ('Literal' in expr) {
+                const lit = expr.Literal;
+                const n = Number(lit);
+                return Number.isFinite(n) && lit !== '' ? n : lit;
+            }
+            // Variable
+            if ('Variable' in expr) {
+                const name = expr.Variable;
+                for (let i = scope.length - 1; i >= 0; i--) {
+                    if (name in scope[i]) return scope[i][name];
+                }
+                return null;
+            }
+            // List
+            if ('List' in expr) return expr.List.map(e => evalExpr(e, scope));
+            // StructInit
+            if ('StructInit' in expr) {
+                const obj = {};
+                for (const [k, v] of expr.StructInit.fields) obj[k] = evalExpr(v, scope);
+                return obj;
+            }
+            // GetField
+            if ('GetField' in expr) {
+                const obj = evalExpr(expr.GetField.obj, scope);
+                return (obj && typeof obj === 'object') ? obj[expr.GetField.field] : null;
+            }
+            // Call (intrinsics + user functions)
+            if ('Call' in expr) {
+                const { function_hash, args } = expr.Call;
+                const evArgs = args.map(a => evalExpr(a, scope));
+                // Intrinsic?
+                if (INTRINSICS[function_hash]) return INTRINSICS[function_hash](...evArgs);
+                // User function
+                for (let i = scope.length - 1; i >= 0; i--) {
+                    if (scope[i]['__fn_' + function_hash]) {
+                        const fn = scope[i]['__fn_' + function_hash];
+                        const fnScope = [{}];
+                        for (let j = 0; j < fn.params.length; j++) {
+                            fnScope[0][fn.params[j]] = deepClone(evArgs[j]);
+                        }
+                        // Copy function defs into scope
+                        for (let j = scope.length - 1; j >= 0; j--) {
+                            for (const k in scope[j]) {
+                                if (k.startsWith('__fn_') && !(k in fnScope[0])) fnScope[0][k] = scope[j][k];
+                            }
+                        }
+                        const res = execBlock(fn.body, fnScope);
+                        return (res instanceof ReturnSignal) ? res.value : res;
+                    }
+                }
+                console.warn('[Ark] Unknown function:', function_hash);
+                return null;
+            }
+            // Statement wrapper
+            if ('Statement' in expr) return execStmt(expr, scope);
+            console.warn('[Ark] Unknown expr:', Object.keys(expr));
+            return null;
         }
 
-        function update() {
-            if (gameOver || paused) return;
-
-            dir = nextDir;
-            const head = [snake[snake.length - 1][0] + dir[0], snake[snake.length - 1][1] + dir[1]];
-
-            // Wall collision
-            if (head[0] < 0 || head[0] >= GRID || head[1] < 0 || head[1] >= GRID) {
-                gameOver = true;
-                document.getElementById('status').textContent = 'Game Over — Wall collision. Press R to restart.';
-                return;
+        function setVar(scope, name, value) {
+            for (let i = scope.length - 1; i >= 0; i--) {
+                if (name in scope[i]) { scope[i][name] = value; return; }
             }
+            scope[scope.length - 1][name] = value;
+        }
 
-            // Self collision
-            if (snake.some(s => s[0] === head[0] && s[1] === head[1])) {
-                gameOver = true;
-                document.getElementById('status').textContent = 'Game Over — Self collision. Press R to restart.';
-                return;
+        function execStmt(stmt, scope) {
+            if (!stmt) return null;
+            // Block
+            if ('Block' in (stmt.Statement || stmt)) {
+                const block = (stmt.Statement || stmt).Block;
+                return execBlock(block, scope);
             }
+            // Function definition
+            if ('Function' in stmt) {
+                const fn = stmt.Function;
+                scope[scope.length - 1]['__fn_' + fn.name] = {
+                    params: fn.inputs.map(i => i[0]),
+                    body: fn.body.content ? [fn.body.content] : [fn.body],
+                };
+                return null;
+            }
+            // Let
+            if ('Let' in stmt) {
+                const { name, value } = stmt.Let;
+                setVar(scope, name, evalExpr(value, scope));
+                return null;
+            }
+            // LetDestructure — Ark returns (value, error) tuples
+            if ('LetDestructure' in stmt) {
+                const { names, value } = stmt.LetDestructure;
+                const result = evalExpr(value, scope);
+                if (Array.isArray(result)) {
+                    for (let i = 0; i < names.length; i++) {
+                        if (names[i] !== '_') setVar(scope, names[i], result[i] ?? null);
+                    }
+                } else {
+                    if (names[0] !== '_') setVar(scope, names[0], result);
+                    if (names.length > 1 && names[1] !== '_') setVar(scope, names[1], null);
+                }
+                return null;
+            }
+            // If
+            if ('If' in stmt) {
+                const { condition, then_block, else_block } = stmt.If;
+                if (isTruthy(evalExpr(condition, scope))) {
+                    const r = execBlock(then_block, scope);
+                    if (r instanceof ReturnSignal) return r;
+                } else if (else_block) {
+                    const r = execBlock(else_block, scope);
+                    if (r instanceof ReturnSignal) return r;
+                }
+                return null;
+            }
+            // While
+            if ('While' in stmt) {
+                const { condition, body } = stmt.While;
+                let safety = 0;
+                while (isTruthy(evalExpr(condition, scope)) && safety++ < 10000) {
+                    const r = execBlock(body, scope);
+                    if (r instanceof ReturnSignal) return r;
+                }
+                return null;
+            }
+            // Return
+            if ('Return' in stmt) return new ReturnSignal(evalExpr(stmt.Return, scope));
+            // SetField
+            if ('SetField' in stmt) {
+                const { obj_name, field, value } = stmt.SetField;
+                for (let i = scope.length - 1; i >= 0; i--) {
+                    if (obj_name in scope[i] && typeof scope[i][obj_name] === 'object') {
+                        scope[i][obj_name][field] = evalExpr(value, scope);
+                        return null;
+                    }
+                }
+                return null;
+            }
+            // Expression statement
+            if ('Expression' in stmt) { evalExpr(stmt.Expression, scope); return null; }
+            console.warn('[Ark] Unknown stmt:', Object.keys(stmt));
+            return null;
+        }
 
-            snake.push(head);
+        function execBlock(stmts, scope) {
+            // CRITICAL: Do NOT unwrap ReturnSignal here — propagate it
+            // upward so nested blocks (inside if/while/block) can signal
+            // a return to the calling function. Only callArkFunction unwraps.
+            const list = Array.isArray(stmts) ? stmts : [stmts];
+            for (const stmt of list) {
+                const r = execStmt(stmt, scope);
+                if (r instanceof ReturnSignal) return r;
+            }
+            return null;
+        }
 
-            // Eat apple
-            if (head[0] === apple[0] && head[1] === apple[1]) {
-                score++;
-                document.getElementById('score').textContent = `Score: ${score}`;
-                spawnApple();
-            } else {
-                snake.shift();
+        // ── Ark Program Loader ──────────────────────────────────────
+        let arkFunctions = {};
+
+        function loadArkMAST(mast) {
+            const scope = [{}];
+            // Process top-level block to register functions
+            const top = mast.Statement ? mast.Statement.Block : (mast.Block || [mast]);
+            for (const stmt of top) {
+                if (stmt.Function) {
+                    const fn = stmt.Function;
+                    arkFunctions[fn.name] = {
+                        params: fn.inputs.map(i => i[0]),
+                        body: fn.body.content ? [fn.body.content] : [fn.body],
+                    };
+                }
             }
         }
+
+        function callArkFunction(name, args) {
+            const fn = arkFunctions[name];
+            if (!fn) throw new Error(`Ark function '${name}' not found`);
+            const fnScope = [{}];
+            for (let i = 0; i < fn.params.length; i++) {
+                fnScope[0][fn.params[i]] = deepClone(args[i] ?? null);
+            }
+            // Register all functions in scope for potential recursion
+            for (const [k, v] of Object.entries(arkFunctions)) {
+                fnScope[0]['__fn_' + k] = v;
+            }
+            const result = execBlock(fn.body, fnScope);
+            // Unwrap ReturnSignal at the top level (function call boundary)
+            return (result instanceof ReturnSignal) ? result.value : result;
+        }
+
+        // ── Game State & Loop ───────────────────────────────────────
+        let gameState = null;
+        let lastInput = 'None';
+        let paused = false;
 
         function draw() {
+            if (!gameState) return;
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Grid lines (subtle)
+            // Grid
             ctx.strokeStyle = '#0a0a12';
             ctx.lineWidth = 0.5;
             for (let i = 0; i <= GRID; i++) {
-                ctx.beginPath();
-                ctx.moveTo(i * CELL, 0);
-                ctx.lineTo(i * CELL, canvas.height);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(0, i * CELL);
-                ctx.lineTo(canvas.width, i * CELL);
-                ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, canvas.height); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(canvas.width, i * CELL); ctx.stroke();
             }
 
-            // Snake body
+            // Snake
+            const snake = gameState.snake || [];
             for (let i = 0; i < snake.length; i++) {
                 const [x, y] = snake[i];
                 if (i === snake.length - 1) {
-                    // Head
-                    const grad = ctx.createLinearGradient(x * CELL, y * CELL, (x + 1) * CELL, (y + 1) * CELL);
-                    grad.addColorStop(0, '#00ff88');
-                    grad.addColorStop(1, '#00cc66');
-                    ctx.fillStyle = grad;
+                    const g = ctx.createLinearGradient(x*CELL, y*CELL, (x+1)*CELL, (y+1)*CELL);
+                    g.addColorStop(0, '#00ff88'); g.addColorStop(1, '#00cc66');
+                    ctx.fillStyle = g;
                 } else {
                     const t = i / snake.length;
-                    ctx.fillStyle = `hsl(150, ${60 + t * 40}%, ${25 + t * 20}%)`;
+                    ctx.fillStyle = `hsl(150, ${60+t*40}%, ${25+t*20}%)`;
                 }
-                ctx.fillRect(x * CELL + 1, y * CELL + 1, CELL - 2, CELL - 2);
+                ctx.fillRect(toNum(x)*CELL+1, toNum(y)*CELL+1, CELL-2, CELL-2);
             }
 
             // Apple
+            const apple = gameState.apple || [0, 0];
             ctx.fillStyle = '#ff3355';
             ctx.beginPath();
-            ctx.arc(apple[0] * CELL + CELL / 2, apple[1] * CELL + CELL / 2, CELL / 2 - 2, 0, Math.PI * 2);
+            ctx.arc(toNum(apple[0])*CELL+CELL/2, toNum(apple[1])*CELL+CELL/2, CELL/2-2, 0, Math.PI*2);
             ctx.fill();
 
-            // Game over overlay
-            if (gameOver) {
-                ctx.fillStyle = 'rgba(10, 10, 15, 0.7)';
+            // Score
+            const score = toNum(gameState.score);
+            document.getElementById('score').textContent = `Score: ${score}`;
+
+            // Game Over
+            if (isTruthy(gameState.game_over)) {
+                ctx.fillStyle = 'rgba(10,10,15,0.7)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = '#ff3355';
                 ctx.font = 'bold 28px Inter, sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 10);
+                ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2-10);
                 ctx.fillStyle = '#666';
                 ctx.font = '14px Inter, sans-serif';
-                ctx.fillText(`Score: ${score}  •  Press R`, canvas.width / 2, canvas.height / 2 + 20);
+                ctx.fillText(`Score: ${score}  •  Press R`, canvas.width/2, canvas.height/2+20);
                 ctx.textAlign = 'start';
             }
 
-            // Pause overlay
-            if (paused && !gameOver) {
-                ctx.fillStyle = 'rgba(10, 10, 15, 0.5)';
+            // Pause
+            if (paused && !isTruthy(gameState.game_over)) {
+                ctx.fillStyle = 'rgba(10,10,15,0.5)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = '#00ccff';
                 ctx.font = 'bold 24px Inter, sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2);
+                ctx.fillText('PAUSED', canvas.width/2, canvas.height/2);
                 ctx.textAlign = 'start';
             }
         }
 
         function gameLoop() {
-            update();
+            if (!gameState) return;
+            if (!paused && !isTruthy(gameState.game_over)) {
+                try {
+                    gameState = callArkFunction('update', [gameState, lastInput]);
+                } catch (e) {
+                    console.error('[Ark Runtime Error]', e);
+                    document.getElementById('status').textContent = `Ark Error: ${e.message}`;
+                }
+            }
             draw();
         }
 
         function togglePause() {
-            if (gameOver) return;
+            if (!gameState || isTruthy(gameState.game_over)) return;
             paused = !paused;
-            document.getElementById('status').textContent = paused ? 'Paused — Press P to resume' : 'Playing';
+            document.getElementById('status').textContent = paused ? 'Paused — Press P to resume' : 'Running snake_browser.ark';
         }
 
         function restartGame() {
-            initGame();
-            spawnApple();
+            if (!arkFunctions.init) return;
+            try {
+                gameState = callArkFunction('init', []);
+                lastInput = 'None';
+                paused = false;
+                document.getElementById('status').textContent = 'Running snake_browser.ark';
+            } catch (e) {
+                console.error('[Ark Init Error]', e);
+            }
+        }
+
+        function toggleArkSource() {
+            const el = document.getElementById('ark-source');
+            const btn = document.getElementById('btn-src');
+            if (el.style.display === 'none') {
+                el.style.display = 'block';
+                btn.textContent = 'Hide Ark Source';
+            } else {
+                el.style.display = 'none';
+                btn.textContent = 'View Ark Source';
+            }
         }
 
         // Input
-        const KEY_MAP = {
-            'ArrowUp': [0, -1], 'w': [0, -1],
-            'ArrowDown': [0, 1], 's': [0, 1],
-            'ArrowLeft': [-1, 0], 'a': [-1, 0],
-            'ArrowRight': [1, 0], 'd': [1, 0],
-        };
-
+        const WASD = { 'w': 'ArrowUp', 'a': 'ArrowLeft', 's': 'ArrowDown', 'd': 'ArrowRight' };
         document.addEventListener('keydown', e => {
-            const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-            if (KEY_MAP[k]) {
-                const nd = KEY_MAP[k];
-                // Prevent 180-degree turns
-                if (nd[0] !== -dir[0] || nd[1] !== -dir[1]) {
-                    nextDir = nd;
-                }
+            const k = e.key;
+            const kl = k.toLowerCase();
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(k)) {
+                if (!paused) lastInput = k;
                 e.preventDefault();
             }
-            if (k === 'p') togglePause();
-            if (k === 'r') restartGame();
+            if (WASD[kl]) { if (!paused) lastInput = WASD[kl]; e.preventDefault(); }
+            if (kl === 'p') togglePause();
+            if (kl === 'r') restartGame();
         });
 
-        // Start
-        initGame();
-        spawnApple();
-        setInterval(gameLoop, 120);
+        // ── Boot: Load Ark MAST + Source ─────────────────────────────
+        (async function boot() {
+            const status = document.getElementById('status');
+            try {
+                // 1. Load the MAST (compiled AST from Ark parser)
+                status.textContent = 'Loading Ark MAST...';
+                const mastResp = await fetch('site/snake.json');
+                if (!mastResp.ok) throw new Error(`MAST fetch failed: ${mastResp.status}`);
+                const mast = await mastResp.json();
+
+                // 2. Load and register functions
+                loadArkMAST(mast);
+                if (!arkFunctions.init || !arkFunctions.update) {
+                    throw new Error('MAST missing init/update functions');
+                }
+
+                // 3. Call Ark init() — runs through the evaluator
+                gameState = callArkFunction('init', []);
+                status.textContent = 'Running snake_browser.ark — Use Arrow Keys or WASD';
+
+                // 4. Load Ark source for display
+                try {
+                    const srcResp = await fetch('apps/snake_browser.ark');
+                    if (srcResp.ok) {
+                        document.getElementById('ark-source').textContent = await srcResp.text();
+                    }
+                } catch (_) { /* source display is optional */ }
+
+                // 5. Start game loop
+                setInterval(gameLoop, 120);
+                draw();
+
+            } catch (e) {
+                status.textContent = `Ark Load Error: ${e.message}`;
+                console.error('[Ark Boot]', e);
+            }
+        })();
 
         // ══════════════════════════════════════════════════════════════
         // ARK PLAYGROUND — Client-side Ark interpreter (subset)

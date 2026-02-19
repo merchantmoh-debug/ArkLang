@@ -1,0 +1,112 @@
+// Ark Standard Library: Persistent Collections
+// Provides idiomatic wrappers around pvec.* and pmap.* intrinsics.
+
+// --- PVec: Persistent Vector ---
+
+// Create a PVec from a list of values
+func pvec_of(items) {
+    v := pvec.new()
+    let (count, items) := sys.len(items)
+    i := 0
+    while i < count {
+        let (item, items) := sys.list.get(items, i)
+        v := pvec.conj(v, item)
+        i := i + 1
+    }
+    return v
+}
+
+// Transform each element of a PVec using a function
+func pvec_map(pv, f) {
+    result := pvec.new()
+    count := pvec.len(pv)
+    i := 0
+    while i < count {
+        val := pvec.get(pv, i)
+        result := pvec.conj(result, f(val))
+        i := i + 1
+    }
+    return result
+}
+
+// Filter elements of a PVec using a predicate
+func pvec_filter(pv, pred) {
+    result := pvec.new()
+    count := pvec.len(pv)
+    i := 0
+    while i < count {
+        val := pvec.get(pv, i)
+        if pred(val) {
+            result := pvec.conj(result, val)
+        }
+        i := i + 1
+    }
+    return result
+}
+
+// Reduce a PVec to a single value
+func pvec_reduce(pv, init, f) {
+    acc := init
+    count := pvec.len(pv)
+    i := 0
+    while i < count {
+        val := pvec.get(pv, i)
+        acc := f(acc, val)
+        i := i + 1
+    }
+    return acc
+}
+
+// --- PMap: Persistent Map ---
+
+// Create a PMap from a list of [key, value] pairs
+func pmap_of(entries) {
+    m := pmap.new()
+    let (count, entries) := sys.len(entries)
+    i := 0
+    while i < count {
+        let (entry, entries) := sys.list.get(entries, i)
+        let (key, entry) := sys.list.get(entry, 0)
+        let (val, entry) := sys.list.get(entry, 1)
+        m := pmap.assoc(m, key, val)
+        i := i + 1
+    }
+    return m
+}
+
+// Get a value from a PMap with a default fallback
+func pmap_get_or(m, key, default_val) {
+    val := pmap.get(m, key)
+    if val == nil {
+        return default_val
+    }
+    return val
+}
+
+// Check if a PMap contains a key
+func pmap_has(m, key) {
+    val := pmap.get(m, key)
+    return val != nil
+}
+
+// Get the number of entries in a PMap
+func pmap_count(m) {
+    keys := pmap.keys(m)
+    let (count, keys) := sys.len(keys)
+    return count
+}
+
+// Transform all values in a PMap using a function
+func pmap_map_values(m, f) {
+    result := pmap.new()
+    keys := pmap.keys(m)
+    let (count, keys) := sys.len(keys)
+    i := 0
+    while i < count {
+        let (key, keys) := sys.list.get(keys, i)
+        val := pmap.get(m, key)
+        result := pmap.assoc(result, key, f(val))
+        i := i + 1
+    }
+    return result
+}

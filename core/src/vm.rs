@@ -103,6 +103,9 @@ pub struct CallFrame {
     pub chunk: Arc<Chunk>,
 }
 
+/// Type alias for VM debug hook callback.
+pub type DebugHookFn<'a> = dyn FnMut(&[Value], &[Scope], usize, &Chunk) -> DebugAction + 'a;
+
 pub struct VM<'a> {
     pub heap: GraphArena,
     pub stack: Vec<Value>,
@@ -114,7 +117,7 @@ pub struct VM<'a> {
     pub step_count: u64,
     pub trace: bool,
     /// Optional debug hook: called before each opcode, receives (ip). Returns DebugAction.
-    pub debug_hook: Option<Box<dyn FnMut(&[Value], &[Scope], usize, &Chunk) -> DebugAction + 'a>>,
+    pub debug_hook: Option<Box<DebugHookFn<'a>>>,
 }
 
 impl<'a> VM<'a> {
@@ -416,6 +419,23 @@ impl<'a> VM<'a> {
                     if let Some(val) = self.op_return()? {
                         return Ok(val);
                     }
+                }
+
+                OpCode::MakeEnum(enum_name, variant, field_count) => {
+                    let mut fields = Vec::with_capacity(*field_count);
+                    for _ in 0..*field_count {
+                        let val = self
+                            .stack
+                            .pop()
+                            .ok_or_else(|| ArkError::StackUnderflow("MakeEnum".to_string()))?;
+                        fields.push(val);
+                    }
+                    fields.reverse(); // Fields were pushed left-to-right
+                    self.push(Value::EnumValue {
+                        enum_name: enum_name.clone(),
+                        variant: variant.clone(),
+                        fields,
+                    })?;
                 }
             }
         }

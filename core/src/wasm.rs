@@ -18,7 +18,7 @@
 
 use crate::checker::LinearChecker;
 use crate::compiler::Compiler;
-use crate::loader::{LoadError, load_ark_program};
+use crate::loader::{load_ark_program, LoadError};
 use crate::parser;
 use crate::runtime::Value;
 use crate::vm::VM;
@@ -33,7 +33,7 @@ use std::cell::RefCell;
 
 // Thread-local buffer to capture print output in WASM
 thread_local! {
-    static OUTPUT_BUFFER: RefCell<Vec<String>> = RefCell::new(Vec::new());
+    static OUTPUT_BUFFER: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Append a line to the WASM output buffer (called by VM's print intrinsic).
@@ -282,10 +282,21 @@ fn value_to_json(v: &Value) -> serde_json::Value {
         Value::Integer(i) => serde_json::Value::Number((*i).into()),
         Value::String(s) => serde_json::Value::String(s.clone()),
         Value::List(l) => serde_json::Value::Array(l.iter().map(value_to_json).collect()),
+        Value::PVec(pv) => {
+            serde_json::Value::Array(pv.to_vec().iter().map(value_to_json).collect())
+        }
         Value::Struct(m) => {
             let map = m
                 .iter()
                 .map(|(k, v)| (k.clone(), value_to_json(v)))
+                .collect();
+            serde_json::Value::Object(map)
+        }
+        Value::PMap(pm) => {
+            let map = pm
+                .entries()
+                .into_iter()
+                .map(|(k, v)| (k, value_to_json(&v)))
                 .collect();
             serde_json::Value::Object(map)
         }
@@ -310,9 +321,23 @@ impl From<Value> for JsValue {
                 }
                 arr.into()
             }
+            Value::PVec(pv) => {
+                let arr = Array::new();
+                for item in pv.to_vec() {
+                    arr.push(&JsValue::from(item));
+                }
+                arr.into()
+            }
             Value::Struct(m) => {
                 let obj = Object::new();
                 for (k, v) in m {
+                    let _ = Reflect::set(&obj, &JsValue::from_str(&k), &JsValue::from(v));
+                }
+                obj.into()
+            }
+            Value::PMap(pm) => {
+                let obj = Object::new();
+                for (k, v) in pm.entries() {
                     let _ = Reflect::set(&obj, &JsValue::from_str(&k), &JsValue::from(v));
                 }
                 obj.into()

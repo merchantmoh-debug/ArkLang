@@ -6,6 +6,7 @@
  * LICENSE: DUAL-LICENSED (AGPLv3 or COMMERCIAL).
  */
 
+use crate::persistent::{PMap, PVec};
 use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 use regex::Regex;
 #[cfg(not(target_arch = "wasm32"))]
@@ -49,6 +50,9 @@ pub enum SocketResource {
 
 #[cfg(not(target_arch = "wasm32"))]
 static AI_CLIENT: OnceLock<Client> = OnceLock::new();
+
+#[cfg(not(target_arch = "wasm32"))]
+static AI_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 #[cfg(not(target_arch = "wasm32"))]
 static SOCKET_ID_COUNTER: AtomicI64 = AtomicI64::new(1);
@@ -215,6 +219,38 @@ impl IntrinsicRegistry {
             "math.add" | "intrinsic_math_tensor_add" => Some(intrinsic_math_tensor_add),
             "math.sub" | "intrinsic_math_tensor_sub" => Some(intrinsic_math_tensor_sub),
             "math.mul_scalar" | "intrinsic_math_mul_scalar" => Some(intrinsic_math_mul_scalar),
+            // Persistent Data Structure Intrinsics
+            "pvec.new" | "sys.pvec.new" | "intrinsic_pvec_new" => Some(intrinsic_pvec_new),
+            "pvec.conj" | "sys.pvec.conj" | "intrinsic_pvec_conj" => Some(intrinsic_pvec_conj),
+            "pvec.get" | "sys.pvec.get" | "intrinsic_pvec_get" => Some(intrinsic_pvec_get),
+            "pvec.assoc" | "sys.pvec.assoc" | "intrinsic_pvec_assoc" => Some(intrinsic_pvec_assoc),
+            "pvec.pop" | "sys.pvec.pop" | "intrinsic_pvec_pop" => Some(intrinsic_pvec_pop),
+            "pvec.len" | "sys.pvec.len" | "intrinsic_pvec_len" => Some(intrinsic_pvec_len),
+            "pmap.new" | "sys.pmap.new" | "intrinsic_pmap_new" => Some(intrinsic_pmap_new),
+            "pmap.assoc" | "sys.pmap.assoc" | "intrinsic_pmap_assoc" => Some(intrinsic_pmap_assoc),
+            "pmap.dissoc" | "sys.pmap.dissoc" | "intrinsic_pmap_dissoc" => {
+                Some(intrinsic_pmap_dissoc)
+            }
+            "pmap.get" | "sys.pmap.get" | "intrinsic_pmap_get" => Some(intrinsic_pmap_get),
+            "pmap.keys" | "sys.pmap.keys" | "intrinsic_pmap_keys" => Some(intrinsic_pmap_keys),
+            "pmap.merge" | "sys.pmap.merge" | "intrinsic_pmap_merge" => Some(intrinsic_pmap_merge),
+            // WASM Component Interop Intrinsics (native only)
+            #[cfg(not(target_arch = "wasm32"))]
+            "sys.wasm.load" | "wasm.load" | "intrinsic_wasm_load" => {
+                Some(crate::wasm_interop::intrinsic_wasm_load)
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            "sys.wasm.exports" | "wasm.exports" | "intrinsic_wasm_exports" => {
+                Some(crate::wasm_interop::intrinsic_wasm_exports)
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            "sys.wasm.call" | "wasm.call" | "intrinsic_wasm_call" => {
+                Some(crate::wasm_interop::intrinsic_wasm_call)
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            "sys.wasm.drop" | "wasm.drop" | "intrinsic_wasm_drop" => {
+                Some(crate::wasm_interop::intrinsic_wasm_drop)
+            }
             _ => None,
         }
     }
@@ -678,7 +714,7 @@ impl IntrinsicRegistry {
     }
 }
 
-fn check_path_security(path: &str) -> Result<(), RuntimeError> {
+fn check_path_security(path: &str, is_write: bool) -> Result<(), RuntimeError> {
     #[cfg(target_arch = "wasm32")]
     return Ok(());
 
@@ -705,7 +741,7 @@ fn check_path_security(path: &str) -> Result<(), RuntimeError> {
         // If neither exists, we can't write anyway (fs::write doesn't mkdir -p).
 
         let path_to_check = if abs_path.exists() {
-            abs_path
+            abs_path.clone()
         } else {
             match abs_path.parent() {
                 Some(p) => p.to_path_buf(),
@@ -723,6 +759,38 @@ fn check_path_security(path: &str) -> Result<(), RuntimeError> {
                 path
             );
             return Err(RuntimeError::NotExecutable);
+        }
+
+        // Sovereign Security: Protected Paths (Write Only)
+        if is_write {
+            // Relativize path from CWD to check against protected list
+            if let Ok(rel_path) = canonical_path.strip_prefix(&cwd) {
+                let rel_str = rel_path.to_string_lossy();
+                let protected_prefixes = ["core", "meta", "src", "web", ".git", "target"];
+                let protected_files = [
+                    "Cargo.toml",
+                    "Cargo.lock",
+                    "Dockerfile",
+                    "README.md",
+                    "LICENSE",
+                ];
+
+                for prefix in protected_prefixes {
+                    if rel_str.starts_with(prefix) {
+                        println!("[Ark:FS] Security Violation: Write to protected directory '{}' denied.", prefix);
+                        return Err(RuntimeError::NotExecutable);
+                    }
+                }
+                for file in protected_files {
+                    if rel_str == file {
+                        println!(
+                            "[Ark:FS] Security Violation: Write to protected file '{}' denied.",
+                            file
+                        );
+                        return Err(RuntimeError::NotExecutable);
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -759,6 +827,15 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
         })?;
 
         let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent".to_string();
+
+        // Optimization: Check Cache first
+        let cache = AI_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        if let Ok(guard) = cache.lock() {
+            if let Some(cached_response) = guard.get(prompt) {
+                println!("[Ark:AI] Cache Hit. Returning stored response.");
+                return Ok(Value::String(cached_response.clone()));
+            }
+        }
 
         // Optimization: Reuse Client (Connection Pool)
         let client = AI_CLIENT.get_or_init(|| {
@@ -804,6 +881,13 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
                             if let Some(text) =
                                 json_resp["candidates"][0]["content"]["parts"][0]["text"].as_str()
                             {
+                                // Store in Cache
+                                if let Ok(mut guard) = cache.lock() {
+                                    if guard.len() > 1000 {
+                                        guard.clear(); // Simple eviction
+                                    }
+                                    guard.insert(prompt.clone(), text.to_string());
+                                }
                                 return Ok(Value::String(text.to_string()));
                             }
                         } else if resp.status().as_u16() == 429 {
@@ -886,6 +970,33 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
+        // Sovereign Security: Command Whitelist
+        // Unless ARK_UNSAFE_EXEC=true is strictly set, we block arbitrary execution.
+        let allow_unsafe =
+            std::env::var("ARK_UNSAFE_EXEC").unwrap_or_else(|_| "false".to_string()) == "true";
+
+        if !allow_unsafe {
+            // Allowed binaries (safe-ish subset)
+            let whitelist = [
+                "ls", "grep", "cat", "echo", "date", "whoami", "clear", "python3", "python",
+                "cargo", "rustc", "node", "git",
+            ];
+
+            // Check strictly against whitelist (exact match on binary name)
+            // If program is a path (e.g. /bin/ls), extract file_name.
+            let prog_path = std::path::Path::new(&program);
+            let prog_name = prog_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            if !whitelist.contains(&prog_name) {
+                println!(
+                    "[Ark:Exec] Security Violation: Command '{}' is not in the whitelist.",
+                    program
+                );
+                println!("[Ark:Exec] To bypass, set ARK_UNSAFE_EXEC=true (NOT RECOMMENDED).");
+                return Err(RuntimeError::NotExecutable);
+            }
+        }
+
         println!("[Ark:Exec] {} {:?}", program, args_list);
 
         let mut cmd = Command::new(&program);
@@ -921,7 +1032,7 @@ pub fn intrinsic_fs_write(args: Vec<Value>) -> Result<Value, RuntimeError> {
         }
     };
 
-    check_path_security(path_str)?;
+    check_path_security(path_str, true)?;
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -1216,6 +1327,8 @@ fn print_value(v: &Value) {
             }
             print!("}}");
         }
+        Value::PVec(pv) => print!("{}", pv),
+        Value::PMap(pm) => print!("{}", pm),
         Value::Return(val) => print_value(val),
     }
 }
@@ -1257,7 +1370,7 @@ pub fn intrinsic_fs_read(args: Vec<Value>) -> Result<Value, RuntimeError> {
         }
     };
 
-    check_path_security(path_str)?;
+    check_path_security(path_str, false)?;
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -2323,7 +2436,7 @@ pub fn intrinsic_io_read_bytes(args: Vec<Value>) -> Result<Value, RuntimeError> 
         }
     };
 
-    check_path_security(path_str)?;
+    check_path_security(path_str, false)?;
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -2458,7 +2571,7 @@ pub fn intrinsic_fs_write_buffer(args: Vec<Value>) -> Result<Value, RuntimeError
         }
     };
 
-    check_path_security(path_str)?;
+    check_path_security(path_str, true)?;
 
     match &args[1] {
         Value::Buffer(buf) => {
@@ -2505,7 +2618,7 @@ pub fn intrinsic_fs_read_buffer(args: Vec<Value>) -> Result<Value, RuntimeError>
         }
     };
 
-    check_path_security(path_str)?;
+    check_path_security(path_str, false)?;
 
     #[cfg(target_arch = "wasm32")]
     {
@@ -3970,6 +4083,192 @@ fn intrinsic_governance_verify_chain(args: Vec<Value>) -> Result<Value, RuntimeE
         Ok(true) => Ok(Value::Boolean(true)),
         Ok(false) => Ok(Value::Boolean(false)),
         Err(_) => Ok(Value::Boolean(false)),
+    }
+}
+
+// ============================================================================
+// PERSISTENT DATA STRUCTURE INTRINSICS
+// ============================================================================
+
+/// pvec.new() → PVec. Create a new empty persistent vector.
+fn intrinsic_pvec_new(_args: Vec<Value>) -> Result<Value, RuntimeError> {
+    Ok(Value::PVec(PVec::new()))
+}
+
+/// pvec.conj(pvec, val) → PVec. Append a value to a persistent vector.
+fn intrinsic_pvec_conj(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::InvalidOperation(
+            "pvec.conj expects 2 arguments: (pvec, value)".to_string(),
+        ));
+    }
+    match &args[0] {
+        Value::PVec(pv) => Ok(Value::PVec(pv.conj(args[1].clone()))),
+        _ => Err(RuntimeError::InvalidOperation(
+            "pvec.conj: first argument must be a PVec".to_string(),
+        )),
+    }
+}
+
+/// pvec.get(pvec, index) → Value. Get value at index from a persistent vector.
+fn intrinsic_pvec_get(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::InvalidOperation(
+            "pvec.get expects 2 arguments: (pvec, index)".to_string(),
+        ));
+    }
+    match (&args[0], &args[1]) {
+        (Value::PVec(pv), Value::Integer(idx)) => match pv.get(*idx as usize) {
+            Some(v) => Ok(v.clone()),
+            None => Ok(Value::Unit),
+        },
+        _ => Err(RuntimeError::InvalidOperation(
+            "pvec.get: expects (PVec, Integer)".to_string(),
+        )),
+    }
+}
+
+/// pvec.assoc(pvec, index, val) → PVec. Set value at index in a persistent vector.
+fn intrinsic_pvec_assoc(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 {
+        return Err(RuntimeError::InvalidOperation(
+            "pvec.assoc expects 3 arguments: (pvec, index, value)".to_string(),
+        ));
+    }
+    match (&args[0], &args[1]) {
+        (Value::PVec(pv), Value::Integer(idx)) => match pv.assoc(*idx as usize, args[2].clone()) {
+            Some(new_pv) => Ok(Value::PVec(new_pv)),
+            None => Err(RuntimeError::InvalidOperation(format!(
+                "pvec.assoc: index {} out of bounds",
+                idx
+            ))),
+        },
+        _ => Err(RuntimeError::InvalidOperation(
+            "pvec.assoc: expects (PVec, Integer, Value)".to_string(),
+        )),
+    }
+}
+
+/// pvec.pop(pvec) → PVec. Remove the last element from a persistent vector.
+fn intrinsic_pvec_pop(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::InvalidOperation(
+            "pvec.pop expects 1 argument: (pvec)".to_string(),
+        ));
+    }
+    match &args[0] {
+        Value::PVec(pv) => match pv.pop() {
+            Some((new_pv, _last)) => Ok(Value::PVec(new_pv)),
+            None => Err(RuntimeError::InvalidOperation(
+                "pvec.pop: cannot pop from empty PVec".to_string(),
+            )),
+        },
+        _ => Err(RuntimeError::InvalidOperation(
+            "pvec.pop: argument must be a PVec".to_string(),
+        )),
+    }
+}
+
+/// pvec.len(pvec) → Integer. Get the length of a persistent vector.
+fn intrinsic_pvec_len(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::InvalidOperation(
+            "pvec.len expects 1 argument: (pvec)".to_string(),
+        ));
+    }
+    match &args[0] {
+        Value::PVec(pv) => Ok(Value::Integer(pv.len() as i64)),
+        _ => Err(RuntimeError::InvalidOperation(
+            "pvec.len: argument must be a PVec".to_string(),
+        )),
+    }
+}
+
+/// pmap.new() → PMap. Create a new empty persistent map.
+fn intrinsic_pmap_new(_args: Vec<Value>) -> Result<Value, RuntimeError> {
+    Ok(Value::PMap(PMap::new()))
+}
+
+/// pmap.assoc(pmap, key, val) → PMap. Associate a key with a value.
+fn intrinsic_pmap_assoc(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 3 {
+        return Err(RuntimeError::InvalidOperation(
+            "pmap.assoc expects 3 arguments: (pmap, key, value)".to_string(),
+        ));
+    }
+    match (&args[0], &args[1]) {
+        (Value::PMap(pm), Value::String(key)) => {
+            Ok(Value::PMap(pm.assoc(key.clone(), args[2].clone())))
+        }
+        _ => Err(RuntimeError::InvalidOperation(
+            "pmap.assoc: expects (PMap, String, Value)".to_string(),
+        )),
+    }
+}
+
+/// pmap.dissoc(pmap, key) → PMap. Remove a key from a persistent map.
+fn intrinsic_pmap_dissoc(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::InvalidOperation(
+            "pmap.dissoc expects 2 arguments: (pmap, key)".to_string(),
+        ));
+    }
+    match (&args[0], &args[1]) {
+        (Value::PMap(pm), Value::String(key)) => Ok(Value::PMap(pm.dissoc(key))),
+        _ => Err(RuntimeError::InvalidOperation(
+            "pmap.dissoc: expects (PMap, String)".to_string(),
+        )),
+    }
+}
+
+/// pmap.get(pmap, key) → Value. Get the value for a key.
+fn intrinsic_pmap_get(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::InvalidOperation(
+            "pmap.get expects 2 arguments: (pmap, key)".to_string(),
+        ));
+    }
+    match (&args[0], &args[1]) {
+        (Value::PMap(pm), Value::String(key)) => match pm.get(key) {
+            Some(v) => Ok(v.clone()),
+            None => Ok(Value::Unit),
+        },
+        _ => Err(RuntimeError::InvalidOperation(
+            "pmap.get: expects (PMap, String)".to_string(),
+        )),
+    }
+}
+
+/// pmap.keys(pmap) → List<String>. Get all keys from a persistent map.
+fn intrinsic_pmap_keys(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::InvalidOperation(
+            "pmap.keys expects 1 argument: (pmap)".to_string(),
+        ));
+    }
+    match &args[0] {
+        Value::PMap(pm) => {
+            let keys: Vec<Value> = pm.keys().into_iter().map(Value::String).collect();
+            Ok(Value::List(keys))
+        }
+        _ => Err(RuntimeError::InvalidOperation(
+            "pmap.keys: argument must be a PMap".to_string(),
+        )),
+    }
+}
+
+/// pmap.merge(pmap1, pmap2) → PMap. Merge two persistent maps.
+fn intrinsic_pmap_merge(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::InvalidOperation(
+            "pmap.merge expects 2 arguments: (pmap1, pmap2)".to_string(),
+        ));
+    }
+    match (&args[0], &args[1]) {
+        (Value::PMap(pm1), Value::PMap(pm2)) => Ok(Value::PMap(pm1.merge(pm2))),
+        _ => Err(RuntimeError::InvalidOperation(
+            "pmap.merge: both arguments must be PMap".to_string(),
+        )),
     }
 }
 

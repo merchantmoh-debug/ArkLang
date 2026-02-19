@@ -67,13 +67,14 @@ class ArkHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         # Proprioception Check (Load Shedding)
         stats = get_system_stats()
-        # If load is critical (>95% CPU), shed load
-        # Note: simulated in fallback mode, but functional structure is here
-        if stats["cpu"] > 95.0:
-             self.send_response(503)
+        # If load is critical (>95% CPU or >90% RAM), shed load with backpressure
+        if stats["cpu"] > 95.0 or stats["memory"] > 90.0:
+             self.send_response(429) # Too Many Requests
              self.send_header('Content-type', 'application/json')
+             self.send_header('Retry-After', '5')
              self.end_headers()
-             self.wfile.write(json.dumps({"error": "System Overload: Proprioception limits exceeded."}).encode('utf-8'))
+             msg = f"System Overload: CPU {stats['cpu']}%, MEM {stats['memory']}%"
+             self.wfile.write(json.dumps({"error": msg, "stats": stats}).encode('utf-8'))
              return
 
         if self.path == "/api/run":
@@ -112,8 +113,9 @@ class ArkHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-class ReusableTCPServer(socketserver.TCPServer):
+class ThreadingTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
+    daemon_threads = True
 
 if __name__ == "__main__":
     # Enforce Strict Mode by default if not set
@@ -121,6 +123,7 @@ if __name__ == "__main__":
         os.environ["ARK_CAPABILITIES"] = "exec,net,fs_read" # Default safe set for demo
         print("ARK_CAPABILITIES set to default strict mode: exec,net,fs_read")
 
-    with ReusableTCPServer(("", PORT), ArkHandler) as httpd:
-        print(f"Serving at http://localhost:{PORT}")
+    # Use ThreadingTCPServer for concurrent request handling
+    with ThreadingTCPServer(("", PORT), ArkHandler) as httpd:
+        print(f"Serving on Sovereign Runtime at http://localhost:{PORT}")
         httpd.serve_forever()

@@ -1,0 +1,4 @@
+// Ark WASM Build Test — arithmetic + print
+x := 10 + 20
+y := x * 2
+print(y)

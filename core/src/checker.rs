@@ -16,7 +16,7 @@
  * NO IMPLIED LICENSE to rights of Mohamad Al-Zawahreh or Sovereign Systems.
  */
 
-use crate::ast::{ArkNode, Expression, FunctionDef, Statement};
+use crate::ast::{ArkNode, EnumDecl, Expression, FunctionDef, Statement, TraitDecl};
 use crate::types::ArkType;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -29,6 +29,61 @@ pub enum LinearError {
     UnusedResource(String),
     #[error("Variable '{0}' not found")]
     NotFound(String),
+}
+
+/// Compile-time type errors detected during type enforcement.
+#[derive(Error, Debug, Clone)]
+pub enum TypeError {
+    #[error("Type mismatch for '{name}': expected {expected}, got {got}")]
+    Mismatch {
+        name: String,
+        expected: String,
+        got: String,
+    },
+    #[error("Unknown enum type '{0}'")]
+    UnknownEnum(String),
+    #[error("Unknown variant '{variant}' for enum '{enum_name}'")]
+    UnknownVariant { enum_name: String, variant: String },
+    #[error("Variant '{variant}' of enum '{enum_name}' expects {expected} fields, got {got}")]
+    VariantFieldCount {
+        enum_name: String,
+        variant: String,
+        expected: usize,
+        got: usize,
+    },
+    #[error("Unknown trait '{0}'")]
+    UnknownTrait(String),
+    #[error("Return type mismatch: declared {expected}, got {got}")]
+    ReturnMismatch { expected: String, got: String },
+    #[error("Argument type mismatch for '{func}' at index {index}: expected {expected}, got {got}")]
+    ArgMismatch {
+        func: String,
+        index: usize,
+        expected: String,
+        got: String,
+    },
+    #[error("Argument count mismatch for '{func}': expected {expected}, got {got}")]
+    ArgCount {
+        func: String,
+        expected: usize,
+        got: usize,
+    },
+}
+
+/// Registry entry for a declared enum type.
+#[derive(Debug, Clone)]
+pub struct EnumTypeInfo {
+    pub name: String,
+    /// Map of variant name → number of fields
+    pub variants: HashMap<String, usize>,
+}
+
+/// Registry entry for a declared trait.
+#[derive(Debug, Clone)]
+pub struct TraitTypeInfo {
+    pub name: String,
+    /// Method names declared in this trait
+    pub methods: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,6 +101,10 @@ pub struct LinearChecker {
     scope_stack: Vec<Vec<String>>,
     pub warnings: Vec<String>,
     func_return_types: Vec<ArkType>,
+    // Compile-time type enforcement
+    pub type_errors: Vec<TypeError>,
+    enum_registry: HashMap<String, EnumTypeInfo>,
+    trait_registry: HashMap<String, TraitTypeInfo>,
 }
 
 impl Default for LinearChecker {
@@ -61,12 +120,54 @@ impl LinearChecker {
             scope_stack: Vec::new(),
             warnings: Vec::new(),
             func_return_types: Vec::new(),
+            type_errors: Vec::new(),
+            enum_registry: HashMap::new(),
+            trait_registry: HashMap::new(),
         }
     }
 
     pub fn check(node: &ArkNode) -> Result<(), LinearError> {
         let mut checker = LinearChecker::new();
-        checker.traverse_node(node)
+        checker.traverse_node(node)?;
+        // Report type errors as warnings (non-fatal for now)
+        for err in &checker.type_errors {
+            checker.warnings.push(format!("TypeError: {}", err));
+        }
+        Ok(())
+    }
+
+    /// Full type-enforced check that returns both linearity and type errors.
+    pub fn check_with_types(node: &ArkNode) -> Result<Vec<TypeError>, LinearError> {
+        let mut checker = LinearChecker::new();
+        checker.traverse_node(node)?;
+        Ok(checker.type_errors)
+    }
+
+    /// Register an enum declaration in the type registry.
+    fn register_enum(&mut self, decl: &EnumDecl) {
+        let mut variants = HashMap::new();
+        for v in &decl.variants {
+            variants.insert(v.name.clone(), v.fields.len());
+        }
+        self.enum_registry.insert(
+            decl.name.clone(),
+            EnumTypeInfo {
+                name: decl.name.clone(),
+                variants,
+            },
+        );
+    }
+
+    /// Register a trait declaration in the type registry.
+    fn register_trait(&mut self, decl: &TraitDecl) {
+        let methods = decl.methods.iter().map(|m| m.name.clone()).collect();
+        self.trait_registry.insert(
+            decl.name.clone(),
+            TraitTypeInfo {
+                name: decl.name.clone(),
+                methods,
+            },
+        );
     }
 
     fn get_intrinsic_signature(name: &str) -> Option<(Vec<ArkType>, ArkType)> {
@@ -234,6 +335,10 @@ impl LinearChecker {
                         "Return type mismatch: declared {:?}, got {:?}",
                         func.output, ty
                     ));
+                    self.type_errors.push(TypeError::ReturnMismatch {
+                        expected: format!("{:?}", func.output),
+                        got: format!("{:?}", ty),
+                    });
                 }
             }
         } else {
@@ -288,6 +393,15 @@ impl LinearChecker {
             | Statement::Continue => Ok(()), // Not checked yet
             Statement::Function(func_def) => self.check_nested_function(func_def),
             Statement::StructDecl(_) => Ok(()),
+            Statement::EnumDecl(decl) => {
+                self.register_enum(decl);
+                Ok(())
+            }
+            Statement::TraitDecl(decl) => {
+                self.register_trait(decl);
+                Ok(())
+            }
+            Statement::ImplBlock(_) => Ok(()),
         }
     }
 
@@ -328,6 +442,11 @@ impl LinearChecker {
                     Some(ArkType::Shared("List<Unknown>".to_string()))
                 }
             }
+            Expression::EnumInit {
+                enum_name,
+                variant,
+                args: _,
+            } => Some(ArkType::Enum(format!("{}::{}", enum_name, variant))),
             _ => None,
         }
     }
@@ -349,6 +468,11 @@ impl LinearChecker {
                         "Type mismatch for '{}': expected {:?}, got {:?}",
                         name, explicit_ty, inferred
                     ));
+                    self.type_errors.push(TypeError::Mismatch {
+                        name: name.to_string(),
+                        expected: format!("{:?}", explicit_ty),
+                        got: format!("{:?}", inferred),
+                    });
                 }
             }
         }
@@ -518,11 +642,22 @@ impl LinearChecker {
                             input_types.len(),
                             args.len()
                         ));
+                        self.type_errors.push(TypeError::ArgCount {
+                            func: function_hash.clone(),
+                            expected: input_types.len(),
+                            got: args.len(),
+                        });
                     } else {
                         for (i, arg) in args.iter().enumerate() {
                             if let Some(inferred) = self.infer_expression_type(arg) {
                                 if inferred != input_types[i] {
                                     self.warnings.push(format!("Argument type mismatch for '{}' at index {}: expected {:?}, got {:?}", function_hash, i, input_types[i], inferred));
+                                    self.type_errors.push(TypeError::ArgMismatch {
+                                        func: function_hash.clone(),
+                                        index: i,
+                                        expected: format!("{:?}", input_types[i]),
+                                        got: format!("{:?}", inferred),
+                                    });
                                 }
                             }
                         }
@@ -563,6 +698,40 @@ impl LinearChecker {
                 }
                 Ok(())
             }
+            Expression::EnumInit {
+                enum_name,
+                variant,
+                args,
+            } => {
+                // Validate enum exists
+                if let Some(info) = self.enum_registry.get(enum_name).cloned() {
+                    // Validate variant exists
+                    if let Some(&expected_fields) = info.variants.get(variant) {
+                        // Validate field count
+                        if args.len() != expected_fields {
+                            self.type_errors.push(TypeError::VariantFieldCount {
+                                enum_name: enum_name.clone(),
+                                variant: variant.clone(),
+                                expected: expected_fields,
+                                got: args.len(),
+                            });
+                        }
+                    } else {
+                        self.type_errors.push(TypeError::UnknownVariant {
+                            enum_name: enum_name.clone(),
+                            variant: variant.clone(),
+                        });
+                    }
+                } else {
+                    self.type_errors
+                        .push(TypeError::UnknownEnum(enum_name.clone()));
+                }
+                // Check sub-expressions
+                for arg in args {
+                    self.check_expression(arg)?;
+                }
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
@@ -586,6 +755,7 @@ mod tests {
                 ))))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -609,6 +779,7 @@ mod tests {
                 }))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -637,6 +808,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -665,6 +837,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -692,6 +865,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -718,6 +892,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -748,6 +923,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -783,6 +959,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -817,6 +994,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -895,6 +1073,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -928,6 +1107,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -960,6 +1140,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -997,6 +1178,7 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -1027,11 +1209,13 @@ mod tests {
                             )))
                             .unwrap(),
                         ),
+                        attributes: vec![],
                     }),
                     Statement::Return(Expression::Variable("x".to_string())),
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
 
         let mut checker = LinearChecker::new();
@@ -1104,14 +1288,17 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
         let mut checker = LinearChecker::new();
         checker.check_function(&func).unwrap();
 
-        assert!(checker
-            .warnings
-            .iter()
-            .any(|w| w.contains("Unused variable: x")));
+        assert!(
+            checker
+                .warnings
+                .iter()
+                .any(|w| w.contains("Unused variable: x"))
+        );
     }
 
     #[test]
@@ -1127,14 +1314,17 @@ mod tests {
                 ])))
                 .unwrap(),
             ),
+            attributes: vec![],
         };
         let mut checker = LinearChecker::new();
         checker.check_function(&func).unwrap();
 
-        assert!(checker
-            .warnings
-            .iter()
-            .any(|w| w.contains("Unreachable code detected")));
+        assert!(
+            checker
+                .warnings
+                .iter()
+                .any(|w| w.contains("Unreachable code detected"))
+        );
     }
 
     #[test]
@@ -1163,9 +1353,184 @@ mod tests {
         let mut checker = LinearChecker::new();
         checker.check_expression(&expr).unwrap();
 
-        assert!(checker
-            .warnings
-            .iter()
-            .any(|w| w.contains("Argument type mismatch")));
+        assert!(
+            checker
+                .warnings
+                .iter()
+                .any(|w| w.contains("Argument type mismatch"))
+        );
+    }
+
+    #[test]
+    fn test_enum_registration_and_valid_init() {
+        let mut checker = LinearChecker::new();
+        // Register an enum
+        let decl = EnumDecl {
+            name: "Color".to_string(),
+            variants: vec![
+                EnumVariantDef {
+                    name: "Red".to_string(),
+                    fields: vec![],
+                },
+                EnumVariantDef {
+                    name: "Green".to_string(),
+                    fields: vec![],
+                },
+                EnumVariantDef {
+                    name: "Blue".to_string(),
+                    fields: vec!["intensity".to_string()],
+                },
+            ],
+        };
+        checker.register_enum(&decl);
+
+        // Valid: Color::Red with 0 args
+        let expr = Expression::EnumInit {
+            enum_name: "Color".to_string(),
+            variant: "Red".to_string(),
+            args: vec![],
+        };
+        checker.check_expression(&expr).unwrap();
+        assert!(
+            checker.type_errors.is_empty(),
+            "Expected no type errors for valid enum init"
+        );
+    }
+
+    #[test]
+    fn test_enum_unknown_variant() {
+        let mut checker = LinearChecker::new();
+        let decl = EnumDecl {
+            name: "Color".to_string(),
+            variants: vec![EnumVariantDef {
+                name: "Red".to_string(),
+                fields: vec![],
+            }],
+        };
+        checker.register_enum(&decl);
+
+        // Invalid: Color::Purple doesn't exist
+        let expr = Expression::EnumInit {
+            enum_name: "Color".to_string(),
+            variant: "Purple".to_string(),
+            args: vec![],
+        };
+        checker.check_expression(&expr).unwrap();
+        assert_eq!(checker.type_errors.len(), 1);
+        assert!(matches!(
+            &checker.type_errors[0],
+            TypeError::UnknownVariant { .. }
+        ));
+    }
+
+    #[test]
+    fn test_enum_field_count_mismatch() {
+        let mut checker = LinearChecker::new();
+        let decl = EnumDecl {
+            name: "Shape".to_string(),
+            variants: vec![EnumVariantDef {
+                name: "Circle".to_string(),
+                fields: vec!["radius".to_string()],
+            }],
+        };
+        checker.register_enum(&decl);
+
+        // Invalid: Circle expects 1 field, got 0
+        let expr = Expression::EnumInit {
+            enum_name: "Shape".to_string(),
+            variant: "Circle".to_string(),
+            args: vec![],
+        };
+        checker.check_expression(&expr).unwrap();
+        assert_eq!(checker.type_errors.len(), 1);
+        assert!(matches!(
+            &checker.type_errors[0],
+            TypeError::VariantFieldCount {
+                expected: 1,
+                got: 0,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_check_with_types_api() {
+        // Test the check_with_types entry point with a block containing an enum init
+        let block = ArkNode::Statement(Statement::Block(vec![
+            Statement::EnumDecl(EnumDecl {
+                name: "Option".to_string(),
+                variants: vec![
+                    EnumVariantDef {
+                        name: "Some".to_string(),
+                        fields: vec!["value".to_string()],
+                    },
+                    EnumVariantDef {
+                        name: "None".to_string(),
+                        fields: vec![],
+                    },
+                ],
+            }),
+            Statement::Expression(Expression::EnumInit {
+                enum_name: "Option".to_string(),
+                variant: "None".to_string(),
+                args: vec![],
+            }),
+        ]));
+        let errors = LinearChecker::check_with_types(&block).unwrap();
+        assert!(
+            errors.is_empty(),
+            "Expected no type errors for valid enum usage"
+        );
+    }
+
+    #[test]
+    fn test_unknown_enum_type_error() {
+        let block = ArkNode::Statement(Statement::Expression(Expression::EnumInit {
+            enum_name: "Nonexistent".to_string(),
+            variant: "Foo".to_string(),
+            args: vec![],
+        }));
+        let errors = LinearChecker::check_with_types(&block).unwrap();
+        assert_eq!(errors.len(), 1);
+        assert!(matches!(&errors[0], TypeError::UnknownEnum(name) if name == "Nonexistent"));
+    }
+
+    #[test]
+    fn test_trait_registration() {
+        let mut checker = LinearChecker::new();
+        let decl = TraitDecl {
+            name: "Drawable".to_string(),
+            methods: vec![TraitMethodSig {
+                name: "draw".to_string(),
+                params: vec![("self".to_string(), ArkType::Shared("Self".to_string()))],
+                return_type: ArkType::Shared("Unit".to_string()),
+            }],
+        };
+        checker.register_trait(&decl);
+        assert!(checker.trait_registry.contains_key("Drawable"));
+        assert_eq!(
+            checker.trait_registry["Drawable"].methods,
+            vec!["draw".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_let_type_mismatch_produces_type_error() {
+        let mut checker = LinearChecker::new();
+        checker.enter_scope();
+
+        // let x: Integer = "hello"
+        let stmt = Statement::Let {
+            name: "x".to_string(),
+            ty: Some(ArkType::Shared("Integer".to_string())),
+            value: Expression::Literal("\"hello\"".to_string()),
+        };
+        checker.check_statement(&stmt).unwrap();
+
+        assert!(
+            !checker.type_errors.is_empty(),
+            "Expected type errors for mismatched let binding"
+        );
+        assert!(matches!(&checker.type_errors[0], TypeError::Mismatch { name, .. } if name == "x"));
     }
 }

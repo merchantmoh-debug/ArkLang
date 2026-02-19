@@ -31,6 +31,7 @@
 **Use it for:** Financial systems, cryptographic protocols, AI-native applications, and anywhere resource correctness is non-negotiable.
 
 > **Philosophical Manifesto:** For the project's vision and design philosophy, see [docs/MANIFESTO.md](docs/MANIFESTO.md).
+> Play the Ark Snake Game (Coded in Ark - Demonstration of the Language's functionality) - https://merchantmoh-debug.github.io/ark-compiler/
 
 ---
 
