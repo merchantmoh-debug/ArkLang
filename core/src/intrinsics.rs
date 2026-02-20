@@ -861,63 +861,56 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
         println!("[Ark:AI] Contacting Gemini (Native Rust)...");
 
-        // Execute async logic within blocking context
-        // SAFETY: This blocks the current thread. Do not call this from within an existing
-        // Tokio runtime context (e.g., inside an async function running on a runtime)
-        // or it will panic. The VM is designed to run in a dedicated thread or process.
-        // Create a new runtime for this blocking operation
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            // Simple Retry Logic
-            for attempt in 0..3 {
-                match client
-                    .post(&url)
-                    .header("x-goog-api-key", &api_key)
-                    .json(&payload)
-                    .send()
-                {
-                    Ok(resp) => {
-                        if resp.status().is_success() {
-                            let json_resp = match resp.json::<serde_json::Value>() {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    println!("[Ark:AI] JSON Error: {}", e);
-                                    return Err(RuntimeError::NotExecutable);
-                                }
-                            };
-
-                            if let Some(text) =
-                                json_resp["candidates"][0]["content"]["parts"][0]["text"].as_str()
-                            {
-                                // Store in Cache
-                                if let Ok(mut guard) = cache.lock() {
-                                    if guard.len() > 1000 {
-                                        guard.clear(); // Simple eviction
-                                    }
-                                    guard.insert(prompt.clone(), text.to_string());
-                                }
-                                return Ok(Value::String(text.to_string()));
+        // Optimization: Direct Blocking Call (No Tokio Runtime Overhead)
+        // Simple Retry Logic
+        for attempt in 0..3 {
+            match client
+                .post(&url)
+                .header("x-goog-api-key", &api_key)
+                .json(&payload)
+                .send()
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        let json_resp = match resp.json::<serde_json::Value>() {
+                            Ok(v) => v,
+                            Err(e) => {
+                                println!("[Ark:AI] JSON Error: {}", e);
+                                return Err(RuntimeError::NotExecutable);
                             }
-                        } else if resp.status().as_u16() == 429 {
-                            println!("[Ark:AI] Rate limit (429). Retrying...");
-                            tokio::time::sleep(Duration::from_secs(2u64.pow(attempt))).await;
-                            continue;
-                        } else {
-                            println!("[Ark:AI] HTTP Error: {}", resp.status());
-                        }
-                    }
-                    Err(e) => println!("[Ark:AI] Network Error: {}", e),
-                }
-            }
+                        };
 
-            // Fallback Mock
-            println!("[Ark:AI] WARNING: API Failed. Using Fallback Mock.");
-            let start = "```python\n";
-            let code =
-                "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
-            let end = "```";
-            Ok(Value::String(format!("{}{}{}", start, code, end)))
-        })
+                        if let Some(text) =
+                            json_resp["candidates"][0]["content"]["parts"][0]["text"].as_str()
+                        {
+                            // Store in Cache
+                            if let Ok(mut guard) = cache.lock() {
+                                if guard.len() > 1000 {
+                                    guard.clear(); // Simple eviction
+                                }
+                                guard.insert(prompt.clone(), text.to_string());
+                            }
+                            return Ok(Value::String(text.to_string()));
+                        }
+                    } else if resp.status().as_u16() == 429 {
+                        println!("[Ark:AI] Rate limit (429). Retrying...");
+                        std::thread::sleep(Duration::from_secs(2u64.pow(attempt)));
+                        continue;
+                    } else {
+                        println!("[Ark:AI] HTTP Error: {}", resp.status());
+                    }
+                }
+                Err(e) => println!("[Ark:AI] Network Error: {}", e),
+            }
+        }
+
+        // Fallback Mock
+        println!("[Ark:AI] WARNING: API Failed. Using Fallback Mock.");
+        let start = "```python\n";
+        let code =
+            "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
+        let end = "```";
+        Ok(Value::String(format!("{}{}{}", start, code, end)))
     }
 }
 
@@ -985,9 +978,9 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
         if !allow_unsafe {
             // Allowed binaries (safe-ish subset)
+            // HARDENED: Removed python, node, cargo, rustc, git to prevent arbitrary code execution
             let whitelist = [
-                "ls", "grep", "cat", "echo", "date", "whoami", "clear", "python3", "python",
-                "cargo", "rustc", "node", "git",
+                "ls", "grep", "cat", "echo", "date", "whoami", "clear",
             ];
 
             // Check strictly against whitelist (exact match on binary name)
