@@ -309,6 +309,54 @@ function setupUI() {
         }
     });
 
+    // Sovereign Mode Toggle
+    const sovereignBtn = document.getElementById("sovereign-btn");
+    if (sovereignBtn) {
+        // Inject styles if not present
+        if (!document.getElementById("sovereign-style")) {
+            const style = document.createElement("style");
+            style.id = "sovereign-style";
+            style.textContent = `
+                body.sovereign-mode {
+                    --bg-color: #000000;
+                    --sidebar-bg: #0a0a0a;
+                    --card-bg: #0f0f0f;
+                    --text-primary: #00ff41;
+                    --text-secondary: #008f11;
+                    --accent-color: #00ff41;
+                    --border-color: #003b00;
+                    font-family: 'JetBrains Mono', monospace;
+                }
+                body.sovereign-mode .header-btn,
+                body.sovereign-mode .sidebar-item,
+                body.sovereign-mode .stat-card {
+                    border: 1px solid #003b00;
+                    box-shadow: 0 0 5px rgba(0, 255, 65, 0.2);
+                }
+                body.sovereign-mode .log-entry {
+                    color: #00ff41;
+                    text-shadow: 0 0 2px #00ff41;
+                }
+                body.sovereign-mode .logo span {
+                    color: #fff;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        sovereignBtn.addEventListener("click", () => {
+            document.body.classList.toggle("sovereign-mode");
+            const isActive = document.body.classList.contains("sovereign-mode");
+            if (isActive) {
+                logToConsole("Sovereign Mode Engaged. Matrix protocols active.", "success");
+                sovereignBtn.style.background = "rgba(0, 255, 65, 0.2)";
+            } else {
+                logToConsole("Sovereign Mode Disengaged.", "dim");
+                sovereignBtn.style.background = "transparent";
+            }
+        });
+    }
+
     // Font Size
     document.getElementById("font-inc").addEventListener("click", () => {
         currentFontSize += 2;

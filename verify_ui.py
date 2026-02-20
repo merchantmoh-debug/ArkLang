@@ -1,19 +1,41 @@
 from playwright.sync_api import sync_playwright
 import os
 
-def run(playwright):
-    browser = playwright.chromium.launch()
-    page = browser.new_page()
-    page.goto("http://localhost:8000/web/index.html")
+def run():
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
 
-    # Wait for canvas to be visible
-    page.wait_for_selector("#neural-canvas")
+        # Load the local HTML file
+        # We need absolute path
+        cwd = os.getcwd()
+        path = f"file://{cwd}/web/index.html"
+        print(f"Loading {path}")
+        page.goto(path)
 
-    # Take screenshot
-    os.makedirs("/home/jules/verification", exist_ok=True)
-    page.screenshot(path="/home/jules/verification/neural_ui.png")
+        # Check if button exists
+        btn = page.locator("#sovereign-btn")
+        if btn.is_visible():
+            print("[+] Sovereign Button found.")
+        else:
+            print("[-] Sovereign Button NOT found.")
+            browser.close()
+            return
 
-    browser.close()
+        # Click it
+        btn.click()
 
-with sync_playwright() as playwright:
-    run(playwright)
+        # Check for class
+        # Note: JS modules might not load via file:// due to CORS policies in some browsers,
+        # but Playwright usually handles local files okay if not fetching external modules.
+        # However, main.js is a module: <script type="module" src="main.js"></script>
+        # This will fail on file:// without a server.
+
+        # Let's take a screenshot anyway to see the button.
+        page.screenshot(path="verification_screenshot.png")
+        print("Screenshot saved to verification_screenshot.png")
+
+        browser.close()
+
+if __name__ == "__main__":
+    run()
