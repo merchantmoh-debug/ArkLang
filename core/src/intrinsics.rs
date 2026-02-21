@@ -169,6 +169,7 @@ impl IntrinsicRegistry {
                 Some(intrinsic_io_read_file_async)
             }
             "sys.extract_code" | "intrinsic_extract_code" => Some(intrinsic_extract_code),
+            "sys.resource.usage" | "intrinsic_resource_usage" => Some(intrinsic_resource_usage),
             // Networking Intrinsics
             "net.http.request" | "intrinsic_http_request" | "sys.net.http.request" => {
                 Some(intrinsic_http_request)
@@ -600,6 +601,14 @@ impl IntrinsicRegistry {
         scope.set(
             "sys.extract_code".to_string(),
             Value::NativeFunction(intrinsic_extract_code),
+        );
+        scope.set(
+            "sys.resource.usage".to_string(),
+            Value::NativeFunction(intrinsic_resource_usage),
+        );
+        scope.set(
+            "intrinsic_resource_usage".to_string(),
+            Value::NativeFunction(intrinsic_resource_usage),
         );
         /*
          */
@@ -2799,6 +2808,47 @@ pub fn intrinsic_extract_code(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     Ok(Value::List(blocks))
 }
+
+pub fn intrinsic_resource_usage(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if !args.is_empty() {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    // Get Memory Usage (RSS)
+    let memory = {
+        #[cfg(target_os = "linux")]
+        {
+            // read /proc/self/statm
+            if let Ok(content) = fs::read_to_string("/proc/self/statm") {
+                let parts: Vec<&str> = content.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    // RSS is the second value (in pages)
+                    if let Ok(pages) = parts[1].parse::<i64>() {
+                        // Assume 4KB pages
+                        pages * 4096
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            0
+        }
+    };
+
+    let mut map = HashMap::new();
+    map.insert("memory".to_string(), Value::Integer(memory));
+    map.insert("cpu".to_string(), Value::Integer(0)); // Placeholder
+
+    Ok(Value::Struct(map))
+}
+
 // ----------------------------------------------------------------------
 // NETWORKING INTRINSICS
 // ----------------------------------------------------------------------
@@ -4755,41 +4805,41 @@ mod tests {
             }
             _ => panic!("Expected String"),
         }
+    }
 
-        // Networking Tests
-        #[test]
-        fn test_socket_bind_close() {
-            // Bind to port 0 (ephemeral)
-            let args = vec![Value::Integer(0)];
-            let res = intrinsic_socket_bind(args).unwrap();
-            let id = match res {
-                Value::Integer(i) => i,
-                _ => panic!("Expected Integer ID"),
-            };
-            assert!(id > 0);
+    // Networking Tests
+    #[test]
+    fn test_socket_bind_close() {
+        // Bind to port 0 (ephemeral)
+        let args = vec![Value::Integer(0)];
+        let res = intrinsic_socket_bind(args).unwrap();
+        let id = match res {
+            Value::Integer(i) => i,
+            _ => panic!("Expected Integer ID"),
+        };
+        assert!(id > 0);
 
-            // Close it
-            let args_close = vec![Value::Integer(id)];
-            let res_close = intrinsic_socket_close(args_close).unwrap();
-            assert_eq!(res_close, Value::Boolean(true));
-        }
+        // Close it
+        let args_close = vec![Value::Integer(id)];
+        let res_close = intrinsic_socket_close(args_close).unwrap();
+        assert_eq!(res_close, Value::Boolean(true));
+    }
 
-        #[test]
-        fn test_close_nonexistent() {
-            let args_close = vec![Value::Integer(999999)];
-            let res_close = intrinsic_socket_close(args_close).unwrap();
-            assert_eq!(res_close, Value::Boolean(false));
-        }
+    #[test]
+    fn test_close_nonexistent() {
+        let args_close = vec![Value::Integer(999999)];
+        let res_close = intrinsic_socket_close(args_close).unwrap();
+        assert_eq!(res_close, Value::Boolean(false));
+    }
 
-        #[test]
-        fn test_http_request_invalid_url() {
-            let args = vec![
-                Value::String("GET".to_string()),
-                Value::String("http://invalid.url.local".to_string()),
-            ];
-            let res = intrinsic_http_request(args);
-            // Should return Error, not panic
-            assert!(res.is_err());
-        }
+    #[test]
+    fn test_http_request_invalid_url() {
+        let args = vec![
+            Value::String("GET".to_string()),
+            Value::String("http://invalid.url.local".to_string()),
+        ];
+        let res = intrinsic_http_request(args);
+        // Should return Error, not panic
+        assert!(res.is_err());
     }
 }
