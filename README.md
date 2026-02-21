@@ -355,7 +355,7 @@ python3 meta/ark.py run examples/snake.ark
 
 Dual Licensed: **AGPL v3** (Open Source) or **Commercial** (Sovereign Systems).
 
-**Patent Notice:** Protected by US Patent Application #63/935,467.
+**Patent Notice:** Protected by US Patent Application 
 
 ---
 
