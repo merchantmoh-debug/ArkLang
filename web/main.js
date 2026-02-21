@@ -309,6 +309,54 @@ function setupUI() {
         }
     });
 
+    // Sovereign Mode Toggle
+    const sovereignBtn = document.getElementById("sovereign-btn");
+    if (sovereignBtn) {
+        // Inject styles if not present
+        if (!document.getElementById("sovereign-style")) {
+            const style = document.createElement("style");
+            style.id = "sovereign-style";
+            style.textContent = `
+                body.sovereign-mode {
+                    --bg-color: #000000;
+                    --sidebar-bg: #0a0a0a;
+                    --card-bg: #0f0f0f;
+                    --text-primary: #00ff41;
+                    --text-secondary: #008f11;
+                    --accent-color: #00ff41;
+                    --border-color: #003b00;
+                    font-family: 'JetBrains Mono', monospace;
+                }
+                body.sovereign-mode .header-btn,
+                body.sovereign-mode .sidebar-item,
+                body.sovereign-mode .stat-card {
+                    border: 1px solid #003b00;
+                    box-shadow: 0 0 5px rgba(0, 255, 65, 0.2);
+                }
+                body.sovereign-mode .log-entry {
+                    color: #00ff41;
+                    text-shadow: 0 0 2px #00ff41;
+                }
+                body.sovereign-mode .logo span {
+                    color: #fff;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        sovereignBtn.addEventListener("click", () => {
+            document.body.classList.toggle("sovereign-mode");
+            const isActive = document.body.classList.contains("sovereign-mode");
+            if (isActive) {
+                logToConsole("Sovereign Mode Engaged. Matrix protocols active.", "success");
+                sovereignBtn.style.background = "rgba(0, 255, 65, 0.2)";
+            } else {
+                logToConsole("Sovereign Mode Disengaged.", "dim");
+                sovereignBtn.style.background = "transparent";
+            }
+        });
+    }
+
     // Font Size
     document.getElementById("font-inc").addEventListener("click", () => {
         currentFontSize += 2;
@@ -350,37 +398,57 @@ function initSystemMonitor() {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        for (let i = 0; i < w; i += 20) { ctx.moveTo(i, 0); ctx.lineTo(i, h); }
-        for (let j = 0; j < h; j += 20) { ctx.moveTo(0, j); ctx.lineTo(w, j); }
+        for (let i = 0; i < w; i += 40) { ctx.moveTo(i, 0); ctx.lineTo(i, h); }
+        for (let j = 0; j < h; j += 40) { ctx.moveTo(0, j); ctx.lineTo(w, j); }
         ctx.stroke();
 
-        // Draw CPU (Blue)
-        drawPath(cpuHistory, '#00d2ff', 2);
+        // Draw CPU (Cyan)
+        drawSmoothPath(cpuHistory, '#00d2ff', 2);
 
-        // Draw Neural (Green/Gold)
-        drawPath(neuralHistory, '#ffd700', 1.5);
+        // Draw Neural (Gold)
+        drawSmoothPath(neuralHistory, '#ffd700', 3, true);
     }
 
-    function drawPath(data, color, width) {
+    function drawSmoothPath(data, color, width, glow = false) {
         if (!ctx) return;
         ctx.beginPath();
         const w = canvas.width;
         const h = canvas.height;
         const step = w / (data.length - 1);
 
+        // Spline interpolation for smoothness
         data.forEach((val, i) => {
             const x = i * step;
             const y = h - (val / 100) * h;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                // Simple linear for now, but robust
+                ctx.lineTo(x, y);
+            }
         });
 
         ctx.strokeStyle = color;
         ctx.lineWidth = width;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 10;
+
+        if (glow) {
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 15;
+        } else {
+            ctx.shadowBlur = 0;
+        }
+
         ctx.stroke();
         ctx.shadowBlur = 0; // Reset
+
+        // Fill area (optional, for neural)
+        if (glow) {
+            ctx.lineTo(w, h);
+            ctx.lineTo(0, h);
+            ctx.closePath();
+            ctx.fillStyle = color + "11"; // Low opacity hex
+            ctx.fill();
+        }
     }
 
     async function updateStats() {
@@ -407,6 +475,37 @@ function initSystemMonitor() {
             if (pulse) {
                 const duration = Math.max(0.2, 2 - (stats.neural / 50));
                 pulse.style.animationDuration = `${duration}s`;
+            }
+
+            // Update System Health Indicator
+            const statusEl = document.querySelector('.status-left span');
+            if (statusEl) {
+                let health = "OPTIMAL";
+                let color = "#4caf50"; // Green
+
+                if (stats.cpu > 90 || stats.memory > 90) {
+                    health = "CRITICAL";
+                    color = "#f44336"; // Red
+                } else if (stats.cpu > 70 || stats.memory > 70) {
+                    health = "ELEVATED";
+                    color = "#ff9800"; // Orange
+                } else if (stats.neural > 80) {
+                    health = "HIGH RESONANCE";
+                    color = "#ffd700"; // Gold
+                }
+
+                statusEl.textContent = `SYSTEM STATUS: ${health}`;
+                statusEl.style.color = color;
+                statusEl.style.fontWeight = "bold";
+            }
+
+            // Update Sys Info if available
+            if (stats.sys_info) {
+                 const versionEl = document.querySelector('.status-right span:first-child');
+                 if (versionEl && !versionEl.dataset.updated) {
+                     versionEl.textContent = `${stats.sys_info.platform} ${stats.sys_info.version}`;
+                     versionEl.dataset.updated = "true";
+                 }
             }
 
         } catch (e) {

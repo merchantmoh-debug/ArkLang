@@ -214,8 +214,9 @@ fn link_wasi_fd_write(linker: &mut Linker<HostState>) -> Result<(), WasmRunError
                 let data = memory.data(&caller);
                 let mut total_written: u32 = 0;
 
-                for i in 0..iovs_len {
-                    let iov_offset = (iovs as usize) + (i as usize) * 8;
+                // Ark only uses iovs_len=1, so we handle the first iov directly
+                if iovs_len > 0 {
+                    let iov_offset = iovs as usize;
 
                     // Read buf_ptr and buf_len from iovec
                     if iov_offset + 8 > data.len() {
@@ -234,24 +235,10 @@ fn link_wasi_fd_write(linker: &mut Linker<HostState>) -> Result<(), WasmRunError
                     }
 
                     let bytes = &data[buf_ptr..buf_ptr + buf_len];
-                    // We need to collect bytes first, then modify state
                     let bytes_vec: Vec<u8> = bytes.to_vec();
                     total_written += buf_len as u32;
 
-                    // Drop the immutable borrow on memory data before mutating state
-                    let _ = data;
-
                     caller.data_mut().stdout_raw.extend_from_slice(&bytes_vec);
-
-                    // Re-borrow for next iteration
-                    let mem = match caller.get_export("memory") {
-                        Some(Extern::Memory(m)) => m,
-                        _ => return 8,
-                    };
-                    // Reassign data for the next loop iteration
-                    // This is safe because we're in a new scope
-                    let _ = mem; // placeholder - we'll re-read data at loop top
-                    break; // Ark only uses iovs_len=1, safe to break
                 }
 
                 // Write nwritten
@@ -381,10 +368,12 @@ fn link_wasi_stubs(linker: &mut Linker<HostState>) -> Result<(), WasmRunError> {
                     let argc_off = argc_ptr as usize;
                     let buf_off = argv_buf_size_ptr as usize;
                     if argc_off + 4 <= data.len() {
-                        data[argc_off..argc_off + 4].copy_from_slice(&0u32.to_le_bytes()); // 0 args
+                        data[argc_off..argc_off + 4].copy_from_slice(&0u32.to_le_bytes());
+                        // 0 args
                     }
                     if buf_off + 4 <= data.len() {
-                        data[buf_off..buf_off + 4].copy_from_slice(&0u32.to_le_bytes()); // 0 buf size
+                        data[buf_off..buf_off + 4].copy_from_slice(&0u32.to_le_bytes());
+                        // 0 buf size
                     }
                 }
                 0

@@ -1,6 +1,6 @@
 # The Ark Language — User Manual
 
-**Version:** Phase 79 | **Updated:** 2026-02-17
+**Version:** Phase 112 | **Updated:** 2026-02-19
 **License:** AGPL-3.0 | **Author:** Mohamad Al-Zawahreh (Sovereign Systems)
 
 > This manual teaches you everything you need to write real programs in Ark.
@@ -18,22 +18,33 @@
 5. [Operators](#5-operators)
 6. [Control Flow](#6-control-flow)
 7. [Functions](#7-functions)
-8. [Lists](#8-lists)
-9. [Strings](#9-strings)
-10. [Imports & Modules](#10-imports--modules)
-11. [Standard Library](#11-standard-library)
-12. [Intrinsics (Built-ins)](#12-intrinsics-built-ins)
-13. [File I/O](#13-file-io)
-14. [Networking](#14-networking)
-15. [Cryptography](#15-cryptography)
-16. [Blockchain](#16-blockchain)
-17. [AI Integration](#17-ai-integration)
-18. [Agent Framework](#18-agent-framework)
-19. [Error Handling](#19-error-handling)
-20. [Configuration & Security](#20-configuration--security)
-21. [Running Programs](#21-running-programs)
-22. [REPL](#22-repl)
-23. [FAQ](#23-faq)
+8. [Lambdas](#8-lambdas)
+9. [Structs](#9-structs)
+10. [Enums](#10-enums)
+11. [Pattern Matching](#11-pattern-matching)
+12. [Traits & Impl Blocks](#12-traits--impl-blocks)
+13. [Linear Types](#13-linear-types)
+14. [Lists](#14-lists)
+15. [Maps & Dictionaries](#15-maps--dictionaries)
+16. [Strings](#16-strings)
+17. [Imports & Modules](#17-imports--modules)
+18. [Standard Library](#18-standard-library)
+19. [Intrinsics (Built-ins)](#19-intrinsics-built-ins)
+20. [File I/O](#20-file-io)
+21. [Networking](#21-networking)
+22. [Cryptography](#22-cryptography)
+23. [Blockchain](#23-blockchain)
+24. [AI Integration](#24-ai-integration)
+25. [Agent Framework](#25-agent-framework)
+26. [Persistent Data Structures](#26-persistent-data-structures)
+27. [Error Handling](#27-error-handling)
+28. [Macros](#28-macros)
+29. [Configuration & Security](#29-configuration--security)
+30. [Running Programs](#30-running-programs)
+31. [REPL](#31-repl)
+32. [Debugger](#32-debugger)
+33. [WASM Compilation](#33-wasm-compilation)
+34. [FAQ](#34-faq)
 
 ---
 
@@ -42,7 +53,7 @@
 ### Prerequisites
 
 - **Rust 1.80+** — For the Rust VM core. [Install Rust](https://rustup.rs/)
-- **Python 3.11+** — For the bootstrap compiler and tooling.
+- **Python 3.8+** — For the bootstrap compiler and tooling (3.10+ recommended).
 - **Git** — To clone the repo.
 
 ### From Source
@@ -55,12 +66,17 @@ cd ark-compiler
 # Build the Rust VM
 cd core && cargo build --release && cd ..
 
-# Install Python deps
-pip install -r requirements.txt
+# Install Python deps (pick one)
+uv sync                         # ⚡ Recommended — fast, deterministic
+pip install -r requirements.txt  # Also works
 
 # Verify
 python meta/ark.py version
 ```
+
+> **Don't have uv?** Install it in one line:
+> - **macOS/Linux:** `curl -LsSf https://astral.sh/uv/install.sh | sh`
+> - **Windows:** `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 
 ### Docker
 
@@ -116,6 +132,8 @@ x := x + 1           // x is now 43
 
 ## 4. Data Types
 
+Ark has a 14-variant type system:
+
 | Type | Example | Notes |
 | --- | --- | --- |
 | Integer | `42`, `-7`, `0` | Arbitrary precision |
@@ -124,6 +142,14 @@ x := x + 1           // x is now 43
 | Boolean | `true`, `false` | Lowercase |
 | Null | `null` | Absence of value |
 | List | `[1, 2, 3]` | Heterogeneous, ordered |
+| Map | `{"key": "value"}` | Key-value pairs |
+| Struct | `{x: 1, y: 2}` | Named fields |
+| Function | `func(x) { x + 1 }` | First-class values |
+| Optional | `some(42)`, `none` | Nullable wrapper |
+| Unit | — | Void return type |
+| Any | — | Unconstrained type variable |
+| Enum | `Shape.Circle(5.0)` | Algebraic data type |
+| Trait | — | Interface/protocol type |
 
 ---
 
@@ -182,8 +208,6 @@ if temperature > 100 {
 
 ### While Loop
 
-`while` is the primary loop construct in Ark:
-
 ```ark
 i := 0
 while i < 10 {
@@ -192,19 +216,41 @@ while i < 10 {
 }
 ```
 
-### Break & Continue (via pattern)
+### For Loop
 
-You can use boolean flags to simulate break/continue:
+Iterate over lists, ranges, and strings:
 
 ```ark
-i := 0
-found := false
-while i < 100 && !found {
-    if i * i == 49 {
-        print("Found: " + str(i))
-        found := true
+// Over a list
+items := ["alpha", "beta", "gamma"]
+for item in items {
+    print(item)
+}
+
+// Over a range
+for i in range(0, 10) {
+    print(i)
+}
+
+// Over characters in a string
+for ch in "hello" {
+    print(ch)
+}
+```
+
+### Break & Continue
+
+`break` exits the loop. `continue` skips to the next iteration.
+
+```ark
+for i in range(0, 100) {
+    if i == 5 {
+        break   // stop at 5
     }
-    i := i + 1
+    if i % 2 == 0 {
+        continue  // skip even numbers
+    }
+    print(i)  // prints 1, 3
 }
 ```
 
@@ -262,9 +308,284 @@ func double(n) {
 print(apply(double, 5))  // 10
 ```
 
+### Return Type Annotations
+
+```ark
+func area(radius: Float) -> Float {
+    return 3.14159 * radius * radius
+}
+```
+
 ---
 
-## 8. Lists
+## 8. Lambdas
+
+Anonymous functions are written with `|args| { body }` syntax:
+
+```ark
+double := |x| { x * 2 }
+print(double(21))  // 42
+
+add := |a, b| { a + b }
+print(add(3, 7))   // 10
+```
+
+### Lambdas with Higher-Order Functions
+
+```ark
+numbers := [1, 2, 3, 4, 5]
+
+doubled := list.map(numbers, |x| { x * 2 })
+// [2, 4, 6, 8, 10]
+
+evens := list.filter(numbers, |x| { x % 2 == 0 })
+// [2, 4]
+
+sum := list.reduce(numbers, |acc, x| { acc + x }, 0)
+// 15
+```
+
+Lambdas are fully compiled to WASM with lambda-lifting — they are not interpreted.
+
+---
+
+## 9. Structs
+
+Named structures with typed fields:
+
+```ark
+struct Point {
+    x: Float,
+    y: Float
+}
+
+struct Person {
+    name: String,
+    age: Integer
+}
+```
+
+### Creating Struct Instances
+
+```ark
+let p := {x: 1.0, y: 2.0}
+
+let alice := {name: "Alice", age: 30}
+```
+
+### Field Access
+
+```ark
+print(p.x)        // 1.0
+print(alice.name)  // "Alice"
+```
+
+### Field Mutation
+
+```ark
+p.x := 5.0
+print(p.x)  // 5.0
+```
+
+---
+
+## 10. Enums
+
+Enums define algebraic data types — types with a fixed set of named variants, each of which can carry data.
+
+### Defining Enums
+
+```ark
+enum Color {
+    Red,
+    Green,
+    Blue
+}
+
+enum Shape {
+    Circle(Float),
+    Rectangle(Float, Float),
+    Point
+}
+
+enum Option {
+    Some(Any),
+    None
+}
+```
+
+### Creating Enum Values
+
+```ark
+let c := Color.Red
+let s := Shape.Circle(5.0)
+let rect := Shape.Rectangle(10.0, 20.0)
+let found := Option.Some(42)
+let missing := Option.None
+```
+
+### Using Enums with Match
+
+See [Pattern Matching](#11-pattern-matching) for destructuring enums.
+
+---
+
+## 11. Pattern Matching
+
+The `match` expression destructures values and selects a branch based on the pattern:
+
+### Matching Enum Variants
+
+```ark
+enum Shape {
+    Circle(Float),
+    Rectangle(Float, Float),
+    Point
+}
+
+func describe(s) {
+    match s {
+        Shape.Circle(r)       => print("Circle with radius: " + str(r))
+        Shape.Rectangle(w, h) => print("Rectangle: " + str(w) + " x " + str(h))
+        Shape.Point           => print("Just a point")
+    }
+}
+
+describe(Shape.Circle(5.0))
+// Circle with radius: 5.0
+
+describe(Shape.Rectangle(3.0, 4.0))
+// Rectangle: 3.0 x 4.0
+```
+
+### Match with Bindings
+
+Pattern variables bind to the destructured fields, which you can use in the branch body:
+
+```ark
+func area(s) {
+    match s {
+        Shape.Circle(r)       => return 3.14159 * r * r
+        Shape.Rectangle(w, h) => return w * h
+        Shape.Point           => return 0.0
+    }
+}
+
+print(area(Shape.Circle(5.0)))      // 78.53975
+print(area(Shape.Rectangle(3.0, 4.0)))  // 12.0
+```
+
+---
+
+## 12. Traits & Impl Blocks
+
+Traits define shared interfaces. Impl blocks provide concrete implementations.
+
+### Defining a Trait
+
+```ark
+trait Drawable {
+    func draw(self) -> Unit
+    func area(self) -> Float
+}
+
+trait Serializable {
+    func to_string(self) -> String
+}
+```
+
+### Implementing a Trait
+
+```ark
+impl Drawable for Circle {
+    func draw(self) -> Unit {
+        print("Drawing circle with radius " + str(self.radius))
+    }
+
+    func area(self) -> Float {
+        return 3.14159 * self.radius * self.radius
+    }
+}
+
+impl Serializable for Point {
+    func to_string(self) -> String {
+        return "(" + str(self.x) + ", " + str(self.y) + ")"
+    }
+}
+```
+
+### Impl Blocks Without Traits
+
+You can also add methods to a type without a trait:
+
+```ark
+impl Vector {
+    func magnitude(self) -> Float {
+        return math.sqrt(self.x * self.x + self.y * self.y)
+    }
+
+    func normalize(self) -> Vector {
+        let m := self.magnitude()
+        return {x: self.x / m, y: self.y / m}
+    }
+}
+```
+
+---
+
+## 13. Linear Types
+
+Ark's **linear type system** enforces resource safety at compile time. Resources annotated as `Linear` must be consumed exactly once — they cannot be copied, and they cannot be silently dropped.
+
+### Type Annotations
+
+| Annotation | Meaning |
+| --- | --- |
+| `Linear<T>` | Must be used exactly once. Cannot be copied or dropped. |
+| `Affine<T>` | Used at most once. Can be dropped, but cannot be copied. |
+| `Shared<T>` | Freely copyable and shareable. Default for most values. |
+
+### How It Works
+
+```ark
+func transfer(coin: Linear<Coin>, recipient: Address) {
+    // 'coin' is MOVED into this function.
+    // The caller can NEVER touch 'coin' again.
+    send(recipient, coin)
+}
+```
+
+If you try to use a moved value:
+
+```ark
+transfer(coin, alice)
+transfer(coin, bob)    // COMPILE ERROR: Use of moved value 'coin'
+```
+
+If you forget to use a linear value:
+
+```ark
+func broken(coin: Linear<Coin>) {
+    // COMPILE ERROR: Linear value 'coin' was never consumed
+}
+```
+
+### Why This Matters
+
+Linear types prevent entire classes of bugs:
+
+| Bug Class | How Linear Types Prevent It |
+| --- | --- |
+| Double-spend | Moved value cannot be used again |
+| Resource leak | Unconsumed linear value is a compile error |
+| Use-after-free | Moved out of scope = gone forever |
+| Data race | Single-owner semantics = no shared mutable state |
+
+The checker that enforces these rules is in `checker.rs` (1,413 LOC).
+
+---
+
+## 14. Lists
 
 Lists are ordered, heterogeneous collections.
 
@@ -304,7 +625,39 @@ length := list.length(items)        // 5
 
 ---
 
-## 9. Strings
+## 15. Maps & Dictionaries
+
+Maps are key-value collections:
+
+```ark
+config := {"host": "localhost", "port": 8080}
+
+// Access
+host := map.get(config, "host")
+
+// Mutation
+config := map.set(config, "port", 3000)
+
+// Check key
+if map.has(config, "host") {
+    print("Host is configured")
+}
+```
+
+### Map Intrinsics
+
+| Intrinsic | Description |
+| --- | --- |
+| `map.get(map, key)` | Get value by key |
+| `map.set(map, key, value)` | Set key-value pair |
+| `map.has(map, key)` | Check if key exists |
+| `map.keys(map)` | List all keys |
+| `map.values(map)` | List all values |
+| `map.remove(map, key)` | Remove a key |
+
+---
+
+## 16. Strings
 
 Strings are double-quoted and support concatenation with `+`.
 
@@ -341,7 +694,7 @@ f := float("3.14") // 3.14
 
 ---
 
-## 10. Imports & Modules
+## 17. Imports & Modules
 
 Use `import` to bring in standard library modules or other Ark files.
 
@@ -370,11 +723,17 @@ print(result)  // 12
 | `lib.wallet_lib` | `lib/wallet_lib.ark` |
 | `apps.server` | `apps/server.ark` |
 
+### Security
+
+- **Path traversal** (`../` or absolute paths) is blocked → `RuntimeError::UntrustedCode`
+- **Circular imports** are detected automatically via a `imported_files` HashSet
+- All imported code runs within the same sandbox and capability tokens
+
 ---
 
-## 11. Standard Library
+## 18. Standard Library
 
-Ark ships with 12 standard library modules. Import them with `import lib.std.<module>`.
+Ark ships with **13 standard library modules**. Import them with `import lib.std.<module>`.
 
 | Module | Purpose | Key Functions |
 | --- | --- | --- |
@@ -390,12 +749,13 @@ Ark ships with 12 standard library modules. Import them with `import lib.std.<mo
 | `result` | Error handling | `ok`, `err`, `is_ok`, `unwrap` |
 | `audio` | Audio playback | `play`, `stop` |
 | `ai` | AI/LLM access | `ask`, `Agent.new`, `Agent.chat`, `Swarm.run`, `pipeline` |
+| `persistent` | Immutable data | `PVec`, `PMap` (trie + HAMT, structural sharing) |
 
 > **Full module documentation:** [STDLIB_REFERENCE.md](STDLIB_REFERENCE.md)
 
 ---
 
-## 12. Intrinsics (Built-ins)
+## 19. Intrinsics (Built-ins)
 
 Intrinsics are functions compiled directly into the runtime — no imports needed.
 
@@ -428,7 +788,7 @@ sys.exec("ls")              // Execute shell command (requires ALLOW_DANGEROUS_L
 
 ---
 
-## 13. File I/O
+## 20. File I/O
 
 ```ark
 // Read a file
@@ -448,11 +808,11 @@ size := sys.fs.size("data.txt")
 print("File size: " + str(size) + " bytes")
 ```
 
-> **Note:** File system access requires the `fs_read` or `fs_write` capability. See [Configuration](#19-configuration--security).
+> **Note:** File system access requires the `fs_read` or `fs_write` capability. See [Configuration](#29-configuration--security).
 
 ---
 
-## 14. Networking
+## 21. Networking
 
 ```ark
 // HTTP GET
@@ -467,7 +827,7 @@ result := net.http.post("https://api.example.com/submit", "{\"key\": \"value\"}"
 
 ---
 
-## 15. Cryptography
+## 22. Cryptography
 
 Ark has 14 built-in cryptographic intrinsics — no external dependencies needed.
 
@@ -487,11 +847,25 @@ mac := sys.crypto.hmac("sha256", "key", "message")
 bytes := sys.crypto.random_bytes(32)
 ```
 
-> See the enriched `crypto` module for AES-GCM encryption, Secp256k1, PBKDF2, and Merkle root: [STDLIB_REFERENCE.md](STDLIB_REFERENCE.md#crypto)
+### Full Crypto Primitives
+
+| Primitive | Status |
+| --- | --- |
+| SHA-256 / SHA-512 | ✅ Hand-rolled in Rust |
+| Double SHA-256 | ✅ |
+| HMAC-SHA256 / HMAC-SHA512 | ✅ |
+| BIP-32 HD Key Derivation | ✅ `derive_key("m/44/0/0")` |
+| Ed25519 Sign/Verify | ✅ |
+| Wallet Address Generation | ✅ (`ark:` prefix, checksum) |
+| Constant-Time Comparison | ✅ |
+| Merkle Root Computation | ✅ |
+| Secure Random | ✅ (`/dev/urandom`) |
+
+> See also: [STDLIB_REFERENCE.md](STDLIB_REFERENCE.md#crypto)
 
 ---
 
-## 16. Blockchain
+## 23. Blockchain
 
 Ark can interact with Ethereum-compatible chains via JSON-RPC.
 
@@ -512,7 +886,7 @@ tx_hash := sys.chain.submit_tx(signed_payload)
 
 ---
 
-## 17. AI Integration
+## 24. AI Integration
 
 Ark has built-in LLM integration via the `sys.ai.*` namespace:
 
@@ -578,7 +952,7 @@ print(result)
 
 ---
 
-## 18. Agent Framework
+## 25. Agent Framework
 
 Ark ships with a **built-in multi-agent AI framework** (`src/`). This is not an add-on — it is a core part of the language: programs that can reason, write code, review their own output, and learn from execution.
 
@@ -741,7 +1115,62 @@ results = vmem.search_similar("sandbox setup", top_k=3)
 
 ---
 
-## 19. Error Handling
+## 26. Persistent Data Structures
+
+Ark includes **persistent immutable data structures** — collections that preserve all previous versions when modified (structural sharing).
+
+```ark
+import lib.std.persistent
+```
+
+### PVec (Persistent Vector)
+
+An immutable vector implemented as a 32-way trie:
+
+```ark
+let v := PVec.new()
+let v1 := v.push(1)
+let v2 := v1.push(2)
+let v3 := v2.push(3)
+
+print(v3.get(0))  // 1
+print(v3.len())   // 3
+
+// v, v1, v2 are all still valid and unchanged
+print(v.len())    // 0
+print(v1.len())   // 1
+```
+
+### PMap (Persistent Map)
+
+A hash-array mapped trie (HAMT):
+
+```ark
+let m := PMap.new()
+let m1 := m.set("name", "Ark")
+let m2 := m1.set("version", "112")
+
+print(m2.get("name"))     // "Ark"
+print(m2.has("version"))  // true
+
+// Original map is unchanged
+print(m.has("name"))      // false
+```
+
+### Why Persistent Data Structures?
+
+| Property | Benefit |
+| --- | --- |
+| Immutability | No shared mutable state = no data races |
+| Structural Sharing | Memory-efficient: O(log N) per update |
+| Versioning | Every modification creates a new version |
+| Thread Safety | Safe to share across concurrent contexts |
+
+The implementation is 832 LOC in `persistent.rs`.
+
+---
+
+## 27. Error Handling
 
 Use the `result` standard library module for structured error handling:
 
@@ -772,7 +1201,15 @@ assert(x > 0)  // Crashes with error if false
 
 ---
 
-## 20. Configuration & Security
+## 28. Macros
+
+Ark supports a hygienic macro system with `gensym`-based symbol generation (522 LOC in `macros.rs`).
+
+Macros allow you to extend the language's syntax and generate code at compile time. They are pattern-matched on the AST and expand before type checking.
+
+---
+
+## 29. Configuration & Security
 
 Ark uses environment variables for security controls. **By default, the runtime is sandboxed** — no network, no file writes, no shell access.
 
@@ -802,7 +1239,7 @@ ARK_CAPABILITIES=* ALLOW_DANGEROUS_LOCAL_EXECUTION=true python meta/ark.py run m
 
 ---
 
-## 21. Running Programs
+## 30. Running Programs
 
 ### Execute a Script
 
@@ -834,7 +1271,7 @@ python meta/gauntlet.py
 
 ---
 
-## 22. REPL
+## 31. REPL
 
 Launch the interactive Read-Eval-Print Loop:
 
@@ -854,16 +1291,60 @@ Hello from REPL!
 
 ---
 
-## 23. FAQ
+## 32. Debugger
+
+Ark includes an interactive step-through debugger (248 LOC):
+
+```bash
+python meta/ark.py debug <file.ark>
+```
+
+Features:
+
+- **Breakpoints** — Set on any line
+- **Step In / Step Over / Step Out** — Navigate through execution
+- **Variable Inspection** — See all variables in scope at any point
+- **Call Stack** — View the full function call chain
+
+---
+
+## 33. WASM Compilation
+
+Ark compiles directly to native WebAssembly (3,865 LOC in `wasm_codegen.rs`):
+
+```bash
+# Compile Ark source to .wasm
+python meta/ark.py build <file.ark>
+
+# Run the compiled .wasm via wasmtime
+python meta/ark.py run-wasm <file.wasm>
+```
+
+### WASM Features
+
+- **WASI-compatible** — runs on any WASI runtime (wasmtime, wasmer, etc.)
+- **Lambda lifting** — closures are compiled to static functions with captured variables
+- **Full type system** — all 14 Ark types are represented in WASM
+- **Browser support** — `wasm_bindgen` API for in-browser execution
+- **WIT generation** — Generate WebAssembly Interface Types from Ark code
+
+```bash
+# Generate WIT interface definition
+python meta/ark.py wit <file.ark>
+```
+
+---
+
+## 34. FAQ
 
 **Q: Why does Ark use both Rust and Python?**
 Python provides a flexible bootstrap compiler ("The Brain"), while Rust provides a secure, high-performance execution engine ("The Engine"). This dual-runtime lets us iterate fast without sacrificing production safety.
 
 **Q: Is Ark production-ready?**
-The Core VM is stable. The Standard Library is active and growing. Everything is tested via the Gauntlet test suite.
+The Core VM is stable. The Standard Library is active and growing. Everything is tested via the Gauntlet test suite. 286 tests pass across 10 CI jobs on 3 operating systems.
 
 **Q: How is Ark different from Python/JavaScript?**
-Ark is designed for *sovereign computing* — sandboxed by default, with built-in cryptography, blockchain access, and AI integration. It uses a capability-based security model instead of trusting all code unconditionally.
+Ark is designed for *sovereign computing* — sandboxed by default, with built-in cryptography, blockchain access, and AI integration. It uses a capability-based security model instead of trusting all code unconditionally. It has a linear type system that prevents resource leaks at compile time, and enums/traits/pattern matching for type-safe domain modeling.
 
 **Q: What happens if my code loops forever?**
 The `ARK_EXEC_TIMEOUT` watchdog terminates the process after 5 seconds (configurable).
@@ -872,7 +1353,13 @@ The `ARK_EXEC_TIMEOUT` watchdog terminates the process after 5 seconds (configur
 Yes. See `apps/server.ark` for a working HTTP server example.
 
 **Q: Can I build smart contracts?**
-Ark has chain intrinsics for interacting with Ethereum-compatible blockchains. See [Blockchain](#16-blockchain).
+Ark has chain intrinsics for interacting with Ethereum-compatible blockchains. See [Blockchain](#23-blockchain).
+
+**Q: What are the compilation targets?**
+Three: (1) Bytecode VM (fastest iteration), (2) Native WASM (production deployment), (3) Tree-walker interpreter (testing).
+
+**Q: Does Ark have enums and traits like Rust?**
+Yes. Enums with variant fields, traits with method signatures, and `impl Trait for Type` blocks are all implemented across all compiler backends. See [Enums](#10-enums), [Traits](#12-traits--impl-blocks).
 
 ---
 

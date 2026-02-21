@@ -138,6 +138,18 @@ pub fn format_value(val: &Value) -> String {
         Value::PMap(pm) => format!("{}", pm),
         Value::LinearObject { id, .. } => format!("<linear {}>", id),
         Value::Return(val) => format!("return({})", format_value(val)),
+        Value::EnumValue {
+            enum_name,
+            variant,
+            fields,
+        } => {
+            if fields.is_empty() {
+                format!("{}::{}", enum_name, variant)
+            } else {
+                let field_strs: Vec<String> = fields.iter().map(format_value).collect();
+                format!("{}::{}({})", enum_name, variant, field_strs.join(", "))
+            }
+        }
     }
 }
 

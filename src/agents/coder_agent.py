@@ -117,10 +117,22 @@ class CoderAgent(BaseAgent):
     def run_command(self, command: str) -> str:
         """Run a shell command in the project root."""
         try:
-            # Security check: simplistic, but prevents some obvious issues
-            # In production, this should be much stricter
-            if "rm -rf /" in command:
-                return "Error: Command blocked for security."
+            # Security check: detect shell metacharacters and dangerous patterns
+            # Block command chaining, redirection, and subshells
+            # metacharacters to block: ; & | ` $ > <
+            forbidden_chars = [';', '&', '|', '`', '$', '>', '<']
+            for char in forbidden_chars:
+                if char in command:
+                    return f"Error: Command blocked for security. Shell metacharacter '{char}' detected."
+
+            # Normalize command for dangerous pattern matching
+            normalized_command = " ".join(command.split()).lower()
+
+            # Block dangerous commands like rm -rf on absolute paths or root
+            if "rm -rf" in normalized_command:
+                # If rm -rf is used with / anywhere, block it
+                if "/" in normalized_command:
+                    return "Error: Command blocked for security. Dangerous 'rm -rf' detected."
 
             result = subprocess.run(
                 command,

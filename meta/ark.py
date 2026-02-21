@@ -11,6 +11,14 @@ All logic lives in:
 import sys
 import os
 
+# ─── Version Gate ─────────────────────────────────────────────────────────────
+# Guard against old Python. The core works on 3.8+, but 3.10+ is recommended
+# for dataclass(slots=True) performance.
+if sys.version_info < (3, 8):
+    print(f"Error: Ark requires Python 3.8 or newer (you have {sys.version}).")
+    print("Install Python 3.10+ from https://python.org or use pyenv.")
+    sys.exit(1)
+
 # --- Re-export everything for backward compatibility ---
 # External consumers (gauntlet.py, compile.py, tests) can still do:
 #   from ark import ArkValue, Scope, INTRINSICS, eval_node, etc.

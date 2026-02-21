@@ -55,7 +55,9 @@ pub enum TypeError {
     UnknownTrait(String),
     #[error("Return type mismatch: declared {expected}, got {got}")]
     ReturnMismatch { expected: String, got: String },
-    #[error("Argument type mismatch for '{func}' at index {index}: expected {expected}, got {got}")]
+    #[error(
+        "Argument type mismatch for '{func}' at index {index}: expected {expected}, got {got}"
+    )]
     ArgMismatch {
         func: String,
         index: usize,
@@ -1293,12 +1295,10 @@ mod tests {
         let mut checker = LinearChecker::new();
         checker.check_function(&func).unwrap();
 
-        assert!(
-            checker
-                .warnings
-                .iter()
-                .any(|w| w.contains("Unused variable: x"))
-        );
+        assert!(checker
+            .warnings
+            .iter()
+            .any(|w| w.contains("Unused variable: x")));
     }
 
     #[test]
@@ -1319,12 +1319,10 @@ mod tests {
         let mut checker = LinearChecker::new();
         checker.check_function(&func).unwrap();
 
-        assert!(
-            checker
-                .warnings
-                .iter()
-                .any(|w| w.contains("Unreachable code detected"))
-        );
+        assert!(checker
+            .warnings
+            .iter()
+            .any(|w| w.contains("Unreachable code detected")));
     }
 
     #[test]
@@ -1353,12 +1351,10 @@ mod tests {
         let mut checker = LinearChecker::new();
         checker.check_expression(&expr).unwrap();
 
-        assert!(
-            checker
-                .warnings
-                .iter()
-                .any(|w| w.contains("Argument type mismatch"))
-        );
+        assert!(checker
+            .warnings
+            .iter()
+            .any(|w| w.contains("Argument type mismatch")));
     }
 
     #[test]
@@ -1378,7 +1374,7 @@ mod tests {
                 },
                 EnumVariantDef {
                     name: "Blue".to_string(),
-                    fields: vec!["intensity".to_string()],
+                    fields: vec![ArkType::Integer],
                 },
             ],
         };
@@ -1430,7 +1426,7 @@ mod tests {
             name: "Shape".to_string(),
             variants: vec![EnumVariantDef {
                 name: "Circle".to_string(),
-                fields: vec!["radius".to_string()],
+                fields: vec![ArkType::Float],
             }],
         };
         checker.register_enum(&decl);
@@ -1462,7 +1458,7 @@ mod tests {
                 variants: vec![
                     EnumVariantDef {
                         name: "Some".to_string(),
-                        fields: vec!["value".to_string()],
+                        fields: vec![ArkType::Any],
                     },
                     EnumVariantDef {
                         name: "None".to_string(),
@@ -1502,8 +1498,8 @@ mod tests {
             name: "Drawable".to_string(),
             methods: vec![TraitMethodSig {
                 name: "draw".to_string(),
-                params: vec![("self".to_string(), ArkType::Shared("Self".to_string()))],
-                return_type: ArkType::Shared("Unit".to_string()),
+                inputs: vec![("self".to_string(), ArkType::Shared("Self".to_string()))],
+                output: ArkType::Unit,
             }],
         };
         checker.register_trait(&decl);

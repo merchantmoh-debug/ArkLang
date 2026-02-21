@@ -169,6 +169,7 @@ impl IntrinsicRegistry {
                 Some(intrinsic_io_read_file_async)
             }
             "sys.extract_code" | "intrinsic_extract_code" => Some(intrinsic_extract_code),
+            "sys.resource.usage" | "intrinsic_resource_usage" => Some(intrinsic_resource_usage),
             // Networking Intrinsics
             "net.http.request" | "intrinsic_http_request" | "sys.net.http.request" => {
                 Some(intrinsic_http_request)
@@ -212,6 +213,7 @@ impl IntrinsicRegistry {
             "sys.html_escape" | "intrinsic_html_escape" => Some(intrinsic_html_escape),
             "sys.z3.verify" | "intrinsic_z3_verify" => Some(intrinsic_z3_verify),
             "sys.vm.source" | "intrinsic_vm_source" => Some(intrinsic_vm_source),
+            "sys.info" | "intrinsic_sys_info" => Some(intrinsic_sys_info),
             "math.Tensor" | "intrinsic_math_tensor" => Some(intrinsic_math_tensor),
             "math.matmul" | "intrinsic_math_matmul" => Some(intrinsic_math_matmul),
             "math.transpose" | "intrinsic_math_transpose" => Some(intrinsic_math_transpose),
@@ -600,6 +602,14 @@ impl IntrinsicRegistry {
             "sys.extract_code".to_string(),
             Value::NativeFunction(intrinsic_extract_code),
         );
+        scope.set(
+            "sys.resource.usage".to_string(),
+            Value::NativeFunction(intrinsic_resource_usage),
+        );
+        scope.set(
+            "intrinsic_resource_usage".to_string(),
+            Value::NativeFunction(intrinsic_resource_usage),
+        );
         /*
          */
 
@@ -668,6 +678,10 @@ impl IntrinsicRegistry {
         scope.set(
             "sys.vm.source".to_string(),
             Value::NativeFunction(intrinsic_vm_source),
+        );
+        scope.set(
+            "sys.info".to_string(),
+            Value::NativeFunction(intrinsic_sys_info),
         );
         scope.set(
             "math.Tensor".to_string(),
@@ -777,7 +791,10 @@ fn check_path_security(path: &str, is_write: bool) -> Result<(), RuntimeError> {
 
                 for prefix in protected_prefixes {
                     if rel_str.starts_with(prefix) {
-                        println!("[Ark:FS] Security Violation: Write to protected directory '{}' denied.", prefix);
+                        println!(
+                            "[Ark:FS] Security Violation: Write to protected directory '{}' denied.",
+                            prefix
+                        );
                         return Err(RuntimeError::NotExecutable);
                     }
                 }
@@ -853,63 +870,56 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
         println!("[Ark:AI] Contacting Gemini (Native Rust)...");
 
-        // Execute async logic within blocking context
-        // SAFETY: This blocks the current thread. Do not call this from within an existing
-        // Tokio runtime context (e.g., inside an async function running on a runtime)
-        // or it will panic. The VM is designed to run in a dedicated thread or process.
-        // Create a new runtime for this blocking operation
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            // Simple Retry Logic
-            for attempt in 0..3 {
-                match client
-                    .post(&url)
-                    .header("x-goog-api-key", &api_key)
-                    .json(&payload)
-                    .send()
-                {
-                    Ok(resp) => {
-                        if resp.status().is_success() {
-                            let json_resp = match resp.json::<serde_json::Value>() {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    println!("[Ark:AI] JSON Error: {}", e);
-                                    return Err(RuntimeError::NotExecutable);
-                                }
-                            };
-
-                            if let Some(text) =
-                                json_resp["candidates"][0]["content"]["parts"][0]["text"].as_str()
-                            {
-                                // Store in Cache
-                                if let Ok(mut guard) = cache.lock() {
-                                    if guard.len() > 1000 {
-                                        guard.clear(); // Simple eviction
-                                    }
-                                    guard.insert(prompt.clone(), text.to_string());
-                                }
-                                return Ok(Value::String(text.to_string()));
+        // Optimization: Direct Blocking Call (No Tokio Runtime Overhead)
+        // Simple Retry Logic
+        for attempt in 0..3 {
+            match client
+                .post(&url)
+                .header("x-goog-api-key", &api_key)
+                .json(&payload)
+                .send()
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        let json_resp = match resp.json::<serde_json::Value>() {
+                            Ok(v) => v,
+                            Err(e) => {
+                                println!("[Ark:AI] JSON Error: {}", e);
+                                return Err(RuntimeError::NotExecutable);
                             }
-                        } else if resp.status().as_u16() == 429 {
-                            println!("[Ark:AI] Rate limit (429). Retrying...");
-                            tokio::time::sleep(Duration::from_secs(2u64.pow(attempt))).await;
-                            continue;
-                        } else {
-                            println!("[Ark:AI] HTTP Error: {}", resp.status());
-                        }
-                    }
-                    Err(e) => println!("[Ark:AI] Network Error: {}", e),
-                }
-            }
+                        };
 
-            // Fallback Mock
-            println!("[Ark:AI] WARNING: API Failed. Using Fallback Mock.");
-            let start = "```python\n";
-            let code =
-                "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
-            let end = "```";
-            Ok(Value::String(format!("{}{}{}", start, code, end)))
-        })
+                        if let Some(text) =
+                            json_resp["candidates"][0]["content"]["parts"][0]["text"].as_str()
+                        {
+                            // Store in Cache
+                            if let Ok(mut guard) = cache.lock() {
+                                if guard.len() > 1000 {
+                                    guard.clear(); // Simple eviction
+                                }
+                                guard.insert(prompt.clone(), text.to_string());
+                            }
+                            return Ok(Value::String(text.to_string()));
+                        }
+                    } else if resp.status().as_u16() == 429 {
+                        println!("[Ark:AI] Rate limit (429). Retrying...");
+                        std::thread::sleep(Duration::from_secs(2u64.pow(attempt)));
+                        continue;
+                    } else {
+                        println!("[Ark:AI] HTTP Error: {}", resp.status());
+                    }
+                }
+                Err(e) => println!("[Ark:AI] Network Error: {}", e),
+            }
+        }
+
+        // Fallback Mock
+        println!("[Ark:AI] WARNING: API Failed. Using Fallback Mock.");
+        let start = "```python\n";
+        let code =
+            "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
+        let end = "```";
+        Ok(Value::String(format!("{}{}{}", start, code, end)))
     }
 }
 
@@ -977,10 +987,8 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
         if !allow_unsafe {
             // Allowed binaries (safe-ish subset)
-            let whitelist = [
-                "ls", "grep", "cat", "echo", "date", "whoami", "clear", "python3", "python",
-                "cargo", "rustc", "node", "git",
-            ];
+            // HARDENED: Removed python, node, cargo, rustc, git to prevent arbitrary code execution
+            let whitelist = ["ls", "grep", "cat", "echo", "date", "whoami", "clear"];
 
             // Check strictly against whitelist (exact match on binary name)
             // If program is a path (e.g. /bin/ls), extract file_name.
@@ -1330,6 +1338,24 @@ fn print_value(v: &Value) {
         Value::PVec(pv) => print!("{}", pv),
         Value::PMap(pm) => print!("{}", pm),
         Value::Return(val) => print_value(val),
+        Value::EnumValue {
+            enum_name,
+            variant,
+            fields,
+        } => {
+            if fields.is_empty() {
+                print!("{}::{}", enum_name, variant);
+            } else {
+                print!("{}::{}(", enum_name, variant);
+                for (i, field) in fields.iter().enumerate() {
+                    if i > 0 {
+                        print!(", ");
+                    }
+                    print_value(field);
+                }
+                print!(")");
+            }
+        }
     }
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -2782,6 +2808,47 @@ pub fn intrinsic_extract_code(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     Ok(Value::List(blocks))
 }
+
+pub fn intrinsic_resource_usage(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if !args.is_empty() {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    // Get Memory Usage (RSS)
+    let memory = {
+        #[cfg(target_os = "linux")]
+        {
+            // read /proc/self/statm
+            if let Ok(content) = fs::read_to_string("/proc/self/statm") {
+                let parts: Vec<&str> = content.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    // RSS is the second value (in pages)
+                    if let Ok(pages) = parts[1].parse::<i64>() {
+                        // Assume 4KB pages
+                        pages * 4096
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            0
+        }
+    };
+
+    let mut map = HashMap::new();
+    map.insert("memory".to_string(), Value::Integer(memory));
+    map.insert("cpu".to_string(), Value::Integer(0)); // Placeholder
+
+    Ok(Value::Struct(map))
+}
+
 // ----------------------------------------------------------------------
 // NETWORKING INTRINSICS
 // ----------------------------------------------------------------------
@@ -3658,6 +3725,32 @@ fn intrinsic_vm_source(args: Vec<Value>) -> Result<Value, RuntimeError> {
         Ok(contents) => Ok(Value::String(contents)),
         Err(e) => Err(RuntimeError::ResourceError(format!("Source Error: {}", e))),
     }
+}
+
+/// sys.info() → Struct
+/// Returns system information (OS, Arch, Version).
+fn intrinsic_sys_info(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if !args.is_empty() {
+        return Err(RuntimeError::InvalidOperation(
+            "sys.info expects no arguments".into(),
+        ));
+    }
+    let mut info = HashMap::new();
+    info.insert(
+        "os".to_string(),
+        Value::String(std::env::consts::OS.to_string()),
+    );
+    info.insert(
+        "arch".to_string(),
+        Value::String(std::env::consts::ARCH.to_string()),
+    );
+    info.insert(
+        "version".to_string(),
+        Value::String("v112.0 (Prime)".to_string()),
+    );
+    info.insert("status".to_string(), Value::String("Sovereign".to_string()));
+
+    Ok(Value::Struct(info))
 }
 
 // --- Tensor Math Helpers ---
@@ -4712,41 +4805,41 @@ mod tests {
             }
             _ => panic!("Expected String"),
         }
+    }
 
-        // Networking Tests
-        #[test]
-        fn test_socket_bind_close() {
-            // Bind to port 0 (ephemeral)
-            let args = vec![Value::Integer(0)];
-            let res = intrinsic_socket_bind(args).unwrap();
-            let id = match res {
-                Value::Integer(i) => i,
-                _ => panic!("Expected Integer ID"),
-            };
-            assert!(id > 0);
+    // Networking Tests
+    #[test]
+    fn test_socket_bind_close() {
+        // Bind to port 0 (ephemeral)
+        let args = vec![Value::Integer(0)];
+        let res = intrinsic_socket_bind(args).unwrap();
+        let id = match res {
+            Value::Integer(i) => i,
+            _ => panic!("Expected Integer ID"),
+        };
+        assert!(id > 0);
 
-            // Close it
-            let args_close = vec![Value::Integer(id)];
-            let res_close = intrinsic_socket_close(args_close).unwrap();
-            assert_eq!(res_close, Value::Boolean(true));
-        }
+        // Close it
+        let args_close = vec![Value::Integer(id)];
+        let res_close = intrinsic_socket_close(args_close).unwrap();
+        assert_eq!(res_close, Value::Boolean(true));
+    }
 
-        #[test]
-        fn test_close_nonexistent() {
-            let args_close = vec![Value::Integer(999999)];
-            let res_close = intrinsic_socket_close(args_close).unwrap();
-            assert_eq!(res_close, Value::Boolean(false));
-        }
+    #[test]
+    fn test_close_nonexistent() {
+        let args_close = vec![Value::Integer(999999)];
+        let res_close = intrinsic_socket_close(args_close).unwrap();
+        assert_eq!(res_close, Value::Boolean(false));
+    }
 
-        #[test]
-        fn test_http_request_invalid_url() {
-            let args = vec![
-                Value::String("GET".to_string()),
-                Value::String("http://invalid.url.local".to_string()),
-            ];
-            let res = intrinsic_http_request(args);
-            // Should return Error, not panic
-            assert!(res.is_err());
-        }
+    #[test]
+    fn test_http_request_invalid_url() {
+        let args = vec![
+            Value::String("GET".to_string()),
+            Value::String("http://invalid.url.local".to_string()),
+        ];
+        let res = intrinsic_http_request(args);
+        // Should return Error, not panic
+        assert!(res.is_err());
     }
 }

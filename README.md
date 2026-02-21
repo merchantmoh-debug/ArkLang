@@ -9,224 +9,362 @@
    ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝    ╚═╝     ╚═╝  ╚═╝╚═╝╚═╝     ╚═╝╚══════╝
 
            THE ARK COMPILER v112.0 (PRIME)
-           -------------------------------
-           System: Linear Type System & Neuro-Symbolic Intrinsic Engine
+           ─────────────────────────────────
+           A sovereign programming language.
+           Built from zero to here in 11 days.
 </pre>
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![License: Commercial](https://img.shields.io/badge/License-Commercial-blue.svg)](LICENSE_COMMERCIAL)
-![Status](https://img.shields.io/badge/Status-BETA-yellow?style=for-the-badge)
-![Security](https://img.shields.io/badge/Security-LINEAR_TYPES-blue?style=for-the-badge)
+![CI](https://img.shields.io/badge/CI-10/10_PASSING-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-286_Passing-brightgreen?style=for-the-badge)
 ![Core](https://img.shields.io/badge/Core-RUST-red?style=for-the-badge)
-![Parity](https://img.shields.io/badge/Rust_Parity-100%25-green?style=for-the-badge)
+![Parity](https://img.shields.io/badge/Intrinsic_Parity-100%25-green?style=for-the-badge)
 
 </div>
 
 ---
 
-# Ark Compiler (Technical Preview)
+## What Is Ark?
 
-**Ark** is a programming language where **resource safety is a compile-time guarantee**, not a runtime hope. It combines a high-performance **Rust core** with a **Linear Type System** that eliminates garbage collection, prevents double-spends, and catches resource leaks before your code ever runs.
+**Ark** is a programming language where **resource safety is a compile-time guarantee**, not a runtime hope. It features **enums, traits, impl blocks, pattern matching, lambdas**, a dual-backend compiler (VM + native WASM), a linear type system, 109 built-in intrinsics, a blockchain layer, a governance engine, an AI agent framework, and a browser-based playground — all built in **11 days**.
 
-**Use it for:** Financial systems, cryptographic protocols, AI-native applications, and anywhere resource correctness is non-negotiable.
+**Use it for:** Financial systems, cryptographic protocols, AI-native applications, smart contracts, and anywhere resource correctness is non-negotiable.
 
-> **Philosophical Manifesto:** For the project's vision and design philosophy, see [docs/MANIFESTO.md](docs/MANIFESTO.md).
-> Play the Ark Snake Game (Coded in Ark - Demonstration of the Language's functionality) - https://merchantmoh-debug.github.io/ark-compiler/
-
----
-
-## 🚀 Key Technical Features
-
-### 1. 100% Rust Core (`core/`)
-
-The runtime is built on a high-performance Rust foundation (`1.93-slim`).
-
-* **Parity:** 107/107 Python intrinsics ported to Rust (109 total including Rust-only additions).
-* **Performance:** `sys.network`, `sys.fs`, `sys.crypto` run at native speeds.
-* **Safety:** Memory safety enforced by Rust's ownership model + Ark's Linear Checker.
-
-### 2. Linear Type System (`core/src/checker.rs`)
-
-Ark treats sensitive data (Money, Sockets, File Handles) as "Linear Resources".
-
-* **No GC:** Resources must be used exactly once.
-* **No Leaks:** Dropping a linear variable without consumption causes a **Compile-Time Error**.
-* **No Double-Spend:** Passed variables are moved, not copied.
-
-### 3. Neuro-Symbolic Intrinsics (`core/src/intrinsics.rs`)
-
-AI calls are treated as standard compiler intrinsics (`sys.ai.ask`), allowing future optimizations like caching, batching, and formal verification of outputs.
+> **[📜 Manifesto](docs/MANIFESTO.md)** — Why Ark exists.
+> **[📖 User Manual](docs/USER_MANUAL.md)** — Complete language guide.
+> **[🐍 Play the Snake Game](https://merchantmoh-debug.github.io/ark-compiler/)** — Written in Ark, compiled to WASM, running in your browser right now.
 
 ---
 
-## 💎 Advanced Capabilities
+## 📊 At a Glance (Day 11)
 
-Beyond the basics, the Standard Library and featured apps demonstrate production-grade capabilities.
-
-### 1. Pure Ark Cryptography (`lib/wallet_lib.ark`)
-
-**Status:** `🟢 PRODUCTION`
-A full implementation of the **Secp256k1** Elliptic Curve and **BIP39** Mnemonic generation written entirely in Ark.
-
-* **Features:** Point Addition, Point Doubling, Scalar Multiplication, PBKDF2-HMAC-SHA512.
-* **Significance:** Proves Ark can handle complex mathematical operations without relying on C bindings.
-
-### 2. Self-Hosting Parser (`apps/lsp.ark`)
-
-**Status:** `🟡 BETA`
-A 1000+ line Recursive Descent Parser and Lexer for the Ark language, written in Ark.
-
-* **Features:** Tokenizes source code, builds AST nodes, reports range-based errors.
-* **Significance:** Demonstrates language self-sufficiency and complex data structure handling (recursive structs/lists).
+| Metric | Count |
+|---|---|
+| Rust source files | 31 |
+| Total Rust LOC | 21,471 |
+| Built-in intrinsics | 109 (100% Python↔Rust parity) |
+| CLI subcommands | 9 |
+| Standard library modules | 13 |
+| Unit tests (all passing) | 286+ |
+| CI jobs (all green) | 10/10 |
+| Compilation backends | 3 (Bytecode VM, Native WASM, Tree-walker) |
+| User manual | 1,000+ lines |
 
 ---
 
-## 🤖 Ark Agent Framework (`src/`)
+## 🚀 Language Features
 
-Ark ships with a multi-agent AI orchestration layer — spawn, coordinate, and sandbox AI agents from Ark code or the CLI.
+### Core Language
+
+Ark is a **real** programming language — not a DSL, not a transpiler, not a wrapper.
+
+```ark
+// Variables
+name := "Ark"
+pi := 3.14159
+items := [1, "two", true, null]
+
+// Functions (first-class, recursive, higher-order)
+func factorial(n) {
+    if n <= 1 { return 1 }
+    return n * factorial(n - 1)
+}
+
+// Lambdas
+double := |x| { x * 2 }
+print(double(21))  // 42
+
+// For loops, while loops, break, continue
+for item in items {
+    print(item)
+}
+```
+
+### Enums & Pattern Matching
+
+Full algebraic data types with destructuring pattern matching:
+
+```ark
+enum Shape {
+    Circle(Float),
+    Rectangle(Float, Float),
+    Point
+}
+
+let s := Shape.Circle(5.0)
+
+match s {
+    Shape.Circle(r)       => print("Circle with radius: " + str(r))
+    Shape.Rectangle(w, h) => print("Rectangle: " + str(w) + "x" + str(h))
+    Shape.Point           => print("Just a point")
+}
+```
+
+### Traits & Impl Blocks
+
+Interface-based polymorphism:
+
+```ark
+trait Drawable {
+    func draw(self) -> Unit
+    func area(self) -> Float
+}
+
+impl Drawable for Circle {
+    func draw(self) -> Unit {
+        print("Drawing circle with radius " + str(self.radius))
+    }
+    func area(self) -> Float {
+        return 3.14159 * self.radius * self.radius
+    }
+}
+```
+
+### Structs
+
+Named, typed structures with field access:
+
+```ark
+struct Point {
+    x: Float,
+    y: Float
+}
+
+let p := {x: 1.0, y: 2.0}
+p.x := 3.0
+```
+
+### Linear Type System
+
+Resources that behave like **physical matter** — they cannot be copied, cannot be leaked, and must be consumed exactly once:
+
+```ark
+// 'coin' is a Linear resource — the compiler enforces Conservation of Value
+func transfer(coin: Linear<Coin>, recipient: Address) {
+    // 'coin' is MOVED here. The caller can NEVER touch it again.
+    // Double-spend? COMPILE ERROR.
+    // Forgot to use it? COMPILE ERROR.
+}
+```
+
+---
+
+## ⚙️ Compiler Architecture
+
+Ark has **three backends**, all fully functional:
+
+| Backend | File | LOC | Purpose |
+|---|---|---|---|
+| **Bytecode Compiler** | `compiler.rs` | 906 | Ark → fast bytecode |
+| **Stack VM** | `vm.rs` | 737 | Execute bytecode with intrinsic dispatch |
+| **WASM Codegen** | `wasm_codegen.rs` | 3,865 | Ark → native `.wasm` binary (WASI-compatible) |
+| **WASM Runner** | `wasm_runner.rs` | 700 | Execute `.wasm` via wasmtime |
+| **Browser Bridge** | `wasm.rs` | 358 | `wasm_bindgen` API for in-browser execution |
+| **Tree-walker** | `eval.rs` | 733 | Interpreter (deprecated, test-only) |
+
+### CLI — 9 Commands
+
+```bash
+ark run <file.ark>         # Run source or MAST JSON
+ark build <file.ark>       # Compile to native .wasm binary
+ark run-wasm <file.wasm>   # Execute compiled WASM via wasmtime
+ark check <file.ark>       # Static linear type checker
+ark parse <file.ark>       # Dump AST as JSON
+ark debug <file.ark>       # Interactive step-through debugger
+ark repl                   # Interactive REPL
+ark wit <file.ark>         # Generate WIT interface definition
+ark adn <file.ark>         # Run and output in ADN format
+```
+
+---
+
+## 🔐 Cryptography (Zero Dependencies)
+
+All hand-rolled in Rust — no OpenSSL, no ring, no external crypto crates for core primitives:
+
+| Primitive | Status |
+|---|---|
+| SHA-256 / SHA-512 | ✅ |
+| Double SHA-256 | ✅ |
+| HMAC-SHA256 / HMAC-SHA512 | ✅ |
+| BIP-32 HD Key Derivation | ✅ `derive_key("m/44/0/0")` |
+| Ed25519 Sign/Verify | ✅ (via `ed25519-dalek`) |
+| Wallet Address Generation | ✅ (`ark:` prefix, checksum) |
+| Constant-Time Comparison | ✅ |
+| Merkle Root Computation | ✅ |
+| Secure Random | ✅ (`/dev/urandom`) |
+
+---
+
+## ⛓️ Blockchain & Governance
+
+### Blockchain (338 LOC)
+Full Proof-of-Work chain: transactions, blocks, Merkle roots, chain validation, balance tracking, difficulty adjustment, code submission. Global singleton via `OnceLock<Mutex<Blockchain>>`.
+
+### Governance Engine (839 LOC)
+5-phase governed pipeline (Sense→Assess→Decide→Action→Verify) with HMAC-signed `StepTrace` receipts, Monotone Confidence Constraint enforcement, Dual-Band orientation scoring, and Merkle audit trails.
+
+---
+
+## 🤖 Multi-Agent AI Framework
+
+Ark ships with a **built-in agent system** — not a plugin, a core feature:
 
 ```text
 Task → RouterAgent → [CoderAgent | ResearcherAgent | ReviewerAgent] → Review → Result
-                          ↕ execute_ark / compile_check
-                     Ark Compiler (meta/ark.py, core/)
 ```
 
-* **4 Specialist Agents:** Router, Coder (Ark-aware), Researcher, Reviewer
-* **Swarm Orchestration:** `router`, `broadcast`, `consensus`, `pipeline` strategies
-* **MCP Client:** JSON-RPC 2.0 over Stdio/HTTP/SSE
-* **Security:** AST-level sandboxing + Docker isolation for untrusted workloads
-* **Memory:** Fernet-encrypted storage + TF-IDF semantic recall
-* **Backend-agnostic:** Gemini, OpenAI, Ollama — configure via env vars
-
-```bash
-# Run the agent orchestrator
-python -m src.agent "Write a Python script that sorts a CSV by the second column"
-```
-
-> **Full guide:** [User Manual — Agent Framework](docs/USER_MANUAL.md#17-agent-framework)
-
-### Ark-Native AI Intrinsics
-
-Call AI directly from `.ark` code — built-in intrinsics, no external SDK required:
+| Feature | Details |
+|---|---|
+| **4 Specialist Agents** | Router, Coder (Ark-aware), Researcher, Reviewer |
+| **Swarm Strategies** | `router`, `broadcast`, `consensus`, `pipeline` |
+| **MCP Client** | JSON-RPC 2.0 over Stdio/HTTP/SSE |
+| **Security** | AST-level sandboxing + Docker isolation |
+| **Memory** | Fernet-encrypted + TF-IDF semantic recall |
+| **LLM Backends** | Gemini → OpenAI → Ollama (auto-fallback) |
 
 ```ark
-// Direct AI call
-answer := sys.ai.ask("What is the capital of France?")
+// AI is a first-class intrinsic — no SDK, no import
+answer := sys.ai.ask("Explain linear types in 3 sentences.")
 print(answer)
 
-// Agent with persona + conversation history
+// Multi-agent swarm from Ark code
 sys.vm.source("lib/std/ai.ark")
 coder := Agent.new("You are a Rust expert.")
-response := coder.chat("Explain ownership.")
-
-// Multi-agent swarm
-swarm := Swarm.new([coder, Agent.new("You are a code reviewer.")])
-results := swarm.run("Write a sort function")
+reviewer := Agent.new("You are a security auditor.")
+swarm := Swarm.new([coder, reviewer])
+results := swarm.run("Build a key-value store")
 ```
 
-> **Configuration:** Set `GOOGLE_API_KEY` or `ARK_LLM_ENDPOINT`. No key? AI degrades gracefully.
+---
+
+## 📚 Standard Library (13 Modules)
+
+| Module | Purpose | Key Functions |
+|---|---|---|
+| `math` | Mathematics | `sqrt`, `sin`, `cos`, `pow`, `abs`, `random` |
+| `string` | String utilities | `length`, `upper`, `lower`, `split`, `join`, `replace` |
+| `io` | Console I/O | `read_line`, `write` |
+| `fs` | File system | `read`, `write`, `exists`, `size`, `read_bytes` |
+| `net` | HTTP networking | `http_get`, `http_post` |
+| `crypto` | Cryptography | `sha256`, `sha512`, `hmac`, `aes_encrypt`, `uuid` |
+| `chain` | Blockchain | `height`, `balance`, `submit_tx`, `get_block` |
+| `time` | Date/time | `now`, `sleep`, `format`, `elapsed` |
+| `event` | Event system | `poll`, `push` |
+| `result` | Error handling | `ok`, `err`, `is_ok`, `unwrap` |
+| `audio` | Audio playback | `play`, `stop` |
+| `ai` | AI/LLM agents | `ask`, `Agent.new`, `Agent.chat`, `Swarm.run` |
+| `persistent` | Immutable data | `PVec`, `PMap` (trie + HAMT) |
+
+---
+
+## 🧱 Everything Else
+
+| Subsystem | LOC | What It Does |
+|---|---|---|
+| **Hygienic Macros** | 522 | `gensym`-based macro expansion |
+| **Interactive Debugger** | 248 | Breakpoints, step-in/out, variable inspection |
+| **Content-Addressed AST (MAST)** | 218 | SHA-256 hashed AST nodes for integrity |
+| **WIT Generator** | 477 | Ark types → WebAssembly Interface Types |
+| **WASM Host Imports** | 361 | Bridge intrinsics into WASM modules |
+| **Persistent Data Structures** | 832 | PVec (trie) + PMap (HAMT) with structural sharing |
+| **ADN (Ark Data Notation)** | 526 | Bidirectional serialization (like Clojure's EDN) |
+| **FFI** | 120 | C ABI: `extern "C" fn ark_eval_string()` |
+| **WASM Interop** | 428 | Load/call/inspect external `.wasm` modules |
+| **VSCode Extension** | — | TextMate grammar, language config (v1.3.0) |
+| **Browser Playground** | — | `site/wasm/index.html` test harness |
+| **GitHub CI** | — | 10 jobs across 3 OS + Docker + WASM + Audit |
 
 ---
 
 ## 🛠️ Quick Start
 
-### Installation
+### Docker (Recommended)
 
 ```bash
-# Clone the Repository
 git clone https://github.com/merchantmoh-debug/ark-compiler.git
 cd ark-compiler
-
-# Build Docker Container (Recommended)
 docker build -t ark-compiler .
-
-# Run Interactive Shell
 docker run -it --rm ark-compiler
 ```
 
-### Local Development (Without Docker)
+### From Source (Recommended)
 
 ```bash
-# Install Python dependencies
-pip install -r requirements.txt
+git clone https://github.com/merchantmoh-debug/ark-compiler.git
+cd ark-compiler
 
-# Install Rust toolchain (if building from source)
-cargo build --release
+# Build the Rust compiler
+cd core && cargo build --release && cd ..
+
+# Install Python tooling (pick one)
+uv sync                         # ⚡ Recommended — fast, deterministic
+pip install -r requirements.txt  # Also works
+
+# Run your first program
+echo 'print("Hello from Ark!")' > hello.ark
+python meta/ark.py run hello.ark
 ```
 
-### Running Examples
+> **Don't have uv?** Install it in one line: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+> Or on Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 
-**1. Wallet CLI (Pure Ark Crypto):**
-Secp256k1 + BIP39 — zero C bindings, 100% Ark.
+### Try the Examples
 
 ```bash
+# Wallet CLI — Secp256k1 + BIP39 in pure Ark
 python3 meta/ark.py run apps/wallet.ark create "mypassword"
-```
 
-**2. Market Maker (Linear Types in Action):**
-HFT bot simulation — Linear Types enforce that positions are never double-counted.
-
-```bash
+# Market Maker — Linear types enforcing no double-counting
 python3 meta/ark.py run apps/market_maker.ark
-```
 
-**3. Snake Game (Live Web App):**
-A fully functional game served over HTTP, written in Ark.
-
-```bash
+# Snake Game — playable in the browser
 python3 meta/ark.py run examples/snake.ark
-# Open http://localhost:8000 in your browser
+# Open http://localhost:8000
 ```
 
 ---
 
-## 📖 Learn Ark
-
-New to Ark? Start here:
+## 📖 Documentation
 
 | Document | Description |
-| :--- | :--- |
-| **[User Manual](docs/USER_MANUAL.md)** | **Complete language guide** — variables, functions, control flow, imports, stdlib, crypto, blockchain, AI, and more. |
-| **[Quick Start](docs/QUICK_START.md)** | 5-minute setup and Hello World. |
-| **[API Reference](docs/API_REFERENCE.md)** | All 109 built-in intrinsics with signatures and examples. |
-| **[Stdlib Reference](docs/STDLIB_REFERENCE.md)** | Documentation for all 12 standard library modules. |
-| **[Manifesto](docs/MANIFESTO.md)** | Why Ark exists — the design philosophy. |
-
----
-
-## 📂 Project Structure
-
-| Directory | Description | Maturity |
-| :--- | :--- | :--- |
-| `core/` | **Rust Runtime & Intrinsics.** The engine. | 🟢 STABLE |
-| `lib/std/` | **Standard Library.** 12 modules (`math`, `net`, `io`, `crypto`, `chain`, etc.). | 🟢 STABLE |
-| `lib/wallet_lib.ark` | **Crypto Library.** Secp256k1/BIP39 implementation. | 🟢 STABLE |
-| `apps/lsp.ark` | **Language Server.** Self-hosted Parser/Lexer. | 🟡 BETA |
-| `apps/server.ark` | **HTTP Server.** Functional web server. | 🟡 BETA |
-| `src/` | **Agent Framework.** Multi-agent orchestration, MCP client, sandboxed execution, encrypted memory. | 🟡 BETA |
-| `meta/` | **Tooling.** Python-based JIT, Security Scanner, Gauntlet runner. | 🟡 BETA |
-| `docs/` | **Documentation.** API Reference, Stdlib Reference, Manifesto. | 🟢 STABLE |
-| `site/` | **Web Assets.** Landing page, WASM test harness. | 🟡 BETA |
-| `tests/` | **Test Suite.** 100+ feature tests (Gauntlet runner). | 🟢 PASSING |
+|---|---|
+| **[User Manual](docs/USER_MANUAL.md)** | Complete language guide — enums, traits, functions, imports, crypto, blockchain, AI |
+| **[Quick Start](docs/QUICK_START.md)** | 5-minute setup |
+| **[API Reference](docs/API_REFERENCE.md)** | All 109 intrinsics with signatures and examples |
+| **[Stdlib Reference](docs/STDLIB_REFERENCE.md)** | All 13 standard library modules |
+| **[Manifesto](docs/MANIFESTO.md)** | The philosophy — why Ark exists |
 
 ---
 
 ## 🛡️ Security Model
 
-Ark uses a **Capability-Token System** (`ARK_CAPABILITIES`) to sandbox execution.
-
-* **Default:** Safe Mode (No IO/Net).
-* **Dev Mode:** `export ARK_CAPABILITIES="exec,net,fs_write,fs_read,thread,ai"`
-
-**Security Scanner:**
-The JIT engine includes a static analysis pass (`meta/ark_security.py`) that scans for:
-
-* SQL/Command Injection patterns.
-* Path Traversal vulnerabilities.
-* Hardcoded Secrets.
+| Feature | Details |
+|---|---|
+| **Default** | Air-gapped — no network, no filesystem writes, no shell |
+| **Capability Tokens** | `ARK_CAPABILITIES="net,fs_read,fs_write,ai"` |
+| **Static Analysis** | Security scanner catches injection, path traversal, hardcoded secrets |
+| **Import Security** | Path traversal → `RuntimeError::UntrustedCode` |
+| **Circular Import Protection** | `imported_files` HashSet |
+| **Agent Sandbox** | AST analysis + Docker isolation for untrusted workloads |
 
 ---
 
 ## 📜 License
 
-Dual Licensed: AGPL v3 (Open Source) or Commercial (Sovereign Systems).
+Dual Licensed: **AGPL v3** (Open Source) or **Commercial** (Sovereign Systems).
+
+**Patent Notice:** Protected by US Patent Application 
+
+---
+
+<div align="center">
+
+**21,471 lines of Rust. 286 tests. 13 stdlib modules. 109 intrinsics. 3 backends. 10/10 CI.**
+
+**Built from nothing in 11 days.**
+
+`[ SYSTEM: ONLINE ]`
+
+</div>

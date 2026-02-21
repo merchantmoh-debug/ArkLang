@@ -64,17 +64,29 @@ const WASI_PATH_OPEN_TYPE_IDX: u32 = 4; // (i32,i32,i32,i32,i32,i64,i64,i32,i32)
 const WASI_FD_CLOSE_TYPE_IDX: u32 = 5; // (i32)->i32
 
 // Import function indices (0..10)
+#[allow(dead_code)]
 const WASI_FD_WRITE_FUNC_IDX: u32 = 0;
+#[allow(dead_code)]
 const WASI_FD_READ_FUNC_IDX: u32 = 1;
+#[allow(dead_code)]
 const WASI_CLOCK_TIME_GET_FUNC_IDX: u32 = 2;
+#[allow(dead_code)]
 const WASI_RANDOM_GET_FUNC_IDX: u32 = 3;
+#[allow(dead_code)]
 const WASI_ARGS_GET_FUNC_IDX: u32 = 4;
+#[allow(dead_code)]
 const WASI_ARGS_SIZES_GET_FUNC_IDX: u32 = 5;
+#[allow(dead_code)]
 const WASI_ENVIRON_GET_FUNC_IDX: u32 = 6;
+#[allow(dead_code)]
 const WASI_ENVIRON_SIZES_GET_FUNC_IDX: u32 = 7;
+#[allow(dead_code)]
 const WASI_PROC_EXIT_FUNC_IDX: u32 = 8;
+#[allow(dead_code)]
 const WASI_PATH_OPEN_FUNC_IDX: u32 = 9;
+#[allow(dead_code)]
 const WASI_FD_CLOSE_FUNC_IDX: u32 = 10;
+#[allow(dead_code)]
 const WASI_IMPORT_COUNT: u32 = 11;
 
 // Ark Host type indices (extend after WASI types, pushed in register_wasi_imports)
@@ -145,11 +157,7 @@ impl LocalScope {
 
     /// Total number of extra locals (beyond parameters).
     fn extra_local_count(&self, param_count: u32) -> u32 {
-        if self.next_local > param_count {
-            self.next_local - param_count
-        } else {
-            0
-        }
+        self.next_local.saturating_sub(param_count)
     }
 }
 
@@ -216,6 +224,7 @@ pub struct WasmCodegen {
     /// Global function name → function index
     func_index_map: HashMap<String, u32>,
     /// Starting offset of the heap region (after string data)
+    #[allow(dead_code)]
     heap_start: i32,
     /// Per-function attributes (name → Vec<"export", "golem::handler", etc.>)
     func_attributes: HashMap<String, Vec<String>>,
@@ -3639,7 +3648,7 @@ mod tests {
         assert_eq!(wasm[1], 0x61); // 'a'
         assert_eq!(wasm[2], 0x73); // 's'
         assert_eq!(wasm[3], 0x6d); // 'm'
-        // Version: 1
+                                   // Version: 1
         assert_eq!(wasm[4], 0x01);
         assert_eq!(wasm[5], 0x00);
         assert_eq!(wasm[6], 0x00);

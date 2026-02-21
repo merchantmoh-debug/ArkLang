@@ -5,6 +5,8 @@ import os
 import asyncio
 import random
 import shutil
+import time
+from collections import deque
 from src.sandbox.local import LocalSandbox
 
 try:
@@ -14,6 +16,32 @@ except ImportError:
 
 PORT = 8000
 WEB_DIR = "web"
+
+class NeuralTracker:
+    def __init__(self):
+        self.history = deque()
+        self.lock = asyncio.Lock() # Not used in sync handler, but good practice if async
+
+    def record_activity(self):
+        """Record a neural event (execution/inference)"""
+        now = time.time()
+        self.history.append(now)
+
+    def get_level(self):
+        """Return activity level (0-100) based on events in last 60s"""
+        now = time.time()
+        # Clean up old events
+        while self.history and self.history[0] < now - 60:
+            self.history.popleft()
+
+        count = len(self.history)
+        # Scale: 0-60 events/min -> 0-100%
+        # Base level is 10 (idle hum)
+        level = min(10 + (count * 2), 100)
+        return int(level)
+
+# Global tracker instance
+NEURAL_TRACKER = NeuralTracker()
 
 def get_system_stats():
     # CPU
@@ -35,19 +63,24 @@ def get_system_stats():
     total, used, free = shutil.disk_usage("/")
     disk = (used / total) * 100
 
-    # Neural Activity (Simulated Pulse)
-    # In a real system, this would be requests/sec or tokens/sec
-    neural = random.randint(20, 90)
+    # Neural Activity (Real Pulse)
+    neural = NEURAL_TRACKER.get_level()
 
     return {
         "cpu": round(cpu, 1),
         "memory": round(mem, 1),
         "disk": round(disk, 1),
-        "neural": neural
+        "neural": neural,
+        "sys_info": {
+            "os": os.name,
+            "platform": "Ark Sovereign Runtime",
+            "version": "v112.0 (Prime)"
+        }
     }
 
 class ArkHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
+        # API Endpoints
         if self.path == "/api/stats":
             stats = get_system_stats()
             self.send_response(200)
@@ -56,12 +89,32 @@ class ArkHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(stats).encode('utf-8'))
             return
 
+        # Static File Serving (Hardened)
+        clean_path = os.path.normpath(self.path)
+
+        # Prevent Path Traversal
+        if ".." in clean_path:
+            self.send_error(403, "Forbidden: Path traversal detected")
+            return
+
         if self.path == "/":
             self.path = "/web/index.html"
         elif not self.path.startswith("/web"):
-            # Serve from web dir if not explicit
-            if os.path.exists(os.path.join(WEB_DIR, self.path.lstrip("/"))):
+            # Try to map root requests to web/ directory safely
+            potential_path = os.path.normpath(os.path.join(WEB_DIR, self.path.lstrip("/")))
+
+            # Security: Ensure resolved path is strictly inside WEB_DIR
+            web_abs = os.path.abspath(WEB_DIR)
+            pot_abs = os.path.abspath(potential_path)
+
+            if pot_abs.startswith(web_abs) and os.path.exists(potential_path) and os.path.isfile(potential_path):
                 self.path = "/web" + self.path
+            else:
+                # Security: Block access to files outside web/ unless explicitly mapped
+                # If we didn't remap it to /web, and it doesn't start with /web, deny it.
+                self.send_error(404, "File not found")
+                return
+
         return super().do_GET()
 
     def do_POST(self):
@@ -78,6 +131,9 @@ class ArkHandler(http.server.SimpleHTTPRequestHandler):
              return
 
         if self.path == "/api/run":
+            # Record Neural Activity
+            NEURAL_TRACKER.record_activity()
+
             content_len = int(self.headers.get('Content-Length'))
             post_body = self.rfile.read(content_len)
             try:

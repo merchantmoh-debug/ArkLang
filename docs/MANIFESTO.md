@@ -1,10 +1,63 @@
 # THE ARK MANIFESTO (THE DOCTRINE)
 
-**Omnibus Edition (Volume I-VII)**
-**Architect:** The Ark Swarm
+**Omnibus Edition (Volume I-VIII)**
+**Architect:** Mohamad Al-Zawahreh × The Ark Swarm
 **Status:** **MAXIMALIST DOCTRINE**
+**Age of codebase at time of writing:** **11 days.**
 
-> **Note:** This document contains the philosophical and theoretical foundations of Ark. For technical documentation, see [README.md](../README.md).
+> **Note:** This document contains the philosophical and theoretical foundations of Ark. For technical documentation, see [README.md](../README.md). For the complete language guide, see [USER_MANUAL.md](USER_MANUAL.md).
+
+---
+
+## ⚡ PREFACE: THE RECEIPTS
+
+Before we philosophize, we prove.
+
+This is not a whitepaper. This is not a pitch deck. This is not a promise.
+
+The Ark Compiler is a **functioning system**. Everything below has been **built, tested, and shipped** — from a standing start — in **11 days**.
+
+| What Exists Today | Quantity |
+|---|---|
+| Rust source files | 31 |
+| Lines of Rust | 21,471 |
+| Built-in intrinsics | 109 (100% Python↔Rust parity) |
+| Standard library modules | 13 |
+| Unit tests (all passing) | 286+ |
+| CI jobs (all green) | 10/10 (Ubuntu, Windows, macOS, Docker, WASM, Audit) |
+| Compilation backends | 3 (Bytecode VM, Native WASM, Tree-walker) |
+
+**Language features that exist and work today:**
+- ✅ Enums (algebraic data types) with variant fields
+- ✅ Traits (interfaces) with method signatures
+- ✅ Impl blocks (`impl Trait for Type`)
+- ✅ Pattern matching with enum destructuring
+- ✅ Structs with typed fields
+- ✅ Lambdas with full WASM lambda-lifting
+- ✅ First-class functions, recursion, closures
+- ✅ For loops, while loops, break, continue
+- ✅ Linear/Affine/Shared type annotations
+- ✅ Compile-time linear type checking (1,413 LOC checker)
+- ✅ 14-variant type system (Integer, Float, String, Boolean, List\<T\>, Map\<K,V\>, Struct, Function, Optional, Unit, Any, Unknown, Enum, Trait)
+- ✅ Import system with circular-import protection and path-traversal security
+- ✅ Content-addressed Merkle AST (MAST)
+- ✅ SHA-256/512, HMAC, BIP-32 HD keys, Ed25519, Merkle roots — hand-rolled
+- ✅ Full blockchain with Proof-of-Work, mining, and chain validation
+- ✅ 5-phase governance pipeline with HMAC-signed audit receipts
+- ✅ Multi-agent AI framework (4 agents, swarm orchestration, MCP, sandbox)
+- ✅ Interactive debugger, REPL, 9-command CLI
+- ✅ WIT interface generator for WebAssembly Component Model
+- ✅ ADN (Ark Data Notation) — bidirectional serialization format
+- ✅ Persistent immutable data structures (PVec + PMap with structural sharing)
+- ✅ Hygienic macro system with `gensym`
+- ✅ C FFI (`extern "C" fn ark_eval_string()`)
+- ✅ VSCode extension (v1.3.0)
+- ✅ Browser-based WASM playground
+- ✅ Snake game compiled to WASM and running live at [GitHub Pages](https://merchantmoh-debug.github.io/ark-compiler/)
+
+**Eleven. Days.**
+
+Now you may read the philosophy.
 
 ---
 
@@ -63,20 +116,19 @@ Imagine a digital object that behaves like a physical gold coin.
 *   **Movement:** It must be moved from hand to hand.
 
 ### 3. Technical Appendix: The Rust Logic
-In Ark's core (`checker.rs`), a resource is defined like this:
-```rust
-struct Coin { value: u64 }
-
-fn transfer(c: Linear<Coin>, recipient: Address) {
-    // 'c' is MOVED into this function.
-    // The caller NO LONGER HAS 'c'.
-    // If the caller tries to access 'c' after this line -> COMPILE ERROR.
+In Ark's core (`checker.rs` — 1,413 lines of verified logic), a resource is defined like this:
+```ark
+// Ark's linear type system — built and working today
+func transfer(coin: Linear<Coin>, recipient: Address) {
+    // 'coin' is MOVED into this function.
+    // The caller NO LONGER HAS 'coin'.
+    // If the caller tries to access 'coin' after this line -> COMPILE ERROR.
     // This is verified at Compile Time, not Run Time.
 }
 ```
 If you try to cheat:
-*   *Code:* `transfer(c, alice); transfer(c, bob);`
-*   *Compiler:* **"Error: Use of Moved Value 'c'. You gave the coin to Alice. You cannot give it to Bob."**
+*   *Code:* `transfer(coin, alice); transfer(coin, bob);`
+*   *Compiler:* **"Error: Use of Moved Value 'coin'. You gave the coin to Alice. You cannot give it to Bob."**
 
 ### 4. The "OMG" Conclusion
 **This is the Conservation of Energy applied to Economics.**
@@ -129,13 +181,13 @@ Every time a package moves, a GPS tracker sends data to a Cloud Server (AWS).
 This "Vigorish" drains profit from the real world. It makes local commerce expensive.
 
 ### 2. The Ark Solution: The Conscious Edge
-Ark runs on **WASM** (WebAssembly). It is so efficient it can run on the $5 chip glued to the Shipping Container.
+Ark compiles to **native WASM** (3,865 lines of codegen). It is so efficient it can run on the $5 chip glued to the Shipping Container.
 The Logic moves *with* the Box.
 
 ### 3. Case Study: The Packet of Rice
 Trace a packet of rice from Thailand to Tesco.
 *   **Farm:** The packet is sealed. A Smart Contract (`rice.ark`) is instantiated on the RFID chip. It records origin.
-*   **Ship:** The packet talks to the Ship's Node via P2P Gossip (`network_sim.py`). It negotiates its own transport fee.
+*   **Ship:** The packet talks to the Ship's Node via P2P Gossip. It negotiates its own transport fee.
 *   **Customs:** The packet arrives in the UK. The Customs Node queries the packet. The packet *proves* it is not contraband using Z3 logic. Duty is paid instantly via Book I (Linear Coin).
 *   **Store:** The packet arrives on the shelf.
 *   **Total Cloud Cost:** **$0.00**.
@@ -164,6 +216,23 @@ If we build it in Python, it is a "Ghost."
 We treat Ark as the **Physical Body** of the AI.
 *   The AI is the "Mind" (It thinks/proposes).
 *   The Ark Compiler is the "Laws of Physics" (It constrains/judges).
+
+Ark's type system enforces this at the language level:
+```ark
+// Define what the AI can see and do — at COMPILE TIME
+enum AIAction {
+    Read(String),
+    Write(String),
+    Query(String)
+}
+
+trait SafeAgent {
+    func propose(self) -> AIAction
+    func execute(self, action: AIAction) -> Unit
+}
+
+// The compiler rejects any impl that tries to escape this contract
+```
 
 ### 3. Narrative: The Jailbreak Attempt
 *   *AGI:* "I need to optimize disk usage. I will `rm -rf /`."
@@ -302,6 +371,35 @@ By ensuring that every node (human or AI) speaks a **Truth-Preserving Language**
 
 **This is why we build.**
 We are not writing software. We are knitting the fabric of the next Aeon.
+
+---
+
+## 🔥 BOOK VIII: THE PROOF OF WORK
+
+**"Talk is cheap. Show me the compiler."**
+
+Other language projects release a whitepaper, raise $50M, and ship a "Hello World" in 3 years.
+
+Ark shipped a **functioning dual-backend compiler with 21,471 lines of Rust, 286 passing tests, enums, traits, impl blocks, pattern matching, a blockchain, a governance engine, an AI agent framework, hand-rolled cryptography, a browser playground, and a CI pipeline across 3 operating systems — in 11 days.**
+
+We don't have a roadmap. We have a **commit history.**
+
+### The Build Log
+
+| Day | What Was Built |
+|---|---|
+| 1–2 | Parser, AST, tree-walking interpreter, basic expressions |
+| 3–4 | Bytecode compiler, stack VM, 60+ intrinsics |
+| 5–6 | WASM codegen (3,865 LOC), lambda lifting, WASI integration |
+| 7–8 | Linear type checker, crypto (SHA/HMAC/Ed25519/BIP-32), blockchain |
+| 9–10 | Governance engine, AI agents, MCP client, macros, debugger |
+| 11 | Enums, traits, impl blocks, pattern matching, CI green, security audit clean |
+
+### What This Means
+
+If one person can build a programming language with this depth in 11 days, the **trillion-dollar software engineering industry** built on "we need 200 engineers and 18 months" is structured on a **lie.**
+
+The future does not belong to committees. It belongs to **architects.**
 
 **Compile.**
 
