@@ -11,7 +11,7 @@
  * LICENSE: DUAL-LICENSED (AGPLv3 or COMMERCIAL).
  */
 
-use crate::persistent::{format_value_adn, PMap, PVec};
+use crate::persistent::{PMap, PVec, format_value_adn};
 use crate::runtime::Value;
 use std::collections::HashMap;
 
@@ -270,6 +270,24 @@ impl AdnParser {
             } else {
                 break;
             }
+        }
+        // Float support: consume decimal point and fractional digits
+        if self.peek() == Some('.') {
+            s.push('.');
+            self.advance();
+            while let Some(c) = self.peek() {
+                if c.is_ascii_digit() {
+                    s.push(c);
+                    self.advance();
+                } else {
+                    break;
+                }
+            }
+            // Parse as f64 and truncate to i64 (consistent with runtime Value::Integer)
+            return s
+                .parse::<f64>()
+                .map(|f| Value::Integer(f as i64))
+                .map_err(|_| AdnError::InvalidNumber(s));
         }
         s.parse::<i64>()
             .map(Value::Integer)
