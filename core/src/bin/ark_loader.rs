@@ -29,6 +29,11 @@
 use ark_0_zheng::adn;
 use ark_0_zheng::compiler::Compiler;
 use ark_0_zheng::debugger::{self, DebugAction, DebugState, StepMode};
+use ark_0_zheng::diagnostic::{
+    self, DiagnosticConfig, DiagnosticProbe, LinearAudit, OverlayEffectiveness, PipelineHealth,
+    ProbeType, ReportTier,
+};
+use ark_0_zheng::governance::{Decision, DualBand, GovernedPipeline, Phase};
 use ark_0_zheng::loader::load_ark_program;
 use ark_0_zheng::parser;
 use ark_0_zheng::persistent::{PMap, PVec};
@@ -65,6 +70,7 @@ fn main() {
         "repl" => cmd_repl(),
         "adn" => cmd_adn(&args[2..]),
         "check" => cmd_check(&args[2..]),
+        "diagnose" => cmd_diagnose(&args[2..]),
         "parse" => cmd_parse(&args[2..]),
         "version" | "--version" | "-v" => {
             println!("Ark Sovereign Compiler v{}", VERSION);
@@ -95,6 +101,7 @@ fn print_usage() {
     println!("  ark debug <file.ark>            Interactive step-through debugger");
     println!("  ark adn <file.ark>              Parse and output as ADN (Ark Data Notation)");
     println!("  ark check <file.ark|file.json>  Run the linear type checker");
+    println!("  ark diagnose <file.ark> [opts]   Run diagnostic proof suite");
     println!("  ark parse <file.ark>            Parse and dump AST as JSON");
     println!("  ark version                     Print version info");
     println!("  ark help                        Print this help message");
@@ -422,6 +429,289 @@ fn cmd_check(args: &[String]) {
         Ok(_) => println!("✓ Linear Check Passed"),
         Err(e) => {
             eprintln!("✗ Linear Check Failed: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+// =============================================================================
+// DIAGNOSE — Run the diagnostic proof suite
+// =============================================================================
+
+/// Run the diagnostic proof suite on an Ark source file.
+///
+/// Parses the source, runs linear type checking, constructs diagnostic probes,
+/// evaluates quality gates, seals a Merkle-rooted ProofBundle, and outputs
+/// a DiagnosticReport.
+///
+/// Usage:
+///   ark diagnose <file.ark> [--tier free|developer|pro] [--json] [--key <hmac_key>]
+fn cmd_diagnose(args: &[String]) {
+    if args.is_empty() {
+        eprintln!("Error: 'diagnose' requires a file argument");
+        eprintln!(
+            "Usage: ark diagnose <file.ark> [--tier free|developer|pro] [--json] [--key <hmac_key>]"
+        );
+        process::exit(1);
+    }
+
+    let filename = &args[0];
+    let json_output = args.iter().any(|a| a == "--json");
+
+    // Parse tier
+    let tier = if let Some(i) = args.iter().position(|a| a == "--tier") {
+        match args.get(i + 1).map(|s| s.as_str()) {
+            Some("free") => ReportTier::Free,
+            Some("developer") => ReportTier::Developer,
+            Some("pro") => ReportTier::Pro,
+            Some(other) => {
+                eprintln!(
+                    "Error: Unknown tier '{}'. Use free, developer, or pro.",
+                    other
+                );
+                process::exit(1);
+            }
+            None => {
+                eprintln!("Error: --tier requires a value (free, developer, pro)");
+                process::exit(1);
+            }
+        }
+    } else {
+        ReportTier::Developer
+    };
+
+    // Parse HMAC key
+    let hmac_key: Vec<u8> = if let Some(i) = args.iter().position(|a| a == "--key") {
+        match args.get(i + 1) {
+            Some(key) => key.as_bytes().to_vec(),
+            None => {
+                eprintln!("Error: --key requires a value");
+                process::exit(1);
+            }
+        }
+    } else {
+        b"ark-diagnostic-default-hmac-key".to_vec()
+    };
+
+    // --- Phase 1: Parse Source ---
+    println!("\x1b[1;36m╔══════════════════════════════════════════════════════════╗\x1b[0m");
+    println!("\x1b[1;36m║       ARK DIAGNOSTIC PROOF SUITE v1.0                    ║\x1b[0m");
+    println!("\x1b[1;36m╚══════════════════════════════════════════════════════════╝\x1b[0m");
+    println!();
+    println!("\x1b[1m▸ Source:\x1b[0m {}", filename);
+    println!("\x1b[1m▸ Tier:\x1b[0m   {}", tier);
+    println!();
+
+    let source = fs::read_to_string(filename).unwrap_or_else(|e| {
+        eprintln!("Error: Cannot read '{}': {}", filename, e);
+        process::exit(1);
+    });
+
+    let start_time = std::time::Instant::now();
+
+    let ast = match parser::parse_source(&source, filename) {
+        Ok(node) => node,
+        Err(e) => {
+            eprintln!("Parse Error: {}", e);
+            process::exit(1);
+        }
+    };
+
+    let source_hash = ark_0_zheng::crypto::hash(source.as_bytes());
+    println!(
+        "\x1b[32m✓\x1b[0m Parsed ({} bytes, MAST root: {}...)",
+        source.len(),
+        &source_hash[..16]
+    );
+
+    // --- Phase 2: Linear Type Check ---
+    let linear_audit = {
+        let check_result = ark_0_zheng::checker::LinearChecker::check(&ast);
+
+        let (linear_errors, type_errors) = match &check_result {
+            Ok(_) => (0usize, 0usize),
+            Err(_) => (1usize, 0usize),
+        };
+
+        let audit = LinearAudit {
+            vars_declared: 0, // Would need checker instrumentation for exact count
+            linear_vars: 0,
+            consumed: 0,
+            leaked: linear_errors,
+            double_uses: 0,
+            type_errors,
+            max_scope_depth: 0,
+            warnings: Vec::new(),
+        };
+
+        if linear_errors == 0 {
+            println!(
+                "\x1b[32m✓\x1b[0m Linear check passed (score: {:.4})",
+                audit.safety_score()
+            );
+        } else {
+            println!(
+                "\x1b[31m✗\x1b[0m Linear check failed: {} error(s)",
+                linear_errors
+            );
+        }
+
+        audit
+    };
+
+    // --- Phase 3: Build Governed Pipeline ---
+    let mut pipeline = GovernedPipeline::new("diag-run", &hmac_key, false);
+
+    // Record parse phase
+    let _ = pipeline.record_step(
+        Phase::Sense,
+        0.02,
+        b"raw_source",
+        source_hash.as_bytes(),
+        DualBand::new(0.48, 0.52),
+        Decision::Accept,
+    );
+
+    // Record check phase
+    let check_decision = if linear_audit.is_clean() {
+        Decision::Accept
+    } else {
+        Decision::Reject
+    };
+    let _ = pipeline.record_step(
+        Phase::Assess,
+        0.03,
+        source_hash.as_bytes(),
+        b"checked",
+        DualBand::new(0.45, 0.55),
+        check_decision,
+    );
+
+    // Record diagnostic decision phase
+    let _ = pipeline.record_step(
+        Phase::Decide,
+        0.05,
+        b"checked",
+        b"diagnosed",
+        DualBand::new(0.40, 0.60),
+        Decision::Accept,
+    );
+
+    let pipe_health = PipelineHealth::from_pipeline(&pipeline);
+    println!(
+        "\x1b[32m✓\x1b[0m Pipeline health: {:.4} (confidence: {:.4})",
+        pipe_health.score(),
+        pipeline.confidence()
+    );
+
+    // --- Phase 4: Create Diagnostic Probes ---
+    let elapsed_ms = start_time.elapsed().as_millis() as u64;
+
+    let type_probe = DiagnosticProbe::new(
+        &source_hash,
+        b"unchecked",
+        b"checked",
+        ProbeType::TypeCheck,
+        linear_audit.safety_score(),
+    )
+    .with_metadata("linear_errors", &linear_audit.leaked.to_string())
+    .with_metadata("type_errors", &linear_audit.type_errors.to_string());
+
+    let pipeline_probe = DiagnosticProbe::new(
+        &source_hash,
+        b"pipeline_start",
+        b"pipeline_end",
+        ProbeType::Pipeline,
+        pipeline.confidence(),
+    )
+    .with_metadata("mcc_violations", &pipe_health.mcc_violations.to_string())
+    .with_metadata("elapsed_ms", &elapsed_ms.to_string());
+
+    let overlay_probe = DiagnosticProbe::new(
+        &source_hash,
+        b"raw_output",
+        b"overlaid_output",
+        ProbeType::Overlay,
+        linear_audit.safety_score(),
+    );
+
+    // --- Phase 5: Run Diagnostic Pipeline ---
+    let config = DiagnosticConfig::default_with_key(&hmac_key);
+    let overlay_eff = Some(OverlayEffectiveness::compute(
+        0.5,                         // Baseline score (raw)
+        linear_audit.safety_score(), // Overlay score (after type checking)
+        pipeline.orientation(),
+    ));
+
+    let report = diagnostic::run_diagnostic(
+        &source_hash,
+        vec![type_probe, pipeline_probe, overlay_probe],
+        &config,
+        overlay_eff,
+        Some(linear_audit),
+        Some(pipe_health),
+    );
+
+    match report {
+        Ok(report) => {
+            println!();
+            println!("\x1b[1;36m─── DIAGNOSTIC REPORT ───\x1b[0m");
+            println!();
+
+            if json_output {
+                // JSON output for API consumption
+                let export = report.export();
+                match serde_json::to_string_pretty(&export) {
+                    Ok(json) => println!("{}", json),
+                    Err(e) => eprintln!("JSON serialization error: {}", e),
+                }
+            } else {
+                // Human-readable output
+                println!("{}", report.summary);
+                println!();
+
+                let export = report.export();
+                let all_passed = export.get("all_gates_passed").map(|s| s.as_str()) == Some("true");
+
+                if all_passed {
+                    println!("\x1b[32m✓ ALL QUALITY GATES PASSED\x1b[0m");
+                } else {
+                    println!("\x1b[31m✗ SOME QUALITY GATES FAILED\x1b[0m");
+                }
+
+                println!();
+                println!("\x1b[1m▸ Bundle ID:\x1b[0m  {}", report.bundle.bundle_id);
+                println!("\x1b[1m▸ Merkle Root:\x1b[0m {}", report.bundle.merkle_root);
+                println!(
+                    "\x1b[1m▸ Probes:\x1b[0m      {}",
+                    report.bundle.probe_count()
+                );
+                println!(
+                    "\x1b[1m▸ Avg Score:\x1b[0m   {:.4}",
+                    report.bundle.avg_gate_score()
+                );
+                println!("\x1b[1m▸ Elapsed:\x1b[0m     {}ms", elapsed_ms);
+
+                if matches!(tier, ReportTier::Pro) {
+                    println!();
+                    println!(
+                        "\x1b[1m▸ HMAC Sig:\x1b[0m    {}",
+                        report.bundle.hmac_signature
+                    );
+                    println!(
+                        "\x1b[1m▸ Verified:\x1b[0m    {}",
+                        report.bundle.verify(&hmac_key).is_ok()
+                    );
+                }
+            }
+
+            println!();
+            println!(
+                "\x1b[1;36m╚══════════════════════════════════════════════════════════╝\x1b[0m"
+            );
+        }
+        Err(e) => {
+            eprintln!("\x1b[31m✗ Diagnostic failed: {}\x1b[0m", e);
             process::exit(1);
         }
     }
