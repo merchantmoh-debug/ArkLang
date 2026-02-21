@@ -24,9 +24,7 @@
  */
 
 use crate::crypto;
-use crate::governance::{
-    Decision, DualBand, GovernedPipeline, MccGate, Phase, ReceiptChain, StepTrace,
-};
+use crate::governance::{DualBand, GovernedPipeline, MccGate};
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -1189,6 +1187,7 @@ pub fn run_diagnostic(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::governance::{Decision, Phase, ReceiptChain, StepTrace};
 
     const TEST_KEY: &[u8] = b"ark-diagnostic-test-hmac-key-sovereign";
 

@@ -11,7 +11,7 @@
  * LICENSE: DUAL-LICENSED (AGPLv3 or COMMERCIAL).
  */
 
-use crate::persistent::{PMap, PVec, format_value_adn};
+use crate::persistent::{format_value_adn, PMap, PVec};
 use crate::runtime::Value;
 use std::collections::HashMap;
 
