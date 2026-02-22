@@ -1,0 +1,106 @@
+// apps/json_transform.ark
+// JSON <-> ADN roundtrip pipeline
+// Demonstrates: data.to_json, data.from_json, data.to_adn, data.from_adn
+
+print("=== Ark JSON/ADN Transform Pipeline ===")
+print("")
+
+// ── Step 1: Build a structured config object ──
+config := {
+    app_name: "ark-service",
+    version: "1.0.0",
+    port: 8080,
+    debug: false,
+    features: ["logging", "metrics", "auth"],
+    database: {
+        host: "localhost",
+        port: 5432,
+        name: "ark_db",
+        pool_size: 10
+    },
+    rate_limit: {
+        requests_per_minute: 100,
+        burst: 20
+    }
+}
+
+print("[1] Original config object built")
+print("    app_name: " + config.app_name)
+print("    db_host:  " + config.database.host)
+print("    features: " + sys.json.stringify(config.features))
+print("")
+
+// ── Step 2: Serialize to JSON ──
+json_str := data.to_json(config)
+print("[2] Serialized to JSON (" + sys.json.stringify(len(json_str)) + " chars)")
+print("    " + json_str)
+print("")
+
+// ── Step 3: Parse JSON back ──
+parsed := data.from_json(json_str)
+print("[3] Parsed JSON back to struct")
+print("    app_name: " + parsed.app_name)
+print("    version:  " + parsed.version)
+print("")
+
+// ── Step 4: Convert to ADN (Ark Data Notation) ──
+adn_str := data.to_adn(config)
+print("[4] Converted to ADN (" + sys.json.stringify(len(adn_str)) + " chars)")
+print("    " + adn_str)
+print("")
+
+// ── Step 5: Parse ADN back ──
+adn_parsed := data.from_adn(adn_str)
+print("[5] Parsed ADN back to struct")
+print("    app_name: " + adn_parsed.app_name)
+print("    version:  " + adn_parsed.version)
+print("")
+
+// ── Step 6: Transform — modify and re-serialize ──
+// Simulate updating config for production
+prod_config := {
+    app_name: config.app_name,
+    version: config.version,
+    port: 443,
+    debug: false,
+    features: ["logging", "metrics", "auth", "tls", "compression"],
+    database: {
+        host: "db.prod.internal",
+        port: 5432,
+        name: "ark_db_prod",
+        pool_size: 50
+    },
+    rate_limit: {
+        requests_per_minute: 1000,
+        burst: 200
+    }
+}
+
+prod_json := data.to_json(prod_config)
+prod_adn := data.to_adn(prod_config)
+
+print("[6] Production config transformed")
+print("    JSON: " + prod_json)
+print("    ADN:  " + prod_adn)
+print("")
+
+// ── Step 7: Verify roundtrip integrity ──
+rt_json := data.to_json(data.from_json(prod_json))
+rt_adn := data.to_adn(data.from_adn(prod_adn))
+
+print("[7] Roundtrip verification")
+print("    JSON roundtrip length: " + sys.json.stringify(len(rt_json)))
+print("    ADN  roundtrip length: " + sys.json.stringify(len(rt_adn)))
+print("")
+
+// ── Step 8: Save to files ──
+sys.fs.write("config_dev.json", json_str)
+sys.fs.write("config_prod.json", prod_json)
+sys.fs.write("config_prod.adn", prod_adn)
+
+print("[8] Config files written:")
+print("    config_dev.json")
+print("    config_prod.json")
+print("    config_prod.adn")
+print("")
+print("=== Pipeline complete ===")

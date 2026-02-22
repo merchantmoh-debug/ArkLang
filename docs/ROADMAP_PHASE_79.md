@@ -10,6 +10,14 @@
 - **Runtime Pipeline:** Merged `ark_loader` and `ark_to_json` pipeline.
 - **Verification:** `cargo check` passing cleanly.
 
+## ✅ COMPLETED: Diagnostic Proof Suite
+- **780+ LOC** Diagnostic Proof Suite with 5-phase pipeline.
+- **15 quality gates** across 3 diagnostic probes (Overlay Delta, Linear Safety, MCC Compliance, Latency, Token Ratio).
+- **Cryptographic verification:** Merkle-rooted, HMAC-signed ProofBundles.
+- **3-tier monetization model:** Free / Developer / Pro.
+- **CLI integration:** `ark diagnose` subcommand with `--tier`, `--json`, `--key` flags.
+- **wasmtime upgraded** from v21 to v41.0.3 (gcc 15 compatibility fix).
+
 ---
 
 ## 🚀 PHASE 79 PLAN: The Distribution (WASM & Packaging)
@@ -40,3 +48,22 @@ Now that `intrinsics.rs` is full, we must ensure it compiles to `wasm32-unknown-
 1. **Gate Intrinsics:** Modify `core/src/intrinsics.rs` to allow WASM compilation.
 2. **Build WASM:** Verify `apps/server.ark` can run in the browser with the new runtime.
 3. **Docs:** Publish the `ARK_STD_LIB.md` reference.
+
+---
+
+## 🔮 PHASE 80 PLAN: Diagnostic Suite Enhancements
+
+### 1. Diagnostic Coverage Expansion
+- [ ] **Custom Gates:** Allow users to define project-specific quality gates.
+- [ ] **Gate Severity Levels:** Introduce warning/error/critical severity for gate failures.
+- [ ] **Historical Tracking:** Store ProofBundles for trend analysis across builds.
+
+### 2. CI/CD Integration
+- [ ] **GitHub Actions Action:** Publish `ark-diagnose-action` for one-line CI integration.
+- [ ] **SARIF Output:** Generate SARIF-format reports for IDE integration.
+- [ ] **Badge Generation:** Auto-generate repo badges from diagnostic results.
+
+### 3. Supply Chain Security
+- [ ] **SBOM Generation:** Extend ProofBundle to include full Software Bill of Materials.
+- [ ] **Sigstore Integration:** Sign ProofBundles with Sigstore for public verifiability.
+- [ ] **Attestation Registry:** Publish ProofBundles to a public attestation log.

@@ -739,6 +739,28 @@ impl<'a> VM<'a> {
                 return Some(val);
             }
         }
+        // Fallback: resolve intrinsic by name from the registry
+        if let Some(native_fn) = intrinsics::IntrinsicRegistry::resolve(name) {
+            return Some(Value::NativeFunction(native_fn));
+        }
+        // Fallback 2: dotted name struct field access (e.g. "string.split")
+        if name.contains('.') {
+            let parts: Vec<&str> = name.split('.').collect();
+            if let Some(mut val) = self.find_var(parts[0]) {
+                for part in &parts[1..] {
+                    if let Value::Struct(ref fields) = val {
+                        if let Some(field_val) = fields.get(*part) {
+                            val = field_val.clone();
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+                return Some(val);
+            }
+        }
         None
     }
 }

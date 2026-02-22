@@ -1,0 +1,120 @@
+// apps/config_parser.ark
+// INI-style config file parser
+// Demonstrates: string parsing, struct construction, file I/O, data.to_adn
+
+import lib.std.string
+
+print("=== Ark Config Parser ===")
+print("")
+
+// ── INI Parser ──
+// Uses intrinsic_struct_* directly because `sys.struct.*` triggers
+// the parser's `struct` keyword recognition.
+
+func parse_ini(text) {
+    lines := string.split(text, "\n")
+    sections := {_init: 0}
+    current_section := "default"
+    current_keys := {_init: 0}
+
+    i := 0
+    l := len(lines)
+    while i < l {
+        line := string.trim(lines[i])
+        line_len := len(line)
+
+        // Skip empty lines and comments
+        if line_len > 0 {
+            first_char := get(line, 0)
+
+            if first_char == "#" {
+                skip := 0
+            } else {
+                if first_char == ";" {
+                    skip := 0
+                } else {
+                    if first_char == "[" {
+                        // Save previous section
+                        intrinsic_struct_set(sections, current_section, current_keys)
+                        // Parse new section name
+                        current_section := string.slice(line, 1, line_len - 1)
+                        current_keys := {_init: 0}
+                    } else {
+                        // Key = Value pair
+                        eq_pos := string.find(line, "=", 0)
+                        if eq_pos > 0 {
+                            key := string.trim(string.slice(line, 0, eq_pos))
+                            val := string.trim(string.slice(line, eq_pos + 1, line_len))
+                            intrinsic_struct_set(current_keys, key, val)
+                        }
+                    }
+                }
+            }
+        }
+        i := i + 1
+    }
+
+    // Save last section
+    intrinsic_struct_set(sections, current_section, current_keys)
+    return sections
+}
+
+func ini_get(config, section, key, default_val) {
+    if intrinsic_struct_has(config, section) {
+        sect := intrinsic_struct_get(config, section)
+        if intrinsic_struct_has(sect, key) {
+            return intrinsic_struct_get(sect, key)
+        }
+    }
+    return default_val
+}
+
+// ── Demo: Parse a sample config ──
+
+sample_ini := "[server]\nhost = 0.0.0.0\nport = 8080\nworkers = 4\n\n[database]\ndriver = postgres\nhost = localhost\nport = 5432\nname = myapp\npool_size = 10\n\n[logging]\nlevel = info\nformat = json\nfile = /var/log/app.log\n\n# Security settings\n[security]\nenable_tls = true\ncert_path = /etc/ssl/cert.pem\nkey_path = /etc/ssl/key.pem\nhmac_secret = change_me_in_production"
+
+print("[1] Parsing INI config...")
+config := parse_ini(sample_ini)
+print("    Done!")
+print("")
+
+// ── Read values ──
+print("[2] Reading config values:")
+host := ini_get(config, "server", "host", "127.0.0.1")
+port := ini_get(config, "server", "port", "3000")
+db_driver := ini_get(config, "database", "driver", "sqlite")
+log_level := ini_get(config, "logging", "level", "warn")
+tls := ini_get(config, "security", "enable_tls", "false")
+
+print("    server.host     = " + host)
+print("    server.port     = " + port)
+print("    database.driver = " + db_driver)
+print("    logging.level   = " + log_level)
+print("    security.tls    = " + tls)
+print("")
+
+// ── Convert to ADN ──
+print("[3] Converting config to ADN...")
+adn_output := data.to_adn(config)
+print("    ADN: " + adn_output)
+print("")
+
+// ── Convert to JSON ──
+print("[4] Converting config to JSON...")
+json_output := data.to_json(config)
+print("    JSON: " + json_output)
+print("")
+
+// ── Save outputs ──
+sys.fs.write("parsed_config.json", json_output)
+sys.fs.write("parsed_config.adn", adn_output)
+print("[5] Saved: parsed_config.json, parsed_config.adn")
+print("")
+
+// ── Test defaults ──
+print("[6] Testing defaults (missing keys):")
+missing := ini_get(config, "nonexistent", "key", "DEFAULT_VALUE")
+print("    nonexistent.key = " + missing)
+print("")
+
+print("=== Config parser complete ===")

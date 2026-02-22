@@ -44,7 +44,8 @@
 31. [REPL](#31-repl)
 32. [Debugger](#32-debugger)
 33. [WASM Compilation](#33-wasm-compilation)
-34. [FAQ](#34-faq)
+34. [Diagnostic Proof Suite](#34-diagnostic-proof-suite)
+35. [FAQ](#35-faq)
 
 ---
 
@@ -1335,16 +1336,144 @@ python meta/ark.py wit <file.ark>
 
 ---
 
-## 34. FAQ
+## 34. Diagnostic Proof Suite
+
+Ark is the **only programming language** with a built-in diagnostic tool that produces **cryptographic evidence** that the compiler verified your code correctly. Other languages give you a green checkbox. Ark gives you a **signed, Merkle-rooted proof bundle**.
+
+### Running Diagnostics
+
+The `diagnose` subcommand runs a 5-phase verification pipeline and produces a detailed report:
+
+```bash
+# Developer tier (recommended default) — detailed human-readable report
+ark diagnose app.ark
+
+# Pro tier — full cryptographic proof with Merkle root and HMAC signature
+ark diagnose app.ark --tier pro
+
+# JSON output — machine-readable, perfect for CI/CD pipelines
+ark diagnose app.ark --json
+
+# Custom HMAC signing key
+ark diagnose app.ark --tier pro --key my_audit_key
+```
+
+Using the Rust CLI directly:
+
+```bash
+cargo run --bin ark_loader -- diagnose app.ark
+cargo run --bin ark_loader -- diagnose app.ark --tier pro --json
+```
+
+### The 5-Phase Pipeline
+
+The diagnostic pipeline evaluates your program through five phases, each producing a **DiagnosticProbe** that captures pre/post-state hashes:
+
+| Phase | What It Does |
+| --- | --- |
+| **Parse** | Parses source to AST, computes MAST root (content-addressed SHA-256) |
+| **Check** | Runs the linear type checker, records safety score |
+| **Pipeline** | Executes the governance pipeline, measures confidence |
+| **Gates** | Evaluates 15 quality gates across all probes |
+| **Seal** | Computes Merkle root, HMAC-signs the bundle |
+
+### Quality Gates
+
+Each probe is evaluated against **5 quality gates**, producing 15 total evaluations (3 probes × 5 gates):
+
+| Gate | Threshold | What It Catches |
+| --- | --- | --- |
+| `OVERLAY_DELTA` | Post-hash ≠ Pre-hash | Compiler phases that are no-ops (didn't actually transform anything) |
+| `LINEAR_SAFETY` | Score > 0.8 | Linear resource leaks, double-use, or unchecked consumption |
+| `MCC_COMPLIANCE` | Monotone confidence | Pipeline regression (confidence decreasing between phases) |
+| `LATENCY` | < 5000ms | Compiler phases exceeding their time budget |
+| `TOKEN_RATIO` | 0.1 – 10.0 | Output bloat or suspicious compression (output/input size ratio) |
+
+### Output Tiers
+
+The diagnostic report supports three tiers, designed for different audiences:
+
+**Free Tier:**
+```
+✓ ALL QUALITY GATES PASSED (15/15)
+```
+
+**Developer Tier** (default):
+```
+╔══════════════════════════════════════════════════════════╗
+║       ARK DIAGNOSTIC PROOF SUITE v1.0                    ║
+╚══════════════════════════════════════════════════════════╝
+
+▸ Source: app.ark
+▸ Tier:   DEVELOPER
+
+✓ Parsed (196 bytes, MAST root: 9926f799...)
+✓ Linear check passed (score: 1.0000) 
+✓ Pipeline health: 0.6800 (confidence: 0.6000)
+
+─── DIAGNOSTIC REPORT ───
+Gates: 15 passed, 0 failed (avg score: 1.0000)
+Overlay: 100.0% improvement
+Linear Safety: CLEAN
+Pipeline: VERIFIED
+
+✓ ALL QUALITY GATES PASSED
+```
+
+**Pro Tier** (JSON, with cryptographic proof):
+```json
+{
+  "suite_version": "1.0",
+  "source_file": "app.ark",
+  "tier": "Pro",
+  "summary": "ALL_GATES_PASSED",
+  "gates_passed": 15,
+  "gates_failed": 0,
+  "merkle_root": "81f7a640...",
+  "hmac_signature": "a3b1c2d4...",
+  "probes": [ ... ],
+  "elapsed_ms": 1
+}
+```
+
+### Use Cases
+
+| Use Case | How Ark Diagnostics Help |
+| --- | --- |
+| **SOC 2 / ISO 27001** | Present ProofBundle as cryptographic evidence in compliance audits |
+| **Smart Contracts** | Prove linear safety before deploying contracts that control real assets |
+| **CI/CD Gates** | Add `ark diagnose --json` to your pipeline; fail builds on gate violations |
+| **Supply Chain** | Attach ProofBundle to releases as tamper-evident compilation attestation |
+| **AI-Generated Code** | Verify that AI-written code passes the same gates as human-written code |
+
+### CI/CD Integration Example
+
+```bash
+# In your CI pipeline (GitHub Actions, GitLab CI, etc.)
+ark diagnose src/main.ark --tier pro --json > proof.json
+
+# Check the exit code (non-zero on gate failure)
+if [ $? -ne 0 ]; then
+    echo "Diagnostic gates failed. Build rejected."
+    exit 1
+fi
+
+# Archive the proof bundle as a build artifact
+mv proof.json artifacts/proof_$(date +%s).json
+```
+
+---
+
+## 35. FAQ
 
 **Q: Why does Ark use both Rust and Python?**
 Python provides a flexible bootstrap compiler ("The Brain"), while Rust provides a secure, high-performance execution engine ("The Engine"). This dual-runtime lets us iterate fast without sacrificing production safety.
 
 **Q: Is Ark production-ready?**
-The Core VM is stable. The Standard Library is active and growing. Everything is tested via the Gauntlet test suite. 286 tests pass across 10 CI jobs on 3 operating systems.
+The Core VM is stable. The Diagnostic Proof Suite is production-ready and shipping. The Standard Library is active and growing. Everything is tested via the Gauntlet test suite. 298 tests pass across 10 CI jobs on 3 operating systems.
 
 **Q: How is Ark different from Python/JavaScript?**
-Ark is designed for *sovereign computing* — sandboxed by default, with built-in cryptography, blockchain access, and AI integration. It uses a capability-based security model instead of trusting all code unconditionally. It has a linear type system that prevents resource leaks at compile time, and enums/traits/pattern matching for type-safe domain modeling.
+Ark is designed for *sovereign computing* — sandboxed by default, with built-in cryptography, blockchain access, AI integration, and **cryptographic compilation verification** (the Diagnostic Proof Suite). It uses a capability-based security model instead of trusting all code unconditionally. It has a linear type system that prevents resource leaks at compile time, and enums/traits/pattern matching for type-safe domain modeling. No other language can produce a signed, Merkle-rooted proof that the compiler did its job correctly.
 
 **Q: What happens if my code loops forever?**
 The `ARK_EXEC_TIMEOUT` watchdog terminates the process after 5 seconds (configurable).

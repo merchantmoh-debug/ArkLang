@@ -30,8 +30,8 @@ use ark_0_zheng::adn;
 use ark_0_zheng::compiler::Compiler;
 use ark_0_zheng::debugger::{self, DebugAction, DebugState, StepMode};
 use ark_0_zheng::diagnostic::{
-    self, DiagnosticConfig, DiagnosticProbe, LinearAudit, OverlayEffectiveness, PipelineHealth,
-    ProbeType, ReportTier,
+    self, DiagnosticConfig, DiagnosticHistory, DiagnosticProbe, HistoryEntry, LinearAudit,
+    OverlayEffectiveness, PipelineHealth, ProbeType, ReportTier, UserDefinedGate,
 };
 use ark_0_zheng::governance::{Decision, DualBand, GovernedPipeline, Phase};
 use ark_0_zheng::loader::load_ark_program;
@@ -102,6 +102,16 @@ fn print_usage() {
     println!("  ark adn <file.ark>              Parse and output as ADN (Ark Data Notation)");
     println!("  ark check <file.ark|file.json>  Run the linear type checker");
     println!("  ark diagnose <file.ark> [opts]   Run diagnostic proof suite");
+    println!("      --tier free|developer|pro     Report detail level");
+    println!("      --json                        JSON output");
+    println!("      --key <hmac_key>              HMAC signing key");
+    println!("      --sarif                       Emit SARIF 2.1.0 report");
+    println!("      --badge                       Emit SVG status badge");
+    println!("      --sign                        Sign bundle (detached .sig)");
+    println!("      --sbom                        Emit CycloneDX SBOM");
+    println!("      --attest                      Emit in-toto attestation");
+    println!("      --history                     Show diagnostic trend table");
+    println!("      --gate \"name:X,key:Y,op:Z,val:W,sev:S\"  Custom gate");
     println!("  ark parse <file.ark>            Parse and dump AST as JSON");
     println!("  ark version                     Print version info");
     println!("  ark help                        Print this help message");
@@ -307,10 +317,44 @@ fn cmd_run(args: &[String]) {
     }
 
     let filename = &args[0];
-    let source = fs::read_to_string(filename).unwrap_or_else(|e| {
+    let raw_source = fs::read_to_string(filename).unwrap_or_else(|e| {
         eprintln!("Error: Cannot read '{}': {}", filename, e);
         process::exit(1);
     });
+
+    // ── Import Resolution ──
+    // Scan source for `import lib.std.*` lines, load and prepend module sources.
+    let mut prepend = String::new();
+    for line in raw_source.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("import ") {
+            let module_path = trimmed.strip_prefix("import ").unwrap().trim();
+            // Convert dotted path to file path: lib.std.string -> lib/std/string.ark
+            let file_path = format!("{}.ark", module_path.replace('.', "/"));
+            if let Ok(module_source) = fs::read_to_string(&file_path) {
+                prepend.push_str(&format!("// [import: {}]\n", module_path));
+                prepend.push_str(&module_source);
+                prepend.push('\n');
+            }
+        }
+    }
+
+    // Build final source: prepended modules + original source with import lines commented out
+    let source = if prepend.is_empty() {
+        raw_source
+    } else {
+        let filtered: Vec<&str> = raw_source
+            .lines()
+            .map(|l| {
+                if l.trim().starts_with("import ") {
+                    "// (import resolved)"
+                } else {
+                    l
+                }
+            })
+            .collect();
+        format!("{}\n{}", prepend, filtered.join("\n"))
+    };
 
     // Determine file type
     let ast = if filename.ends_with(".ark") {
@@ -493,6 +537,41 @@ fn cmd_diagnose(args: &[String]) {
         b"ark-diagnostic-default-hmac-key".to_vec()
     };
 
+    // Parse new Phase 80 flags
+    let sarif_output = args.iter().any(|a| a == "--sarif");
+    let badge_output = args.iter().any(|a| a == "--badge");
+    let sign_output = args.iter().any(|a| a == "--sign");
+    let sbom_output = args.iter().any(|a| a == "--sbom");
+    let attest_output = args.iter().any(|a| a == "--attest");
+    let history_output = args.iter().any(|a| a == "--history");
+
+    // Parse custom gates
+    let mut custom_gates: Vec<Box<dyn ark_0_zheng::diagnostic::QualityGate>> = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == "--gate" {
+            if let Some(spec) = args.get(i + 1) {
+                match UserDefinedGate::from_spec(spec) {
+                    Some(gate) => {
+                        println!("\x1b[32m✓\x1b[0m Custom gate: {}", gate.gate_name);
+                        custom_gates.push(Box::new(gate));
+                    }
+                    None => {
+                        eprintln!("Error: Invalid gate spec '{}'", spec);
+                        eprintln!("  Format: name:X,key:Y,op:Z,val:W,sev:S");
+                        process::exit(1);
+                    }
+                }
+                i += 2;
+                continue;
+            } else {
+                eprintln!("Error: --gate requires a spec string");
+                process::exit(1);
+            }
+        }
+        i += 1;
+    }
+
     // --- Phase 1: Parse Source ---
     println!("\x1b[1;36m╔══════════════════════════════════════════════════════════╗\x1b[0m");
     println!("\x1b[1;36m║       ARK DIAGNOSTIC PROOF SUITE v1.0                    ║\x1b[0m");
@@ -636,7 +715,11 @@ fn cmd_diagnose(args: &[String]) {
     );
 
     // --- Phase 5: Run Diagnostic Pipeline ---
-    let config = DiagnosticConfig::default_with_key(&hmac_key);
+    let mut config = DiagnosticConfig::default_with_key(&hmac_key);
+    // Add custom gates
+    for gate in custom_gates {
+        config.gates.push(gate);
+    }
     let overlay_eff = Some(OverlayEffectiveness::compute(
         0.5,                         // Baseline score (raw)
         linear_audit.safety_score(), // Overlay score (after type checking)
@@ -709,6 +792,127 @@ fn cmd_diagnose(args: &[String]) {
             println!(
                 "\x1b[1;36m╚══════════════════════════════════════════════════════════╝\x1b[0m"
             );
+
+            // --- Phase 80: Extended Outputs ---
+
+            // SARIF output
+            if sarif_output {
+                let sarif = diagnostic::generate_sarif(&report, filename);
+                let sarif_path = format!("{}.sarif", filename);
+                match fs::write(&sarif_path, &sarif) {
+                    Ok(_) => println!("\x1b[32m✓\x1b[0m SARIF report: {}", sarif_path),
+                    Err(e) => eprintln!("\x1b[31m✗\x1b[0m SARIF write error: {}", e),
+                }
+            }
+
+            // Badge output
+            if badge_output {
+                let badge = diagnostic::generate_badge(&report);
+                let badge_path = format!("{}.diagnostic-badge.svg", filename);
+                match fs::write(&badge_path, &badge) {
+                    Ok(_) => println!("\x1b[32m✓\x1b[0m Badge: {}", badge_path),
+                    Err(e) => eprintln!("\x1b[31m✗\x1b[0m Badge write error: {}", e),
+                }
+            }
+
+            // Signature output
+            if sign_output {
+                let sig = diagnostic::generate_signature_file(&report.bundle, &hmac_key);
+                let sig_path = format!("{}.sig", filename);
+                match fs::write(&sig_path, &sig) {
+                    Ok(_) => println!("\x1b[32m✓\x1b[0m Signature: {}", sig_path),
+                    Err(e) => eprintln!("\x1b[31m✗\x1b[0m Signature write error: {}", e),
+                }
+            }
+
+            // SBOM output
+            if sbom_output {
+                // Minimal SBOM with known dependencies
+                let entries = vec![
+                    diagnostic::SbomEntry {
+                        name: "sha2".to_string(),
+                        version: "0.10".to_string(),
+                        purl: "pkg:cargo/sha2@0.10".to_string(),
+                        hash_sha256: ark_0_zheng::crypto::hash(b"sha2"),
+                    },
+                    diagnostic::SbomEntry {
+                        name: "hmac".to_string(),
+                        version: "0.12".to_string(),
+                        purl: "pkg:cargo/hmac@0.12".to_string(),
+                        hash_sha256: ark_0_zheng::crypto::hash(b"hmac"),
+                    },
+                    diagnostic::SbomEntry {
+                        name: "ed25519-dalek".to_string(),
+                        version: "2.1".to_string(),
+                        purl: "pkg:cargo/ed25519-dalek@2.1".to_string(),
+                        hash_sha256: ark_0_zheng::crypto::hash(b"ed25519-dalek"),
+                    },
+                    diagnostic::SbomEntry {
+                        name: "serde".to_string(),
+                        version: "1.0".to_string(),
+                        purl: "pkg:cargo/serde@1.0".to_string(),
+                        hash_sha256: ark_0_zheng::crypto::hash(b"serde"),
+                    },
+                ];
+                let sbom = diagnostic::generate_sbom(&entries, &source_hash, "1.0.0");
+                let sbom_path = format!("{}.sbom.json", filename);
+                match fs::write(&sbom_path, &sbom) {
+                    Ok(_) => println!("\x1b[32m✓\x1b[0m SBOM: {}", sbom_path),
+                    Err(e) => eprintln!("\x1b[31m✗\x1b[0m SBOM write error: {}", e),
+                }
+            }
+
+            // Attestation output
+            if attest_output {
+                let attestation = diagnostic::generate_attestation(&report, &hmac_key);
+                let attest_path = format!("{}.attestation.json", filename);
+                match fs::write(&attest_path, &attestation) {
+                    Ok(_) => println!("\x1b[32m✓\x1b[0m Attestation: {}", attest_path),
+                    Err(e) => eprintln!("\x1b[31m✗\x1b[0m Attestation write error: {}", e),
+                }
+            }
+
+            // Historical tracking
+            let history_path = format!(
+                "{}",
+                std::path::Path::new(filename)
+                    .parent()
+                    .unwrap_or(std::path::Path::new("."))
+                    .join(".ark-diagnostic-history.jsonl")
+                    .display()
+            );
+            let entry = HistoryEntry::from_report(&report);
+            let line = entry.to_json_line();
+
+            // Append to history file
+            let mut history_file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&history_path);
+            match history_file {
+                Ok(ref mut f) => {
+                    use std::io::Write;
+                    let _ = writeln!(f, "{}", line);
+                }
+                Err(e) => eprintln!("\x1b[33m⚠\x1b[0m History append failed: {}", e),
+            }
+
+            // Show history trend table
+            if history_output {
+                let content = fs::read_to_string(&history_path).unwrap_or_default();
+                let history = DiagnosticHistory::load(&content);
+                println!();
+                println!("\x1b[1;36m─── DIAGNOSTIC HISTORY (last 10 runs) ───\x1b[0m");
+                println!();
+                println!("{}", history.trend_table(10));
+
+                if history.has_regression(report.bundle.avg_gate_score(), 5) {
+                    println!();
+                    println!(
+                        "\x1b[31m⚠ REGRESSION DETECTED: Score has dropped below 5-run average\x1b[0m"
+                    );
+                }
+            }
         }
         Err(e) => {
             eprintln!("\x1b[31m✗ Diagnostic failed: {}\x1b[0m", e);

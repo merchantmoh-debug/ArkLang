@@ -6,6 +6,7 @@
  * LICENSE: DUAL-LICENSED (AGPLv3 or COMMERCIAL).
  */
 
+use crate::adn;
 use crate::persistent::{PMap, PVec};
 use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 use regex::Regex;
@@ -25,14 +26,14 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aes_gcm::{
-    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit},
 };
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2;
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use sha2::{Digest, Sha512};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -90,9 +91,10 @@ impl IntrinsicRegistry {
             "intrinsic_not" => Some(intrinsic_not),
             "intrinsic_print" => Some(intrinsic_print),
             "print" => Some(intrinsic_print),
-            // Core aliases for Python parity
-            "get" => Some(intrinsic_list_get),
-            "len" => Some(intrinsic_len),
+            // Core aliases for Python parity (non-linear wrappers for bytecode VM)
+            "get" => Some(core_get),
+            "len" => Some(core_len),
+            "get_item" => Some(core_get),
             "intrinsic_ask_ai" | "sys.ai.ask" | "ai.ask" => Some(intrinsic_ask_ai),
             "sys_exec" | "intrinsic_exec" => Some(intrinsic_exec),
             "sys_fs_write" | "intrinsic_fs_write" | "sys.fs.write" => Some(intrinsic_fs_write),
@@ -236,6 +238,16 @@ impl IntrinsicRegistry {
             "pmap.get" | "sys.pmap.get" | "intrinsic_pmap_get" => Some(intrinsic_pmap_get),
             "pmap.keys" | "sys.pmap.keys" | "intrinsic_pmap_keys" => Some(intrinsic_pmap_keys),
             "pmap.merge" | "sys.pmap.merge" | "intrinsic_pmap_merge" => Some(intrinsic_pmap_merge),
+            // ADN Data Notation Intrinsics
+            "data.to_adn" | "sys.data.to_adn" | "intrinsic_data_to_adn" => {
+                Some(intrinsic_data_to_adn)
+            }
+            "data.from_adn" | "sys.data.from_adn" | "intrinsic_data_from_adn" => {
+                Some(intrinsic_data_from_adn)
+            }
+            // Unified data namespace aliases for JSON
+            "data.to_json" | "sys.data.to_json" => Some(intrinsic_json_stringify),
+            "data.from_json" | "sys.data.from_json" => Some(intrinsic_json_parse),
             // WASM Component Interop Intrinsics (native only)
             #[cfg(not(target_arch = "wasm32"))]
             "sys.wasm.load" | "wasm.load" | "intrinsic_wasm_load" => {
@@ -330,6 +342,11 @@ impl IntrinsicRegistry {
         );
 
         // System
+        // Bare aliases for common builtins (compiler emits Load("len") / Load("get"))
+        // Use non-linear wrappers so bytecode programs get scalar results
+        scope.set("len".to_string(), Value::NativeFunction(core_len));
+        scope.set("get".to_string(), Value::NativeFunction(core_get));
+        scope.set("get_item".to_string(), Value::NativeFunction(core_get));
         scope.set("sys.len".to_string(), Value::NativeFunction(intrinsic_len));
         scope.set(
             "sys.exec".to_string(),
@@ -725,6 +742,25 @@ impl IntrinsicRegistry {
             "governance.verify_chain".to_string(),
             Value::NativeFunction(intrinsic_governance_verify_chain),
         );
+
+        // ── ADN Data Notation intrinsics ──
+        scope.set(
+            "data.to_adn".to_string(),
+            Value::NativeFunction(intrinsic_data_to_adn),
+        );
+        scope.set(
+            "data.from_adn".to_string(),
+            Value::NativeFunction(intrinsic_data_from_adn),
+        );
+        // Unified data namespace aliases for JSON
+        scope.set(
+            "data.to_json".to_string(),
+            Value::NativeFunction(intrinsic_json_stringify),
+        );
+        scope.set(
+            "data.from_json".to_string(),
+            Value::NativeFunction(intrinsic_json_parse),
+        );
     }
 }
 
@@ -1066,6 +1102,32 @@ pub fn intrinsic_fs_write(args: Vec<Value>) -> Result<Value, RuntimeError> {
         fs::write(path_str, content).map_err(|_| RuntimeError::NotExecutable)?;
         Ok(Value::Unit)
     }
+}
+
+/// Non-linear `len` — returns just the count as Integer (not the linear pair).
+/// Used by bytecode VM where imperative programs expect `len(x)` to return a scalar.
+pub fn core_len(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let result = intrinsic_len(args)?;
+    // intrinsic_len returns List([Integer(count), original_value])
+    if let Value::List(items) = result {
+        if !items.is_empty() {
+            return Ok(items[0].clone());
+        }
+    }
+    Ok(Value::Integer(0))
+}
+
+/// Non-linear `get` — returns just the element value (not the linear pair).
+/// Used by bytecode VM for subscript access `x[i]`.
+pub fn core_get(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let result = intrinsic_list_get(args)?;
+    // intrinsic_list_get returns List([element, original_list])
+    if let Value::List(items) = result {
+        if !items.is_empty() {
+            return Ok(items[0].clone());
+        }
+    }
+    Err(RuntimeError::NotExecutable)
 }
 
 pub fn intrinsic_add(args: Vec<Value>) -> Result<Value, RuntimeError> {
@@ -3506,7 +3568,7 @@ fn json_to_value(s: &str) -> Result<Value, String> {
             }
             let key = kv[0].trim();
             let val_str = kv[1..].join(":"); // rejoin in case value contains colons
-                                             // Strip quotes from key
+            // Strip quotes from key
             let key = if key.starts_with('"') && key.ends_with('"') && key.len() >= 2 {
                 &key[1..key.len() - 1]
             } else {
@@ -3596,6 +3658,42 @@ fn value_to_json(val: &Value) -> String {
         }
         _ => "null".into(),
     }
+}
+
+// =============================================================================
+// ADN Data Notation Intrinsics (Phase 80)
+// =============================================================================
+
+/// data.to_adn(value) → String
+/// Serialize any Ark Value to ADN (Ark Data Notation) string.
+fn intrinsic_data_to_adn(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::InvalidOperation(
+            "data.to_adn expects 1 argument".into(),
+        ));
+    }
+    let adn_str = adn::to_adn_pretty(&args[0]);
+    Ok(Value::String(adn_str))
+}
+
+/// data.from_adn(string) → Value
+/// Parse an ADN string into an Ark Value.
+fn intrinsic_data_from_adn(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::InvalidOperation(
+            "data.from_adn expects 1 argument (string)".into(),
+        ));
+    }
+    let adn_str = match &args[0] {
+        Value::String(s) => s.clone(),
+        _ => {
+            return Err(RuntimeError::InvalidOperation(
+                "data.from_adn expects a string".into(),
+            ));
+        }
+    };
+    adn::from_adn(&adn_str)
+        .map_err(|e| RuntimeError::InvalidOperation(format!("ADN Parse Error: {}", e)))
 }
 
 /// sys.log(args...) → Unit
@@ -4470,7 +4568,7 @@ mod tests {
 
         // sin(PI/2) approx 10000 (PI/2 = 1.5707... * 10000 = 15707)
         let args = vec![Value::Integer(15708)]; // 1.5708
-                                                // sin(1.5708) is close to 1
+        // sin(1.5708) is close to 1
         let res = intrinsic_math_sin(args).unwrap();
         if let Value::Integer(v) = res {
             assert!(v >= 9999 && v <= 10000);
@@ -4800,7 +4898,7 @@ mod tests {
         match res {
             Value::String(s) => {
                 assert_eq!(s.len(), 32); // 16 bytes = 32 hex chars
-                                         // Verify hex
+                // Verify hex
                 assert!(hex::decode(&s).is_ok());
             }
             _ => panic!("Expected String"),

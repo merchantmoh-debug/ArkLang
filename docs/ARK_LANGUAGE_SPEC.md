@@ -769,6 +769,7 @@ core/src/
 ├── bytecode.rs     # OpCode enum and Chunk struct
 ├── checker.rs      # Linear type checker
 ├── compiler.rs     # AST → bytecode compiler with optimizations
+├── diagnostic.rs   # Diagnostic Proof Suite (Merkle + HMAC verification)
 ├── intrinsics.rs   # 109 built-in intrinsic functions
 ├── loader.rs       # JSON MAST loader with integrity verification
 ├── parser.rs       # Rust-native recursive descent parser
@@ -776,5 +777,5 @@ core/src/
 ├── types.rs        # ArkType enum and compatibility rules
 ├── vm.rs           # Stack-based virtual machine
 └── bin/
-    └── ark_loader.rs   # CLI binary (ark run/check/parse/version)
+    └── ark_loader.rs   # CLI binary (ark run/check/diagnose/parse/version)
 ```

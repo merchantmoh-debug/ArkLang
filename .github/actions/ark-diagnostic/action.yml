@@ -1,0 +1,147 @@
+name: 'Ark Diagnostic Gate'
+description: 'Run Ark diagnostic proof suite with full Phase 80 outputs'
+author: 'Mohamad Al-Zawahreh (Sovereign Systems)'
+
+inputs:
+  file:
+    description: 'Path to the .ark source file to diagnose'
+    required: true
+  tier:
+    description: 'Report tier: free, developer, or pro'
+    required: false
+    default: 'developer'
+  hmac-key:
+    description: 'HMAC signing key (use a GitHub secret)'
+    required: false
+    default: ''
+  sarif:
+    description: 'Emit SARIF report for GitHub Code Scanning'
+    required: false
+    default: 'true'
+  badge:
+    description: 'Generate SVG diagnostic badge'
+    required: false
+    default: 'true'
+  sign:
+    description: 'Generate detached signature file'
+    required: false
+    default: 'false'
+  sbom:
+    description: 'Generate CycloneDX SBOM'
+    required: false
+    default: 'false'
+  attest:
+    description: 'Generate in-toto attestation envelope'
+    required: false
+    default: 'false'
+  history:
+    description: 'Show diagnostic trend table'
+    required: false
+    default: 'true'
+  custom-gates:
+    description: 'Custom gate specs (newline-separated)'
+    required: false
+    default: ''
+  fail-on-warning:
+    description: 'Fail the action on warnings (default: only errors)'
+    required: false
+    default: 'false'
+
+outputs:
+  passed:
+    description: 'Whether all blocking gates passed'
+    value: ${{ steps.diagnose.outcome == 'success' }}
+  sarif-path:
+    description: 'Path to the generated SARIF file'
+    value: ${{ steps.diagnose.outputs.sarif_path }}
+  badge-path:
+    description: 'Path to the generated badge SVG'
+    value: ${{ steps.diagnose.outputs.badge_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Rust toolchain
+      shell: bash
+      run: |
+        if ! command -v cargo &> /dev/null; then
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        fi
+
+    - name: Build Ark Compiler
+      shell: bash
+      run: cargo build --release
+      working-directory: ${{ github.workspace }}
+
+    - name: Run Ark Diagnostic
+      id: diagnose
+      shell: bash
+      run: |
+        ARGS="${{ inputs.file }} --tier ${{ inputs.tier }} --json"
+
+        # Add HMAC key if provided
+        if [ -n "${{ inputs.hmac-key }}" ]; then
+          ARGS="$ARGS --key ${{ inputs.hmac-key }}"
+        fi
+
+        # Add output flags
+        if [ "${{ inputs.sarif }}" = "true" ]; then
+          ARGS="$ARGS --sarif"
+          echo "sarif_path=${{ inputs.file }}.sarif" >> $GITHUB_OUTPUT
+        fi
+
+        if [ "${{ inputs.badge }}" = "true" ]; then
+          ARGS="$ARGS --badge"
+          echo "badge_path=${{ inputs.file }}.diagnostic-badge.svg" >> $GITHUB_OUTPUT
+        fi
+
+        if [ "${{ inputs.sign }}" = "true" ]; then
+          ARGS="$ARGS --sign"
+        fi
+
+        if [ "${{ inputs.sbom }}" = "true" ]; then
+          ARGS="$ARGS --sbom"
+        fi
+
+        if [ "${{ inputs.attest }}" = "true" ]; then
+          ARGS="$ARGS --attest"
+        fi
+
+        if [ "${{ inputs.history }}" = "true" ]; then
+          ARGS="$ARGS --history"
+        fi
+
+        # Add custom gates
+        if [ -n "${{ inputs.custom-gates }}" ]; then
+          while IFS= read -r gate; do
+            if [ -n "$gate" ]; then
+              ARGS="$ARGS --gate \"$gate\""
+            fi
+          done <<< "${{ inputs.custom-gates }}"
+        fi
+
+        echo "Running: cargo run --release --bin ark -- diagnose $ARGS"
+        eval cargo run --release --bin ark -- diagnose $ARGS
+      working-directory: ${{ github.workspace }}
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: inputs.sarif == 'true' && always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.file }}.sarif
+      continue-on-error: true
+
+    - name: Upload Diagnostic Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ark-diagnostic-results
+        path: |
+          ${{ inputs.file }}.sarif
+          ${{ inputs.file }}.diagnostic-badge.svg
+          ${{ inputs.file }}.sig
+          ${{ inputs.file }}.sbom.json
+          ${{ inputs.file }}.attestation.json
+          .ark-diagnostic-history.jsonl
+        if-no-files-found: ignore
