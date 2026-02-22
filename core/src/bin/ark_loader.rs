@@ -317,10 +317,44 @@ fn cmd_run(args: &[String]) {
     }
 
     let filename = &args[0];
-    let source = fs::read_to_string(filename).unwrap_or_else(|e| {
+    let raw_source = fs::read_to_string(filename).unwrap_or_else(|e| {
         eprintln!("Error: Cannot read '{}': {}", filename, e);
         process::exit(1);
     });
+
+    // ── Import Resolution ──
+    // Scan source for `import lib.std.*` lines, load and prepend module sources.
+    let mut prepend = String::new();
+    for line in raw_source.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("import ") {
+            let module_path = trimmed.strip_prefix("import ").unwrap().trim();
+            // Convert dotted path to file path: lib.std.string -> lib/std/string.ark
+            let file_path = format!("{}.ark", module_path.replace('.', "/"));
+            if let Ok(module_source) = fs::read_to_string(&file_path) {
+                prepend.push_str(&format!("// [import: {}]\n", module_path));
+                prepend.push_str(&module_source);
+                prepend.push('\n');
+            }
+        }
+    }
+
+    // Build final source: prepended modules + original source with import lines commented out
+    let source = if prepend.is_empty() {
+        raw_source
+    } else {
+        let filtered: Vec<&str> = raw_source
+            .lines()
+            .map(|l| {
+                if l.trim().starts_with("import ") {
+                    "// (import resolved)"
+                } else {
+                    l
+                }
+            })
+            .collect();
+        format!("{}\n{}", prepend, filtered.join("\n"))
+    };
 
     // Determine file type
     let ast = if filename.ends_with(".ark") {

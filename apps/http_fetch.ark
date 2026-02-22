@@ -1,0 +1,89 @@
+// apps/http_fetch.ark
+// HTTP Client — fetch and parse JSON APIs
+// Demonstrates: net.http.request, sys.json.parse, struct access, error handling
+
+print("=== Ark HTTP Fetch ===")
+print("")
+
+// ── Fetch a public JSON API ──
+
+func fetch_json(url) {
+    print("Fetching: " + url)
+    response := net.http.request(url)
+
+    if response == false {
+        print("  Error: Request failed")
+        return false
+    }
+
+    // response is the body text for GET requests
+    print("  Response received (" + sys.json.stringify(len(response)) + " chars)")
+    return response
+}
+
+func display_ip_info() {
+    // Use httpbin for a reliable public JSON endpoint
+    body := fetch_json("https://httpbin.org/ip")
+    if body != false {
+        data := sys.json.parse(body)
+        print("  Your IP: " + sys.json.stringify(data))
+    }
+    print("")
+}
+
+func display_headers() {
+    body := fetch_json("https://httpbin.org/headers")
+    if body != false {
+        print("  Headers: " + body)
+    }
+    print("")
+}
+
+func display_uuid() {
+    body := fetch_json("https://httpbin.org/uuid")
+    if body != false {
+        print("  UUID response: " + body)
+    }
+    print("")
+}
+
+func fetch_user_agent() {
+    body := fetch_json("https://httpbin.org/user-agent")
+    if body != false {
+        print("  User-Agent: " + body)
+    }
+    print("")
+}
+
+// ── Build a custom request ──
+
+func post_echo() {
+    print("POST echo test:")
+    payload := data.to_json({
+        message: "Hello from Ark!",
+        version: "112.0",
+        timestamp: sys.time.now()
+    })
+    print("  Payload: " + payload)
+    // POST via http.request with method override
+    // net.http.request supports GET by default
+    // For demonstration, we show the payload we'd send
+    print("  (POST requires method param — demonstrating payload construction)")
+    print("")
+}
+
+// ── Main ──
+
+print("[1] IP lookup")
+display_ip_info()
+
+print("[2] UUID generation")
+display_uuid()
+
+print("[3] User agent")
+fetch_user_agent()
+
+print("[4] POST payload construction")
+post_echo()
+
+print("=== HTTP fetch complete ===")

@@ -1,0 +1,201 @@
+// apps/todo_cli.ark
+// Persistent CLI Todo List
+// Demonstrates: CLI args, JSON persistence, list operations, file I/O
+
+import lib.std.string
+
+TODO_FILE := "todos.json"
+
+// ── Storage ──
+
+func load_todos() {
+    content := sys.fs.read(TODO_FILE)
+    if content == "" {
+        return []
+    }
+    if content == false {
+        return []
+    }
+    return data.from_json(content)
+}
+
+func save_todos(todos) {
+    json := data.to_json(todos)
+    sys.fs.write(TODO_FILE, json)
+}
+
+// ── Commands ──
+
+func cmd_add(text) {
+    todos := load_todos()
+    todo := {
+        id: len(todos) + 1,
+        text: text,
+        done: false,
+        created: sys.time.now()
+    }
+    intrinsic_list_append(todos, todo)
+    save_todos(todos)
+    print("Added: [" + sys.json.stringify(todo.id) + "] " + text)
+}
+
+func cmd_list() {
+    todos := load_todos()
+    l := len(todos)
+
+    if l == 0 {
+        print("No todos. Use 'add <text>' to create one.")
+        return 0
+    }
+
+    print("Todo List (" + sys.json.stringify(l) + " items):")
+    print("─────────────────────────────────")
+
+    i := 0
+    done_count := 0
+    while i < l {
+        t := todos[i]
+        marker := "[ ]"
+        if t.done {
+            marker := "[x]"
+            done_count := done_count + 1
+        }
+        print("  " + marker + " #" + sys.json.stringify(t.id) + " " + t.text)
+        i := i + 1
+    }
+
+    print("─────────────────────────────────")
+    print("Progress: " + sys.json.stringify(done_count) + "/" + sys.json.stringify(l) + " complete")
+}
+
+func cmd_done(id_str) {
+    todos := load_todos()
+    l := len(todos)
+    found := false
+
+    i := 0
+    while i < l {
+        t := todos[i]
+        if sys.json.stringify(t.id) == id_str {
+            intrinsic_struct_set(t, "done", 1 == 1)
+            intrinsic_struct_set(t, "completed", sys.time.now())
+            sys.list.set(todos, i, t)
+            found := 1 == 1
+            print("Completed: [x] #" + id_str + " " + t.text)
+            i := l
+        }
+        i := i + 1
+    }
+
+    if found != false {
+        save_todos(todos)
+    } else {
+        print("Error: Todo #" + id_str + " not found")
+    }
+}
+
+func cmd_delete(id_str) {
+    todos := load_todos()
+    l := len(todos)
+    new_todos := []
+    found := false
+
+    i := 0
+    while i < l {
+        t := todos[i]
+        if sys.json.stringify(t.id) == id_str {
+            found := 1 == 1
+            print("Deleted: #" + id_str + " " + t.text)
+        } else {
+            intrinsic_list_append(new_todos, t)
+        }
+        i := i + 1
+    }
+
+    if found != false {
+        save_todos(new_todos)
+    } else {
+        print("Error: Todo #" + id_str + " not found")
+    }
+}
+
+func cmd_clear() {
+    save_todos([])
+    print("All todos cleared.")
+}
+
+func cmd_stats() {
+    todos := load_todos()
+    l := len(todos)
+    done := 0
+    i := 0
+    while i < l {
+        if todos[i].done { done := done + 1 }
+        i := i + 1
+    }
+    pending := l - done
+    print("Stats:")
+    print("  Total:     " + sys.json.stringify(l))
+    print("  Completed: " + sys.json.stringify(done))
+    print("  Pending:   " + sys.json.stringify(pending))
+    if l > 0 {
+        pct := (done * 100) / l
+        print("  Progress:  " + sys.json.stringify(pct) + "%")
+    }
+}
+
+func print_usage() {
+    print("Ark Todo CLI")
+    print("Usage: ark run apps/todo_cli.ark <command> [args]")
+    print("")
+    print("Commands:")
+    print("  list              Show all todos")
+    print("  add <text>        Add a new todo")
+    print("  done <id>         Mark a todo as complete")
+    print("  delete <id>       Delete a todo")
+    print("  clear             Delete all todos")
+    print("  stats             Show statistics")
+}
+
+// ── Main ──
+args := sys_args
+argc := len(args)
+
+if argc < 2 {
+    print_usage()
+    sys.exit(0)
+}
+
+cmd := args[1]
+
+if cmd == "list" { cmd_list() }
+if cmd == "add" {
+    if argc < 3 {
+        print("Usage: add <text>")
+        sys.exit(1)
+    }
+    // Join remaining args as text
+    text := args[2]
+    i := 3
+    while i < argc {
+        text := text + " " + args[i]
+        i := i + 1
+    }
+    cmd_add(text)
+}
+if cmd == "done" {
+    if argc < 3 {
+        print("Usage: done <id>")
+        sys.exit(1)
+    }
+    cmd_done(args[2])
+}
+if cmd == "delete" {
+    if argc < 3 {
+        print("Usage: delete <id>")
+        sys.exit(1)
+    }
+    cmd_delete(args[2])
+}
+if cmd == "clear" { cmd_clear() }
+if cmd == "stats" { cmd_stats() }

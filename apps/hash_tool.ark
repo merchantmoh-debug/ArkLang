@@ -1,0 +1,158 @@
+// apps/hash_tool.ark
+// CLI File Hashing & Verification Tool
+// Demonstrates: crypto intrinsics, file I/O, CLI args, string comparison
+
+import lib.std.string
+
+func print_usage() {
+    print("Ark Hash Tool")
+    print("Usage: ark run apps/hash_tool.ark <command> [args]")
+    print("")
+    print("Commands:")
+    print("  hash <file>                   Compute SHA-512 hash of file")
+    print("  verify <file> <expected>      Verify file hash matches expected")
+    print("  compare <file1> <file2>       Compare hashes of two files")
+    print("  text <string>                 Hash a text string")
+    print("  hmac <file> <key>             Compute HMAC-SHA512 of file")
+}
+
+func hash_content(content) {
+    return sys.crypto.sha512(content)
+}
+
+func cmd_hash(filepath) {
+    print("Hashing: " + filepath)
+    content := sys.fs.read(filepath)
+    if content == false {
+        print("Error: Cannot read file '" + filepath + "'")
+        sys.exit(1)
+    }
+
+    hash := hash_content(content)
+    print("File:   " + filepath)
+    print("SHA512: " + hash)
+    return hash
+}
+
+func cmd_verify(filepath, expected) {
+    print("Verifying: " + filepath)
+    content := sys.fs.read(filepath)
+    if content == false {
+        print("Error: Cannot read file '" + filepath + "'")
+        sys.exit(1)
+    }
+
+    hash := hash_content(content)
+
+    print("File:     " + filepath)
+    print("Expected: " + expected)
+    print("Actual:   " + hash)
+
+    if hash == expected {
+        print("Result:   MATCH ✓")
+    } else {
+        print("Result:   MISMATCH ✗")
+        sys.exit(1)
+    }
+}
+
+func cmd_compare(file1, file2) {
+    print("Comparing files...")
+
+    content1 := sys.fs.read(file1)
+    content2 := sys.fs.read(file2)
+
+    if content1 == false {
+        print("Error: Cannot read '" + file1 + "'")
+        sys.exit(1)
+    }
+    if content2 == false {
+        print("Error: Cannot read '" + file2 + "'")
+        sys.exit(1)
+    }
+
+    hash1 := hash_content(content1)
+    hash2 := hash_content(content2)
+
+    print("File 1: " + file1)
+    print("  Hash: " + hash1)
+    print("File 2: " + file2)
+    print("  Hash: " + hash2)
+
+    if hash1 == hash2 {
+        print("Result: IDENTICAL (hashes match)")
+    } else {
+        print("Result: DIFFERENT (hashes differ)")
+    }
+}
+
+func cmd_text(text) {
+    hash := sys.crypto.sha512(text)
+    print("Text:   \"" + text + "\"")
+    print("SHA512: " + hash)
+}
+
+func cmd_hmac(filepath, key) {
+    print("HMAC-SHA512: " + filepath)
+    content := sys.fs.read(filepath)
+    if content == false {
+        print("Error: Cannot read file '" + filepath + "'")
+        sys.exit(1)
+    }
+
+    hmac := sys.crypto.hmac_sha512(key, content)
+    print("File: " + filepath)
+    print("Key:  " + key)
+    print("HMAC: " + hmac)
+}
+
+// ── Main ──
+args := sys_args
+argc := len(args)
+
+if argc < 2 {
+    print_usage()
+    sys.exit(0)
+}
+
+cmd := args[1]
+
+if cmd == "hash" {
+    if argc < 3 {
+        print("Usage: hash <file>")
+        sys.exit(1)
+    }
+    cmd_hash(args[2])
+}
+
+if cmd == "verify" {
+    if argc < 4 {
+        print("Usage: verify <file> <expected_hash>")
+        sys.exit(1)
+    }
+    cmd_verify(args[2], args[3])
+}
+
+if cmd == "compare" {
+    if argc < 4 {
+        print("Usage: compare <file1> <file2>")
+        sys.exit(1)
+    }
+    cmd_compare(args[2], args[3])
+}
+
+if cmd == "text" {
+    if argc < 3 {
+        print("Usage: text <string>")
+        sys.exit(1)
+    }
+    cmd_text(args[2])
+}
+
+if cmd == "hmac" {
+    if argc < 4 {
+        print("Usage: hmac <file> <key>")
+        sys.exit(1)
+    }
+    cmd_hmac(args[2], args[3])
+}

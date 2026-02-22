@@ -1,0 +1,264 @@
+// lib/std/prelude.ark
+// Ark Standard Prelude — functional primitives and utilities
+// Usage: import lib.std.prelude
+
+// ── Boolean Constants ──
+true := 1 == 1
+false := 1 == 0
+
+// ── Assertions ──
+func assert(cond, msg) {
+    if cond == false {
+        print("ASSERT FAILED: " + msg)
+        crash := 1 / 0
+    }
+    return true
+}
+
+func assert_eq(a, b, msg) {
+    if a != b {
+        print("ASSERT_EQ FAILED: " + msg)
+        print("  left:  " + sys.json.stringify(a))
+        print("  right: " + sys.json.stringify(b))
+        crash := 1 / 0
+    }
+    return true
+}
+
+// ── Type Detection ──
+func typeof(v) {
+    // Probe the value to determine its type
+    // Strings have len() and per-char access
+    // Lists have len() and index access
+    // Structs have field access
+    // Numbers support arithmetic
+    // This is a best-effort heuristic
+    if v == true { return "bool" }
+    if v == false { return "bool" }
+
+    // Try string check: strings concat with ""
+    test := v + ""
+    if test == v + "" {
+        // Could be string or number (numbers coerce to string in +)
+        // Check if v + 0 works (numbers) vs errors
+        if v == 0 { return "number" }
+        if v == 1 { return "number" }
+
+        // If len works and get(v,0) returns a single char, it's a string
+        l := len(v)
+        if l == 0 { return "string" }
+        ch := get(v, 0)
+        ch_len := len(ch)
+        if ch_len == 1 { return "string" }
+    }
+    return "unknown"
+}
+
+// ── Range Generator ──
+func range(start, end) {
+    result := []
+    i := start
+    while i < end {
+        intrinsic_list_append(result, i)
+        i := i + 1
+    }
+    return result
+}
+
+func range_step(start, end, step) {
+    result := []
+    i := start
+    if step > 0 {
+        while i < end {
+            intrinsic_list_append(result, i)
+            i := i + step
+        }
+    }
+    if step < 0 {
+        while i > end {
+            intrinsic_list_append(result, i)
+            i := i + step
+        }
+    }
+    return result
+}
+
+// ── Functional Primitives ──
+func map(lst, fn) {
+    result := []
+    i := 0
+    l := len(lst)
+    while i < l {
+        intrinsic_list_append(result, fn(lst[i]))
+        i := i + 1
+    }
+    return result
+}
+
+func filter(lst, fn) {
+    result := []
+    i := 0
+    l := len(lst)
+    while i < l {
+        if fn(lst[i]) {
+            intrinsic_list_append(result, lst[i])
+        }
+        i := i + 1
+    }
+    return result
+}
+
+func reduce(lst, fn, init) {
+    acc := init
+    i := 0
+    l := len(lst)
+    while i < l {
+        acc := fn(acc, lst[i])
+        i := i + 1
+    }
+    return acc
+}
+
+func each(lst, fn) {
+    i := 0
+    l := len(lst)
+    while i < l {
+        fn(lst[i])
+        i := i + 1
+    }
+}
+
+func find(lst, fn) {
+    i := 0
+    l := len(lst)
+    while i < l {
+        if fn(lst[i]) {
+            return lst[i]
+        }
+        i := i + 1
+    }
+    return false
+}
+
+func any(lst, fn) {
+    i := 0
+    l := len(lst)
+    while i < l {
+        if fn(lst[i]) { return true }
+        i := i + 1
+    }
+    return false
+}
+
+func all(lst, fn) {
+    i := 0
+    l := len(lst)
+    while i < l {
+        if fn(lst[i]) == false { return false }
+        i := i + 1
+    }
+    return true
+}
+
+// ── List Utilities ──
+func reversed(lst) {
+    result := []
+    i := len(lst) - 1
+    while i >= 0 {
+        intrinsic_list_append(result, lst[i])
+        i := i - 1
+    }
+    return result
+}
+
+func contains(lst, val) {
+    i := 0
+    l := len(lst)
+    while i < l {
+        if lst[i] == val { return true }
+        i := i + 1
+    }
+    return false
+}
+
+func flatten(lst) {
+    result := []
+    i := 0
+    l := len(lst)
+    while i < l {
+        inner := lst[i]
+        j := 0
+        il := len(inner)
+        while j < il {
+            intrinsic_list_append(result, inner[j])
+            j := j + 1
+        }
+        i := i + 1
+    }
+    return result
+}
+
+func zip(a, b) {
+    result := []
+    la := len(a)
+    lb := len(b)
+    l := la
+    if lb < la { l := lb }
+    i := 0
+    while i < l {
+        intrinsic_list_append(result, [a[i], b[i]])
+        i := i + 1
+    }
+    return result
+}
+
+// ── Type Conversion ──
+func to_string(v) {
+    return sys.json.stringify(v)
+}
+
+func max(a, b) {
+    if a > b { return a }
+    return b
+}
+
+func min(a, b) {
+    if a < b { return a }
+    return b
+}
+
+func abs(x) {
+    if x < 0 { return 0 - x }
+    return x
+}
+
+func clamp(x, lo, hi) {
+    if x < lo { return lo }
+    if x > hi { return hi }
+    return x
+}
+
+// ── Export ──
+prelude := {
+    assert: assert,
+    assert_eq: assert_eq,
+    typeof: typeof,
+    range: range,
+    range_step: range_step,
+    map: map,
+    filter: filter,
+    reduce: reduce,
+    each: each,
+    find: find,
+    any: any,
+    all: all,
+    reversed: reversed,
+    contains: contains,
+    flatten: flatten,
+    zip: zip,
+    to_string: to_string,
+    max: max,
+    min: min,
+    abs: abs,
+    clamp: clamp
+}
