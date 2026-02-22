@@ -33,7 +33,8 @@
 
 > **[📜 Manifesto](docs/MANIFESTO.md)** — Why Ark exists.
 > **[📖 User Manual](docs/USER_MANUAL.md)** — Complete language guide.
-> **[🐍 Play the Snake Game](https://merchantmoh-debug.github.io/ark-compiler/)** — Written in Ark, compiled to WASM, running in your browser right now.
+> **[🐍 Play the Snake Game](https://merchantmoh-debug.github.io/ArkLang/site/snake.html)** — Written in Ark, compiled to WASM, running in your browser right now.
+> **[⚡ Leviathan Portal](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** — Z3-verify and CSG-compile a titanium metamaterial heat sink, entirely in your browser.
 
 ---
 
@@ -50,6 +51,7 @@
 | CI jobs (all green) | 10/10 |
 | Compilation backends | 3 (Bytecode VM, Native WASM, Tree-walker) |
 | User manual | 1,000+ lines |
+| Leviathan Portal | Live in-browser CSG via manifold-3d WASM |
 
 ---
 
@@ -337,6 +339,7 @@ results := swarm.run("Build a key-value store")
 | **WASM Interop** | 428 | Load/call/inspect external `.wasm` modules |
 | **VSCode Extension** | — | TextMate grammar, language config (v1.3.0) |
 | **Browser Playground** | — | `site/wasm/index.html` test harness |
+| **Leviathan WASM Portal** | 1,086 | Live CSG compilation via manifold-3d WASM + Z3 verification + GLB export |
 | **GitHub CI** | — | 10 jobs across 3 OS + Docker + WASM + Audit |
 
 ---
@@ -385,6 +388,9 @@ python3 meta/ark.py run apps/market_maker.ark
 # Snake Game — playable in the browser
 python3 meta/ark.py run examples/snake.ark
 # Open http://localhost:8000
+
+# Leviathan Portal — Z3 + CSG compilation in the browser
+# Visit: https://merchantmoh-debug.github.io/ArkLang/site/leviathan/
 ```
 
 ---
@@ -398,6 +404,7 @@ python3 meta/ark.py run examples/snake.ark
 | **[API Reference](docs/API_REFERENCE.md)** | All 109 intrinsics with signatures and examples |
 | **[Stdlib Reference](docs/STDLIB_REFERENCE.md)** | All 13 standard library modules |
 | **[Manifesto](docs/MANIFESTO.md)** | The philosophy — why Ark exists |
+| **[Leviathan Portal](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | Live demo — Z3 + CSG compilation in the browser |
 
 ---
 

@@ -53,7 +53,8 @@ The Ark Compiler is a **functioning system**. Everything below has been **built,
 - ✅ C FFI (`extern "C" fn ark_eval_string()`)
 - ✅ VSCode extension (v1.3.0)
 - ✅ Browser-based WASM playground
-- ✅ Snake game compiled to WASM and running live at [GitHub Pages](https://merchantmoh-debug.github.io/ark-compiler/)
+- ✅ Snake game compiled to WASM and running live at [GitHub Pages](https://merchantmoh-debug.github.io/ArkLang/site/snake.html)
+- ✅ **Leviathan WASM Portal** — [Live in-browser CSG compilation](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) of a Z3-verified titanium metamaterial heat sink using manifold-3d WASM, with GLB export and cryptographic proof-of-matter receipt
 - ✅ **Diagnostic Proof Suite** — cryptographic compilation verification with Merkle-rooted, HMAC-signed proof bundles (780+ LOC)
 
 **Eleven. Days.**
@@ -316,6 +317,17 @@ Every `ark diagnose` run creates a **ProofBundle** — a Merkle-rooted, HMAC-sig
 No other language — not Rust, not Haskell, not Lean — ships with built-in, one-command cryptographic compilation verification. Rust can prove memory safety, but it cannot produce a signed receipt of that proof. Ark can.
 
 This turns every Ark program into a **notarized document**. The compiler is no longer a black box. It is a **witness** — and the ProofBundle is its sworn testimony.
+
+### 5. The Live Proof: Leviathan WASM Portal
+We didn't just write about this. We **shipped it in a browser**.
+
+The [**Leviathan WASM Portal**](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) lets anyone — with zero installation — click a button and watch Ark:
+1. **Z3-verify** 11 thermodynamic constraints (wall thickness, porosity, thermal conductivity, structural integrity)
+2. **CSG-compile** a titanium metamaterial heat sink via `manifold-3d` WASM (real boolean algebra — cube minus 432 cylinders)
+3. **Render** the result as an interactive 3D model via `<model-viewer>`
+4. **Output** a cryptographic proof-of-matter receipt (SHA-256 topology hash)
+
+This is not a mockup. This is not a video. **The geometry is computed in your browser, from scratch, using real constructive solid geometry.** The compiler proves the physics, the WASM engine forges the matter, and the receipt proves the work.
 
 ---
 

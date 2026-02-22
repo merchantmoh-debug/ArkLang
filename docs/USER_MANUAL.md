@@ -45,7 +45,8 @@
 32. [Debugger](#32-debugger)
 33. [WASM Compilation](#33-wasm-compilation)
 34. [Diagnostic Proof Suite](#34-diagnostic-proof-suite)
-35. [FAQ](#35-faq)
+35. [Leviathan WASM Portal](#35-leviathan-wasm-portal)
+36. [FAQ](#36-faq)
 
 ---
 
@@ -1464,7 +1465,47 @@ mv proof.json artifacts/proof_$(date +%s).json
 
 ---
 
-## 35. FAQ
+## 35. Leviathan WASM Portal
+
+The **Leviathan WASM Portal** is a zero-installation browser demo that showcases Ark's ability to compile verified physical matter.
+
+**Live URL:** [https://merchantmoh-debug.github.io/ArkLang/site/leviathan/](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)
+
+### What It Does
+
+Click **"Compile Digital Matter"** and watch Ark:
+
+1. **Z3-verify** 11 thermodynamic constraints (wall thickness, porosity, thermal conductivity, structural integrity)
+2. **CSG-compile** a titanium metamaterial heat sink via `manifold-3d` WASM (real boolean algebra — cube minus up to 1,875 cylinders)
+3. **Render** the result as an interactive 3D model via `<model-viewer>`
+4. **Output** a cryptographic proof-of-matter receipt (SHA-256 topology hash)
+
+### Controls
+
+| Control | Range | Effect |
+| --- | --- | --- |
+| Lattice Density slider | 5–25 | Controls channel count (75 to 1,875 channels) |
+| Compile button | — | Triggers full Z3 → CSG → GLB pipeline |
+
+### Architecture
+
+| Layer | Technology | Role |
+| --- | --- | --- |
+| Z3 Verification | Pure JS (simulated SMT) | 11 thermodynamic constraint checks |
+| CSG Engine | `manifold-3d@3.0.0` WASM | In-browser boolean algebra (cube − cylinders) |
+| 3D Rendering | `<model-viewer>` CDN | Interactive GLB viewer with auto-rotate |
+| GLB Export | Custom JS encoder | Mesh → binary GLB (positions + indices) |
+| Proof Receipt | Web Crypto API | SHA-256 hash of mesh topology |
+
+**Zero dependencies.** Everything loads via CDN ESM imports. No `npm install`, no build step, no server.
+
+### Source
+
+The portal source is at `site/leviathan/index.html` — a single self-contained HTML file (1,086 lines) with embedded CSS and JavaScript.
+
+---
+
+## 36. FAQ
 
 **Q: Why does Ark use both Rust and Python?**
 Python provides a flexible bootstrap compiler ("The Brain"), while Rust provides a secure, high-performance execution engine ("The Engine"). This dual-runtime lets us iterate fast without sacrificing production safety.
@@ -1489,6 +1530,9 @@ Three: (1) Bytecode VM (fastest iteration), (2) Native WASM (production deployme
 
 **Q: Does Ark have enums and traits like Rust?**
 Yes. Enums with variant fields, traits with method signatures, and `impl Trait for Type` blocks are all implemented across all compiler backends. See [Enums](#10-enums), [Traits](#12-traits--impl-blocks).
+
+**Q: Can I try Ark without installing anything?**
+Yes. The [Leviathan WASM Portal](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) runs entirely in your browser — Z3 verification, CSG compilation, 3D rendering, and cryptographic proof generation, all with zero installation. See [Leviathan WASM Portal](#35-leviathan-wasm-portal).
 
 ---
 
