@@ -13,13 +13,13 @@
 
 // Physics Constants
 core_size := 100
-density := 25
+density := 18
 circ_segments := 16
 
 // String versions for embedding into Python script
 core_str := "100"
-pore_str := "1.5"
-den_str := "25"
+pore_str := "2.1"
+den_str := "18"
 seg_str := "16"
 
 // ---- GATE 1: Z3 FORMAL VERIFICATION (Truth-First Axiom) ----
@@ -185,7 +185,7 @@ func main() {
     titanium := forge_titanium_substrate()
     print("[ARK] Substrate forged. Volume: " + titanium.volume + " mm3")
 
-    // Step 3: Carve 1,875 Fluid Channels (Consumes titanium)
+    // Step 3: Carve 972 Fluid Channels (Consumes titanium)
     metamaterial := subtract_entropy(titanium)
     print("[ARK] Metamaterial carved. Estimated volume: " + metamaterial.volume + " mm3")
 

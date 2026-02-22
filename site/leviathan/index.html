@@ -511,7 +511,7 @@
 
         <div class="slider-container">
             <span>Lattice Density</span>
-            <input type="range" id="density-slider" min="5" max="25" value="12" step="1">
+            <input type="range" id="density-slider" min="5" max="18" value="12" step="1">
             <span class="density-val" id="density-val">12</span>
         </div>
 
@@ -721,8 +721,9 @@
         // ── Z3 VERIFICATION (Simulated — thermodynamic constraints) ──
         // Pore diameter scales with density (finer channels for denser lattices)
         function getPoreDiameter(density) {
-            // Linear interpolation: density 5 → 3mm, density 25 → 1mm
-            return Math.max(1, 3 - (density - 5) * (2 / 20));
+            // Linear interpolation: density 5 → 3mm, density 18 → 2.1mm
+            // Ensures aspect ratio (100/pore) stays under 50 at all slider positions
+            return Math.max(2.1, 3 - (density - 5) * (0.9 / 13));
         }
 
         function z3Verify(density, spacing) {

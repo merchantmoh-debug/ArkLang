@@ -1484,7 +1484,7 @@ Click **"Compile Digital Matter"** and watch Ark:
 
 | Control | Range | Effect |
 | --- | --- | --- |
-| Lattice Density slider | 5–25 | Controls channel count (75 to 1,875 channels) |
+| Lattice Density slider | 5–18 | Controls channel count (75 to 972 channels) |
 | Compile button | — | Triggers full Z3 → CSG → GLB pipeline |
 
 ### Architecture
