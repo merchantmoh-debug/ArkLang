@@ -11,6 +11,13 @@ All logic lives in:
 import sys
 import os
 
+# ─── Path Setup ───────────────────────────────────────────────────────────────
+# When invoked as `python meta/ark.py`, the repo root isn't in sys.path.
+# This ensures `from meta.xyz import ...` works everywhere.
+_repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 # ─── Version Gate ─────────────────────────────────────────────────────────────
 # Guard against old Python. The core works on 3.8+, but 3.10+ is recommended
 # for dataclass(slots=True) performance.
@@ -164,7 +171,10 @@ if __name__ == "__main__":
         if "--target" not in sys.argv:
             sys.argv.extend(["--target", "bytecode"])
 
-        from meta import compile as ark_compile
+        try:
+            from meta import compile as ark_compile
+        except ModuleNotFoundError:
+            import compile as ark_compile
         ark_compile.main()
     else:
         print(f"Unknown command: {cmd}")
