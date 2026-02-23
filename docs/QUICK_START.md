@@ -127,6 +127,27 @@ python meta/ark.py run hello_ai.ark
 | `python meta/ark.py repl` | Start the interactive REPL |
 | `python meta/ark.py version` | Print the compiler version |
 | `python meta/ark.py compile <file.ark>` | Compile to bytecode |
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named 'lark'`
+
+You skipped step 2. Run this from the `ark-compiler` directory:
+
+```bash
+pip install -r requirements.txt
+```
+
+> On macOS/Linux, use `pip3` if `pip` points to Python 2. If you use virtual environments:
+> ```bash
+> python -m venv .venv
+> source .venv/bin/activate   # macOS/Linux
+> .venv\Scripts\activate      # Windows
+> pip install -r requirements.txt
+> ```
+
+### `ModuleNotFoundError: No module named 'meta'`
+
+Make sure you are running from the **repository root** (the `ark-compiler/` directory), not from inside `meta/`.
 
 ## Docker (Recommended)
 

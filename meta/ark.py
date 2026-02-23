@@ -19,6 +19,24 @@ if sys.version_info < (3, 8):
     print("Install Python 3.10+ from https://python.org or use pyenv.")
     sys.exit(1)
 
+# ─── Dependency Gate ──────────────────────────────────────────────────────────
+# Catch missing deps BEFORE cascading import errors confuse users.
+_missing_deps = []
+for _dep in ["lark", "pydantic"]:
+    try:
+        __import__(_dep)
+    except ImportError:
+        _missing_deps.append(_dep)
+
+if _missing_deps:
+    print(f"Error: Missing required dependencies: {', '.join(_missing_deps)}")
+    print()
+    print("Fix: Run this command from the ark-compiler directory:")
+    print()
+    print("    pip install -r requirements.txt")
+    print()
+    sys.exit(1)
+
 # --- Re-export everything for backward compatibility ---
 # External consumers (gauntlet.py, compile.py, tests) can still do:
 #   from ark import ArkValue, Scope, INTRINSICS, eval_node, etc.
@@ -41,7 +59,11 @@ try:
         eval_node, call_user_func, instantiate_class, eval_block,
         is_truthy, eval_binop, ARK_PARSER, NODE_HANDLERS
     )
-except ModuleNotFoundError:
+except ModuleNotFoundError as _e:
+    # Only fall back to relative imports if the error is about the 'meta' prefix.
+    # Re-raise if a real dependency is missing.
+    if "meta" not in str(_e):
+        raise
     from ark_types import (
         RopeString, ArkValue, UNIT_VALUE, ReturnException,
         ArkFunction, ArkClass, ArkInstance, Scope
