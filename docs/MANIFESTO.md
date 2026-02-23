@@ -23,7 +23,7 @@ The Ark Compiler is a **functioning system**. Everything below has been **built,
 | Lines of Rust | 21,471 |
 | Built-in intrinsics | 109 (100% Python↔Rust parity) |
 | Standard library modules | 13 |
-| Unit tests (all passing) | 298 |
+| Unit tests (all passing) | 390 |
 | CI jobs (all green) | 10/10 (Ubuntu, Windows, macOS, Docker, WASM, Audit) |
 | Compilation backends | 3 (Bytecode VM, Native WASM, Tree-walker) |
 
@@ -464,7 +464,7 @@ We are not writing software. We are knitting the fabric of the next Aeon.
 
 Other language projects release a whitepaper, raise $50M, and ship a "Hello World" in 3 years.
 
-Ark shipped a **functioning dual-backend compiler with 22,000+ lines of Rust, 298 passing tests, enums, traits, impl blocks, pattern matching, a blockchain, a governance engine, an AI agent framework, hand-rolled cryptography, a cryptographic diagnostic proof suite, a browser playground, and a CI pipeline across 3 operating systems — in 11 days.**
+Ark shipped a **functioning dual-backend compiler with 22,000+ lines of Rust, 390 passing tests, enums, traits, impl blocks, pattern matching, a blockchain, a governance engine, an AI agent framework, hand-rolled cryptography, a cryptographic diagnostic proof suite, a browser playground, and a CI pipeline across 3 operating systems — in 11 days.**
 
 We don't have a roadmap. We have a **commit history.**
 

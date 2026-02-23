@@ -1630,7 +1630,7 @@ The Ark compiler source is at `apps/leviathan_compiler.ark` — 210 lines of Ark
 Python provides a flexible bootstrap compiler ("The Brain"), while Rust provides a secure, high-performance execution engine ("The Engine"). This dual-runtime lets us iterate fast without sacrificing production safety.
 
 **Q: Is Ark production-ready?**
-The Core VM is stable. The Diagnostic Proof Suite is production-ready and shipping. The Standard Library is active and growing. Everything is tested via the Gauntlet test suite. 298 tests pass across 10 CI jobs on 3 operating systems.
+The Core VM is stable. The Diagnostic Proof Suite is production-ready and shipping. The Standard Library is active and growing. Everything is tested via the Gauntlet test suite. 390 tests pass across 10 CI jobs on 3 operating systems.
 
 **Q: How is Ark different from Python/JavaScript?**
 Ark is designed for *sovereign computing* — sandboxed by default, with built-in cryptography, blockchain access, AI integration, and **cryptographic compilation verification** (the Diagnostic Proof Suite). It uses a capability-based security model instead of trusting all code unconditionally. It has a linear type system that prevents resource leaks at compile time, and enums/traits/pattern matching for type-safe domain modeling. No other language can produce a signed, Merkle-rooted proof that the compiler did its job correctly.

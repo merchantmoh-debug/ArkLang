@@ -16,7 +16,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![License: Commercial](https://img.shields.io/badge/License-Commercial-blue.svg)](LICENSE_COMMERCIAL)
 ![CI](https://img.shields.io/badge/CI-10/10_PASSING-brightgreen?style=for-the-badge)
-![Tests](https://img.shields.io/badge/Tests-298_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-390_Passing-brightgreen?style=for-the-badge)
 ![Core](https://img.shields.io/badge/Core-RUST-red?style=for-the-badge)
 ![Parity](https://img.shields.io/badge/Intrinsic_Parity-100%25-green?style=for-the-badge)
 
@@ -46,7 +46,7 @@
 | Built-in intrinsics | 109 (100% Python↔Rust parity) |
 | CLI subcommands | 10 |
 | Standard library modules | 13 |
-| Unit tests (all passing) | 298 |
+| Unit tests (all passing) | 390 |
 | CI jobs (all green) | 10/10 |
 | Compilation backends | 3 (Bytecode VM, Native WASM, Tree-walker) |
 | User manual | 1,000+ lines |
@@ -457,7 +457,7 @@ Dual Licensed: **AGPL v3** (Open Source) or **Commercial** (Sovereign Systems).
 
 <div align="center">
 
-**22,000+ lines of Rust. 298 tests. 13 stdlib modules. 109 intrinsics. 3 backends. 10/10 CI.**
+**22,000+ lines of Rust. 390 tests. 13 stdlib modules. 109 intrinsics. 3 backends. 10/10 CI.**
 
 **The compiler that proves physics and forges matter.**
 
