@@ -46,11 +46,6 @@ INTERACTIVE_SKIP = {
     "tests/test_net_http.ark",     # Binds port 8087, times out on macOS CI
     "tests/test_broken.ark",       # Intentionally broken syntax test — expected to fail
     "tests/agi_genesis.ark",        # Calls intrinsic_ask_ai — requires live AI provider (not available in CI)
-    # Unimplemented intrinsic tests — use data.*, net.http.*, intrinsic_struct_* which
-    # don't exist in the Python runtime yet. Will be enabled once intrinsics are ported.
-    "apps/config_parser.ark",      # Uses intrinsic_struct_set/get/has — not in Python runtime
-    "apps/http_fetch.ark",         # Uses net.http.request — not in Python runtime
-    "apps/json_transform.ark",     # Uses data.to_json/from_json/to_adn/from_adn — not in Python runtime
 }
 
 @dataclass

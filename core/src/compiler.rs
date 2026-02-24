@@ -810,21 +810,6 @@ impl Compiler {
                         }
                         self.chunk.write(OpCode::Push(Value::Unit));
                     }
-                    "neg" => {
-                        // Unary minus: 0 - x
-                        if args.len() == 1 {
-                            self.chunk.write(OpCode::Push(Value::Integer(0)));
-                            self.visit_expr(&args[0])?;
-                            self.chunk.write(OpCode::Sub);
-                        }
-                    }
-                    "not" | "intrinsic_not" => {
-                        if args.len() == 1 {
-                            self.visit_expr(&args[0])?;
-                            self.chunk.write(OpCode::Load("intrinsic_not".to_string()));
-                            self.chunk.write(OpCode::Call(1));
-                        }
-                    }
                     _ => {
                         for arg in args {
                             self.visit_expr(arg)?;

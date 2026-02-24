@@ -17,7 +17,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![License: Commercial](https://img.shields.io/badge/License-Commercial-blue.svg)](LICENSE_COMMERCIAL)
 ![CI](https://img.shields.io/badge/CI-10/10_PASSING-brightgreen?style=for-the-badge)
-![Tests](https://img.shields.io/badge/Tests-298_Passing-brightgreen?style=for-the-badge)
+![Tests](https://img.shields.io/badge/Tests-286_Passing-brightgreen?style=for-the-badge)
 ![Core](https://img.shields.io/badge/Core-RUST-red?style=for-the-badge)
 ![Parity](https://img.shields.io/badge/Intrinsic_Parity-100%25-green?style=for-the-badge)
 
@@ -27,9 +27,9 @@
 
 ## What Is Ark?
 
-**Ark** is a programming language where **resource safety is a compile-time guarantee**, not a runtime hope. It features **enums, traits, impl blocks, pattern matching, lambdas**, a dual-backend compiler (VM + native WASM), a linear type system, a **built-in diagnostic proof suite** with cryptographic verification, 109 built-in intrinsics, a blockchain layer, a governance engine, an AI agent framework, and a browser-based playground — all built in **11 days**.
+**Ark** is a programming language where **resource safety is a compile-time guarantee**, not a runtime hope. It features **enums, traits, impl blocks, pattern matching, lambdas**, a dual-backend compiler (VM + native WASM), a linear type system, 109 built-in intrinsics, a blockchain layer, a governance engine, an AI agent framework, and a browser-based playground — all built in **11 days**.
 
-**Use it for:** Financial systems, cryptographic protocols, AI-native applications, smart contracts, compliance-audited systems, and anywhere resource correctness is non-negotiable.
+**Use it for:** Financial systems, cryptographic protocols, AI-native applications, smart contracts, and anywhere resource correctness is non-negotiable.
 
 > **[📜 Manifesto](docs/MANIFESTO.md)** — Why Ark exists.
 > **[📖 User Manual](docs/USER_MANUAL.md)** — Complete language guide.
@@ -44,9 +44,9 @@
 | Rust source files | 31 |
 | Total Rust LOC | 21,471 |
 | Built-in intrinsics | 109 (100% Python↔Rust parity) |
-| CLI subcommands | 10 |
+| CLI subcommands | 9 |
 | Standard library modules | 13 |
-| Unit tests (all passing) | 298 |
+| Unit tests (all passing) | 286+ |
 | CI jobs (all green) | 10/10 |
 | Compilation backends | 3 (Bytecode VM, Native WASM, Tree-walker) |
 | User manual | 1,000+ lines |
@@ -163,14 +163,13 @@ Ark has **three backends**, all fully functional:
 | **Browser Bridge** | `wasm.rs` | 358 | `wasm_bindgen` API for in-browser execution |
 | **Tree-walker** | `eval.rs` | 733 | Interpreter (deprecated, test-only) |
 
-### CLI — 10 Commands
+### CLI — 9 Commands
 
 ```bash
 ark run <file.ark>         # Run source or MAST JSON
 ark build <file.ark>       # Compile to native .wasm binary
 ark run-wasm <file.wasm>   # Execute compiled WASM via wasmtime
 ark check <file.ark>       # Static linear type checker
-ark diagnose <file.ark>    # Diagnostic proof suite (cryptographic verification)
 ark parse <file.ark>       # Dump AST as JSON
 ark debug <file.ark>       # Interactive step-through debugger
 ark repl                   # Interactive REPL
@@ -195,67 +194,6 @@ All hand-rolled in Rust — no OpenSSL, no ring, no external crypto crates for c
 | Constant-Time Comparison | ✅ |
 | Merkle Root Computation | ✅ |
 | Secure Random | ✅ (`/dev/urandom`) |
-
----
-
-## 🔬 Diagnostic Proof Suite
-
-**No other programming language has this.** Ark ships with a built-in diagnostic tool that cryptographically proves the compiler did its job correctly — producing Merkle-rooted, HMAC-signed evidence bundles that are machine-verifiable and tamper-evident.
-
-```bash
-ark diagnose app.ark                          # Developer tier (detailed metrics)
-ark diagnose app.ark --tier pro               # Pro tier (full cryptographic proof)
-ark diagnose app.ark --json                   # JSON output for CI/CD integration
-ark diagnose app.ark --tier pro --key secret  # Custom HMAC key for signing
-```
-
-### What It Proves
-
-Every `ark diagnose` run executes a **5-phase pipeline** (Parse → Check → Pipeline → Gates → Seal) that evaluates your code against **15 quality gates** across 3 diagnostic probes:
-
-| Gate | What It Verifies |
-|------|------------------|
-| `OVERLAY_DELTA` | Compiler phases actually changed state (catches no-op passes) |
-| `LINEAR_SAFETY` | All linear resources consumed correctly, zero leaks |
-| `MCC_COMPLIANCE` | Confidence is monotonically non-decreasing (catches regression) |
-| `LATENCY` | Each phase completed within its time budget |
-| `TOKEN_RATIO` | Output/input size ratio within bounds (catches bloat) |
-
-### Tiered Output (Monetization-Ready)
-
-| Tier | What You Get |
-|------|-------------|
-| **Free** | Summary + pass/fail + probe count |
-| **Developer** | + Per-gate scores, evidence strings, linear audit, pipeline health |
-| **Pro** | + Merkle root, HMAC signature, per-probe hashes, full crypto verification chain |
-
-### Sample Output
-
-```
-╔══════════════════════════════════════════════════════════╗
-║       ARK DIAGNOSTIC PROOF SUITE v1.0                    ║
-╚══════════════════════════════════════════════════════════╝
-
-▸ Source: bench_fibonacci.ark
-▸ Tier:   DEVELOPER
-
-✓ Parsed (196 bytes, MAST root: 9926f799...)
-✓ Linear check passed (score: 1.0000)
-✓ Pipeline health: 0.6800 (confidence: 0.6000)
-
-─── DIAGNOSTIC REPORT ───
-Gates: 15 passed, 0 failed (avg score: 1.0000)
-Overlay: 100.0% improvement
-Linear Safety: CLEAN
-Pipeline: VERIFIED
-
-✓ ALL QUALITY GATES PASSED
-
-▸ Merkle Root: 81f7a640...
-▸ Elapsed:     1ms
-```
-
-**Why this matters:** The Pro tier turns every compilation into auditable evidence for SOC 2 compliance, smart contract verification, CI/CD quality gates, and supply chain attestation — without any SaaS dependency.
 
 ---
 
@@ -325,7 +263,6 @@ results := swarm.run("Build a key-value store")
 
 | Subsystem | LOC | What It Does |
 |---|---|---|
-| **Diagnostic Proof Suite** | 780+ | Cryptographic compilation verification (Merkle + HMAC) |
 | **Hygienic Macros** | 522 | `gensym`-based macro expansion |
 | **Interactive Debugger** | 248 | Breakpoints, step-in/out, variable inspection |
 | **Content-Addressed AST (MAST)** | 218 | SHA-256 hashed AST nodes for integrity |
@@ -352,7 +289,7 @@ docker build -t ark-compiler .
 docker run -it --rm ark-compiler
 ```
 
-### From Source (Recommended)
+### From Source
 
 ```bash
 git clone https://github.com/merchantmoh-debug/ark-compiler.git
@@ -361,17 +298,13 @@ cd ark-compiler
 # Build the Rust compiler
 cd core && cargo build --release && cd ..
 
-# Install Python tooling (pick one)
-uv sync                         # ⚡ Recommended — fast, deterministic
-pip install -r requirements.txt  # Also works
+# Install Python tooling
+pip install -r requirements.txt
 
 # Run your first program
 echo 'print("Hello from Ark!")' > hello.ark
 python meta/ark.py run hello.ark
 ```
-
-> **Don't have uv?** Install it in one line: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-> Or on Windows: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 
 ### Try the Examples
 
@@ -418,13 +351,13 @@ python3 meta/ark.py run examples/snake.ark
 
 Dual Licensed: **AGPL v3** (Open Source) or **Commercial** (Sovereign Systems).
 
-**Patent Notice:** Protected by US Patent Application 
+**Patent Notice:** Protected by US Patent Application #63/935,467.
 
 ---
 
 <div align="center">
 
-**22,000+ lines of Rust. 298 tests. 13 stdlib modules. 109 intrinsics. 3 backends. 10/10 CI.**
+**21,471 lines of Rust. 286 tests. 13 stdlib modules. 109 intrinsics. 3 backends. 10/10 CI.**
 
 **Built from nothing in 11 days.**
 

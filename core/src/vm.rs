@@ -239,201 +239,48 @@ impl<'a> VM<'a> {
                         .ok_or_else(|| ArkError::StackUnderflow("Pop".to_string()))?;
                 }
 
-                OpCode::Add => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Add".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Add".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            self.push(Value::Integer(i1 + i2))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_add(vec![a, b])?)?,
-                    }
-                }
-                OpCode::Sub => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Sub".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Sub".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            self.push(Value::Integer(i1 - i2))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_sub(vec![a, b])?)?,
-                    }
-                }
-                OpCode::Mul => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Mul".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Mul".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            self.push(Value::Integer(i1 * i2))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_mul(vec![a, b])?)?,
-                    }
-                }
-                OpCode::Div => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Div".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Div".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            if *i2 == 0 {
-                                return Err(ArkError::DivisionByZero);
-                            }
-                            self.push(Value::Integer(i1 / i2))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_div(vec![a, b])?)?,
-                    }
-                }
-                OpCode::Mod => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Mod".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Mod".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            if *i2 == 0 {
-                                return Err(ArkError::DivisionByZero);
-                            }
-                            self.push(Value::Integer(i1 % i2))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_mod(vec![a, b])?)?,
-                    }
-                }
+                OpCode::Add => self.binary_op("Add", |a, b| {
+                    intrinsics::intrinsic_add(vec![a, b]).map_err(ArkError::from)
+                })?,
+                OpCode::Sub => self.binary_op("Sub", |a, b| {
+                    intrinsics::intrinsic_sub(vec![a, b]).map_err(ArkError::from)
+                })?,
+                OpCode::Mul => self.binary_op("Mul", |a, b| {
+                    intrinsics::intrinsic_mul(vec![a, b]).map_err(ArkError::from)
+                })?,
+                OpCode::Div => self.binary_op("Div", |a, b| match b {
+                    Value::Integer(0) => Err(ArkError::DivisionByZero),
+                    _ => intrinsics::intrinsic_div(vec![a, b]).map_err(ArkError::from),
+                })?,
+                OpCode::Mod => self.binary_op("Mod", |a, b| match b {
+                    Value::Integer(0) => Err(ArkError::DivisionByZero),
+                    _ => intrinsics::intrinsic_mod(vec![a, b]).map_err(ArkError::from),
+                })?,
 
-                OpCode::Eq => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Eq".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Eq".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            self.push(Value::Integer(if i1 == i2 { 1 } else { 0 }))?
-                        }
-                        (Value::Boolean(b1), Value::Boolean(b2)) => {
-                            self.push(Value::Integer(if b1 == b2 { 1 } else { 0 }))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_eq(vec![a, b])?)?,
+                OpCode::Eq => self.binary_op("Eq", |a, b| {
+                    intrinsics::intrinsic_eq(vec![a, b]).map_err(ArkError::from)
+                })?,
+                OpCode::Neq => self.binary_op_manual("Neq", |a, b| {
+                    let res =
+                        intrinsics::intrinsic_eq(vec![a, b]).map_err(|e| format!("{:?}", e))?;
+                    if let Value::Boolean(b) = res {
+                        Ok(Value::Boolean(!b))
+                    } else {
+                        Err("Eq did not return boolean".to_string())
                     }
-                }
-                OpCode::Neq => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Neq".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Neq".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            self.push(Value::Integer(if i1 != i2 { 1 } else { 0 }))?
-                        }
-                        _ => {
-                            let res = intrinsics::intrinsic_eq(vec![a, b])?;
-                            if let Value::Integer(i) = res {
-                                self.push(Value::Integer(if i == 0 { 1 } else { 0 }))?;
-                            } else if let Value::Boolean(b) = res {
-                                self.push(Value::Integer(if !b { 1 } else { 0 }))?;
-                            } else {
-                                self.push(Value::Integer(1))?; // Assume not eq
-                            }
-                        }
-                    }
-                }
-                OpCode::Gt => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Gt".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Gt".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            self.push(Value::Integer(if i1 > i2 { 1 } else { 0 }))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_gt(vec![a, b])?)?,
-                    }
-                }
-                OpCode::Lt => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Lt".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Lt".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            self.push(Value::Boolean(i1 < i2))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_lt(vec![a, b])?)?,
-                    }
-                }
-                OpCode::Ge => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Ge".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Ge".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            self.push(Value::Integer(if i1 >= i2 { 1 } else { 0 }))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_ge(vec![a, b])?)?,
-                    }
-                }
-                OpCode::Le => {
-                    let b = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Le".into()))?;
-                    let a = self
-                        .stack
-                        .pop()
-                        .ok_or_else(|| ArkError::StackUnderflow("Le".into()))?;
-                    match (&a, &b) {
-                        (Value::Integer(i1), Value::Integer(i2)) => {
-                            self.push(Value::Integer(if i1 <= i2 { 1 } else { 0 }))?
-                        }
-                        _ => self.push(intrinsics::intrinsic_le(vec![a, b])?)?,
-                    }
-                }
+                })?,
+                OpCode::Gt => self.binary_op("Gt", |a, b| {
+                    intrinsics::intrinsic_gt(vec![a, b]).map_err(ArkError::from)
+                })?,
+                OpCode::Lt => self.binary_op("Lt", |a, b| {
+                    intrinsics::intrinsic_lt(vec![a, b]).map_err(ArkError::from)
+                })?,
+                OpCode::Ge => self.binary_op("Ge", |a, b| {
+                    intrinsics::intrinsic_ge(vec![a, b]).map_err(ArkError::from)
+                })?,
+                OpCode::Le => self.binary_op("Le", |a, b| {
+                    intrinsics::intrinsic_le(vec![a, b]).map_err(ArkError::from)
+                })?,
 
                 OpCode::And => {
                     let b = self
@@ -594,6 +441,38 @@ impl<'a> VM<'a> {
         }
     }
 
+    fn binary_op<F>(&mut self, name: &str, op_fn: F) -> Result<(), ArkError>
+    where
+        F: Fn(Value, Value) -> Result<Value, ArkError>,
+    {
+        let b = self
+            .stack
+            .pop()
+            .ok_or_else(|| ArkError::StackUnderflow(name.to_string()))?;
+        let a = self
+            .stack
+            .pop()
+            .ok_or_else(|| ArkError::StackUnderflow(name.to_string()))?;
+        let res = op_fn(a, b)?;
+        self.push(res)
+    }
+
+    fn binary_op_manual<F>(&mut self, name: &str, op_fn: F) -> Result<(), ArkError>
+    where
+        F: Fn(Value, Value) -> Result<Value, String>,
+    {
+        let b = self
+            .stack
+            .pop()
+            .ok_or_else(|| ArkError::StackUnderflow(name.to_string()))?;
+        let a = self
+            .stack
+            .pop()
+            .ok_or_else(|| ArkError::StackUnderflow(name.to_string()))?;
+        let res = op_fn(a, b).map_err(ArkError::Generic)?;
+        self.push(res)
+    }
+
     #[inline]
     fn op_return(&mut self) -> Result<Option<Value>, ArkError> {
         let result = self.stack.pop().unwrap_or(Value::Unit);
@@ -736,28 +615,6 @@ impl<'a> VM<'a> {
     fn find_var(&self, name: &str) -> Option<Value> {
         for scope in self.scopes.iter().rev() {
             if let Some(val) = scope.get(name) {
-                return Some(val);
-            }
-        }
-        // Fallback: resolve intrinsic by name from the registry
-        if let Some(native_fn) = intrinsics::IntrinsicRegistry::resolve(name) {
-            return Some(Value::NativeFunction(native_fn));
-        }
-        // Fallback 2: dotted name struct field access (e.g. "string.split")
-        if name.contains('.') {
-            let parts: Vec<&str> = name.split('.').collect();
-            if let Some(mut val) = self.find_var(parts[0]) {
-                for part in &parts[1..] {
-                    if let Value::Struct(ref fields) = val {
-                        if let Some(field_val) = fields.get(*part) {
-                            val = field_val.clone();
-                        } else {
-                            return None;
-                        }
-                    } else {
-                        return None;
-                    }
-                }
                 return Some(val);
             }
         }

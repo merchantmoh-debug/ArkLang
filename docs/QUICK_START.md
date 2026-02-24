@@ -37,16 +37,6 @@ Run it:
 python meta/ark.py run hello.ark
 ```
 
-## Verify Your Code (Diagnostic Proof)
-
-Ark can cryptographically prove the compiler verified your code correctly:
-
-```bash
-cargo run --bin ark_loader -- diagnose hello.ark
-```
-
-This runs a 5-phase pipeline and produces a signed proof bundle. Use `--tier pro --json` for full cryptographic output suitable for CI/CD pipelines.
-
 ## Basic Syntax
 
 ### Variables

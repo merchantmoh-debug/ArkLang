@@ -91,8 +91,8 @@ def core_get(args: List[ArkValue]):
 
 def load_whitelist():
     default_whitelist = {
-        "ls", "grep", "cat", "echo",
-        "date", "whoami", "pwd", "mkdir", "touch"
+        "ls", "grep", "cat", "echo", "python", "python3",
+        "cargo", "rustc", "git", "date", "whoami", "pwd", "mkdir", "touch"
     }
     if os.path.exists("security.json"):
         try:

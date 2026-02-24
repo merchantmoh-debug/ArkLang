@@ -3,17 +3,8 @@ Ark Type System — Core data types for the Ark runtime.
 
 Extracted from ark.py (Phase 72: Structural Hardening).
 """
-import sys
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
-
-# slots=True requires Python 3.10+. Gracefully degrade on older versions.
-if sys.version_info >= (3, 10):
-    def _dataclass_compat(cls):
-        return dataclass(slots=True)(cls)
-else:
-    def _dataclass_compat(cls):
-        return dataclass(cls)
 
 
 class RopeString:
@@ -100,7 +91,7 @@ class RopeString:
         return str(self) >= str(other)
 
 
-@_dataclass_compat
+@dataclass(slots=True)
 class ArkValue:
     val: Any
     type: str
@@ -114,7 +105,7 @@ class ReturnException(Exception):
         self.value = value
 
 
-@_dataclass_compat
+@dataclass(slots=True)
 class ArkFunction:
     name: str
     params: List[str]
@@ -122,13 +113,13 @@ class ArkFunction:
     closure: 'Scope'
 
 
-@_dataclass_compat
+@dataclass(slots=True)
 class ArkClass:
     name: str
     methods: Dict[str, ArkFunction]
 
 
-@_dataclass_compat
+@dataclass(slots=True)
 class ArkInstance:
     klass: ArkClass
     fields: Dict[str, ArkValue]

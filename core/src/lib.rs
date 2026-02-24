@@ -30,7 +30,6 @@ pub mod compiler;
 pub mod consensus;
 pub mod crypto;
 pub mod debugger;
-pub mod diagnostic;
 #[cfg(test)]
 pub mod eval; // Deprecated by VM, enabled for tests
 pub mod ffi;
