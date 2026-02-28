@@ -32,40 +32,176 @@ class LinearityViolation(Exception):
     pass
 
 
-# ─── Capability-Token System ─────────────────────────────────────────────────
+# ─── Granular Capability-Token System ────────────────────────────────────────
 #
-# Replaces the binary ALLOW_DANGEROUS_LOCAL_EXECUTION env var with granular caps.
-# Usage: ARK_CAPABILITIES="exec,net,fs_write,fs_read,thread,ai"
+# RBAC model inspired by GitHub MCP server's StdioServerConfig (LockdownMode).
 #
+# Features:
+#   1. Path-scoped capabilities:  ARK_CAPABILITIES="fs_read:/data,fs_write:/output,net"
+#   2. ReadOnly mode:             ARK_READ_ONLY=true (strips all write capabilities)
+#   3. Lockdown paths:            ARK_LOCKDOWN_PATHS="/allowed/dir1,/allowed/dir2"
+#   4. Toolset gating:            ARK_ENABLED_TOOLSETS="fs,net" / ARK_EXCLUDED_TOOLS="sys.exec"
+#
+# Backward compat: ARK_CAPABILITIES="exec,net" still works (unscoped = global).
 # Backward compat: ALLOW_DANGEROUS_LOCAL_EXECUTION=true grants ALL capabilities.
 
+# Write-class capabilities (stripped by ReadOnly mode)
+_WRITE_CAPS = {"fs_write", "exec", "thread"}
+
+
 def _load_capabilities():
-    """Load capabilities from environment."""
+    """Load capabilities from environment with path-scope support.
+    
+    Returns:
+        dict: Maps capability names to their scopes.
+              scope=None means global (unrestricted).
+              scope=str means restricted to that path prefix.
+    
+    Examples:
+        "exec,net"             -> {"exec": None, "net": None}
+        "fs_read:/data"        -> {"fs_read": "/data"}
+        "fs_read:/data,net"    -> {"fs_read": "/data", "net": None}
+    """
     # Backward compatibility: old env var grants everything
     if os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() == "true":
-        return {"exec", "net", "fs_write", "fs_read", "thread", "ai", "all"}
+        return {
+            "exec": None, "net": None, "fs_write": None,
+            "fs_read": None, "thread": None, "ai": None, "all": None
+        }
     
     raw = os.environ.get("ARK_CAPABILITIES", "")
     if not raw:
-        return set()
-    return set(cap.strip() for cap in raw.split(",") if cap.strip())
+        return {}
+    
+    caps = {}
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        # Parse path-scoped token: "fs_read:/data" -> ("fs_read", "/data")
+        if ":" in token:
+            cap_name, scope = token.split(":", 1)
+            caps[cap_name.strip()] = scope.strip()
+        else:
+            caps[token] = None  # Global (unscoped)
+    
+    # ReadOnly mode: strip all write capabilities
+    if os.environ.get("ARK_READ_ONLY", "false").lower() == "true":
+        for wc in _WRITE_CAPS:
+            caps.pop(wc, None)
+    
+    return caps
+
+
+def _load_lockdown_paths():
+    """Load lockdown paths from environment.
+    
+    When set, ALL file operations (read + write) are restricted to these directories.
+    This is tighter than CWD sandboxing — whitelists specific paths.
+    """
+    raw = os.environ.get("ARK_LOCKDOWN_PATHS", "")
+    if not raw:
+        return None  # No lockdown
+    return [os.path.realpath(p.strip()) for p in raw.split(",") if p.strip()]
+
+
+def _load_toolset_config():
+    """Load toolset gating configuration.
+    
+    ARK_ENABLED_TOOLSETS: Whitelist of toolset categories (e.g., "fs,net")
+    ARK_EXCLUDED_TOOLS:   Blacklist of specific intrinsics (e.g., "sys.exec,sys.shell")
+    """
+    enabled = os.environ.get("ARK_ENABLED_TOOLSETS", "")
+    excluded = os.environ.get("ARK_EXCLUDED_TOOLS", "")
+    
+    enabled_set = set(t.strip() for t in enabled.split(",") if t.strip()) if enabled else None
+    excluded_set = set(t.strip() for t in excluded.split(",") if t.strip()) if excluded else set()
+    
+    return enabled_set, excluded_set
 
 
 CAPABILITIES = _load_capabilities()
+LOCKDOWN_PATHS = _load_lockdown_paths()
+ENABLED_TOOLSETS, EXCLUDED_TOOLS = _load_toolset_config()
 
 
-def has_capability(cap: str) -> bool:
-    """Check if a capability is granted."""
-    return "all" in CAPABILITIES or cap in CAPABILITIES
+def has_capability(cap: str, path: str = None) -> bool:
+    """Check if a capability is granted, optionally for a specific path.
+    
+    Args:
+        cap: Capability name (e.g., "fs_read", "net", "exec")
+        path: Optional path to check against path-scoped capabilities
+    
+    Returns:
+        True if the capability is granted (globally or for the given path)
+    """
+    if "all" in CAPABILITIES:
+        return True
+    if cap not in CAPABILITIES:
+        return False
+    
+    scope = CAPABILITIES[cap]
+    if scope is None:
+        return True  # Global (unscoped) — always granted
+    
+    # Path-scoped: check if the requested path falls under the scope
+    if path is None:
+        return True  # No path to check — base capability exists
+    
+    real_path = os.path.realpath(path)
+    return real_path.startswith(scope)
 
 
-def check_capability(cap: str):
+def check_capability(cap: str, path: str = None):
     """Require a capability, raising SandboxViolation if not granted."""
-    if not has_capability(cap):
+    if not has_capability(cap, path):
+        scope_info = ""
+        if path and cap in CAPABILITIES and CAPABILITIES[cap] is not None:
+            scope_info = f" (scoped to '{CAPABILITIES[cap]}', requested '{path}')"
         raise SandboxViolation(
-            f"Capability '{cap}' not granted. "
+            f"Capability '{cap}' not granted{scope_info}. "
             f"Set ARK_CAPABILITIES={cap} or ALLOW_DANGEROUS_LOCAL_EXECUTION=true to enable."
         )
+
+
+def check_tool_allowed(tool_name: str):
+    """Check if a specific tool/intrinsic is allowed by toolset gating.
+    
+    Enforces ARK_ENABLED_TOOLSETS (whitelist) and ARK_EXCLUDED_TOOLS (blacklist).
+    Blacklist takes priority over whitelist.
+    """
+    # Blacklist always wins
+    if tool_name in EXCLUDED_TOOLS:
+        raise SandboxViolation(
+            f"Tool '{tool_name}' is explicitly excluded via ARK_EXCLUDED_TOOLS."
+        )
+    
+    # If whitelist is active, check membership
+    if ENABLED_TOOLSETS is not None:
+        # Extract toolset category from tool name: "sys.fs.read" -> "fs"
+        parts = tool_name.split(".")
+        toolset = parts[1] if len(parts) > 1 else parts[0]
+        if toolset not in ENABLED_TOOLSETS:
+            raise SandboxViolation(
+                f"Toolset '{toolset}' is not enabled. "
+                f"Enabled toolsets: {', '.join(sorted(ENABLED_TOOLSETS))}"
+            )
+
+
+def is_read_only() -> bool:
+    """Check if the runtime is in read-only mode."""
+    return os.environ.get("ARK_READ_ONLY", "false").lower() == "true"
+
+
+def get_capability_summary() -> dict:
+    """Returns a summary of the current security configuration for diagnostics."""
+    return {
+        "capabilities": {k: v for k, v in CAPABILITIES.items()},
+        "read_only": is_read_only(),
+        "lockdown_paths": LOCKDOWN_PATHS,
+        "enabled_toolsets": list(ENABLED_TOOLSETS) if ENABLED_TOOLSETS else None,
+        "excluded_tools": list(EXCLUDED_TOOLS) if EXCLUDED_TOOLS else [],
+    }
 
 
 # ─── Path Security ───────────────────────────────────────────────────────────
@@ -85,14 +221,38 @@ def check_path_security(path, is_write=False):
     real_path = os.path.realpath(path) # Follow symlinks
     cwd = os.getcwd()
 
-    # 3. Check if path is within CWD (allow CWD itself)
-    # Using commonpath on real_path ensures we don't escape via symlinks
-    if os.path.commonpath([cwd, real_path]) != cwd:
-        raise SandboxViolation(f"Access outside working directory is forbidden: {path} (Resolved to: {real_path})")
+    # 3. Lockdown path enforcement (GitHub LockdownMode pattern)
+    # If lockdown paths are set, ONLY those directories are accessible
+    if LOCKDOWN_PATHS is not None:
+        allowed = False
+        for lp in LOCKDOWN_PATHS:
+            if real_path.startswith(lp) or real_path == lp:
+                allowed = True
+                break
+        if not allowed:
+            raise SandboxViolation(
+                f"Lockdown mode: access restricted to approved paths. "
+                f"'{path}' is not within: {', '.join(LOCKDOWN_PATHS)}"
+            )
+    else:
+        # 4. Default CWD sandbox (only when lockdown is not active)
+        if os.path.commonpath([cwd, real_path]) != cwd:
+            raise SandboxViolation(f"Access outside working directory is forbidden: {path} (Resolved to: {real_path})")
+
+    # 5. Read operations: check path-scoped fs_read capability
+    if not is_write:
+        check_capability("fs_read", real_path)
 
     if is_write:
-        # Require fs_write capability
-        check_capability("fs_write")
+        # ReadOnly mode guard
+        if is_read_only():
+            raise SandboxViolation(
+                f"Read-only mode is active (ARK_READ_ONLY=true). "
+                f"Write operation on '{path}' is forbidden."
+            )
+        
+        # Require fs_write capability (with path scope)
+        check_capability("fs_write", real_path)
         
         # Protect system files from being overwritten in sandbox mode
         meta_dir = os.path.dirname(os.path.realpath(__file__))
@@ -217,7 +377,9 @@ class SecurityScanner:
             # 2. Parse & Static Analysis
             if self.parser:
                 try:
-                    ast = self.parser.parse(content)
+                    raw_ast = self.parser.parse(content)
+                    # QiParser.parse() returns (dict, list) tuple — unpack
+                    ast = raw_ast[0] if isinstance(raw_ast, tuple) else raw_ast
                     self._check_static_analysis(path, ast)
                     self._audit_capabilities(path, ast)
                     self._audit_dependencies(path, ast)
@@ -259,7 +421,9 @@ class SecurityScanner:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
-            ast = self.parser.parse(content)
+            raw_ast = self.parser.parse(content)
+            # QiParser.parse() returns (dict, list) tuple — unpack
+            ast = raw_ast[0] if isinstance(raw_ast, tuple) else raw_ast
 
             def visit(node):
                 if isinstance(node, dict):

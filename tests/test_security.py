@@ -1,6 +1,7 @@
 import subprocess
 import os
 import sys
+import pytest
 
 def test_security():
     # 1. Create a malicious Ark script
@@ -34,34 +35,32 @@ def test_security():
 
         # 1. Check if exploit succeeded
         if "PWNED" in result.stdout:
-            print("[-] FAIL: Arbitrary code execution successful! 'PWNED' found in output.")
-            sys.exit(1)
+            pytest.fail("Arbitrary code execution successful! 'PWNED' found in output.")
 
         # 2. Check if exploit was blocked
         # The Rust intrinsic prints: "[Ark:Exec] Security Violation: ..."
         if "Security Violation" in result.stdout:
             print("[+] PASS: Exploit blocked by whitelist.")
-            sys.exit(0)
+            return  # Test passed
 
         # 3. Fallback check
         if result.returncode != 0:
              # Check if it was a syntax error vs runtime error
              if "Syntax Error" in result.stderr or "Syntax Error" in result.stdout:
-                 print("[-] FAIL: Syntax Error in test script. Fix the test.")
-                 sys.exit(1)
+                 pytest.fail("Syntax Error in test script. Fix the test.")
              print("[+] PASS: Process failed (likely blocked).")
-             sys.exit(0)
+             return  # Test passed
 
         # If neither PWNED nor explicit block message...
         print("[?] UNDETERMINED: 'PWNED' not found, but no explicit block message seen.")
-        sys.exit(0)
+        return  # Treat as pass
 
     except Exception as e:
-        print(f"[-] ERROR: {e}")
-        sys.exit(1)
+        pytest.fail(f"Test error: {e}")
     finally:
         if os.path.exists(file_name):
             os.remove(file_name)
 
 if __name__ == "__main__":
     test_security()
+

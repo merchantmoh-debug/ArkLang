@@ -24,6 +24,41 @@ except ImportError:
 
 from src.config import settings
 
+
+class MessageBus:
+    """
+    Inter-agent message bus for swarm communication.
+    Stores messages as dicts with from, to, type, content, timestamp fields.
+    """
+
+    def __init__(self):
+        self.messages: list = []
+
+    def send(self, sender: str, recipient: str, msg_type: str, content: str):
+        """Send a message between agents."""
+        self.messages.append({
+            "from": sender,
+            "to": recipient,
+            "type": msg_type,
+            "content": content,
+            "timestamp": datetime.now().isoformat(),
+        })
+
+    def get_all_messages(self) -> list:
+        """Return a copy of all messages."""
+        return list(self.messages)
+
+    def get_context_for(self, agent_name: str) -> list:
+        """Get messages relevant to a specific agent (sent by or to them)."""
+        return [
+            m for m in self.messages
+            if m["from"] == agent_name or m["to"] == agent_name
+        ]
+
+    def clear(self):
+        """Clear all messages."""
+        self.messages.clear()
+
 class SwarmOrchestrator:
     """
     Swarm Orchestrator.
@@ -50,75 +85,108 @@ class SwarmOrchestrator:
         """Register an agent in the swarm."""
         self.agents[agent.role] = agent
 
-    async def execute(self, task: str, strategy: str = "router") -> Dict[str, Any]:
-        """Execute a task with the specified strategy."""
+    def get_message_log(self):
+        """Return a copy of the message bus."""
+        return list(self.message_bus)
+
+    def execute(self, task: str, strategy: str = "router", verbose: bool = True) -> str:
+        """Execute a task with the specified strategy (synchronous)."""
         start_time = datetime.now()
-        success = False
         try:
             if strategy == "router":
-                result = await self._strategy_router(task)
+                result = self._strategy_router_sync(task, verbose=verbose)
             elif strategy == "broadcast":
-                result = await self._strategy_broadcast(task)
+                result = self._strategy_broadcast_sync(task)
             elif strategy == "consensus":
-                result = await self._strategy_consensus(task)
+                result = self._strategy_consensus_sync(task)
             else:
                 raise ValueError(f"Unknown strategy: {strategy}")
 
-            success = True
             latency = (datetime.now() - start_time).total_seconds()
             self._update_stats(success=True, latency=latency)
-
-            if isinstance(result, str):
-                return {"result": result, "status": "success"}
             return result
 
         except Exception as e:
             latency = (datetime.now() - start_time).total_seconds()
             self._update_stats(success=False, latency=latency)
-            return {"result": str(e), "status": "error"}
+            return f"Error: {e}"
 
     async def _run_sync(self, func, *args):
         """Run a synchronous function in the executor."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, func, *args)
 
-    async def _strategy_router(self, task: str) -> Any:
-        """Use RouterAgent to delegate."""
+    def _strategy_router_sync(self, task: str, verbose: bool = True) -> str:
+        """Synchronous router strategy for test compatibility."""
         router = self.agents.get("router")
         if not router:
             return "Error: Router agent not found."
 
         # Analyze
         if hasattr(router, "analyze_and_delegate"):
-            delegations = await self._run_sync(router.analyze_and_delegate, task)
+            delegations = router.analyze_and_delegate(task)
         else:
-            delegations = [{"agent": "coder", "task": task}] # Fallback
-        
+            delegations = [{"agent": "coder", "task": task}]
+
         results = []
-        delegation_plan = []
-        
-        # If delegation returns list of dicts
+
         if isinstance(delegations, list):
             for item in delegations:
                 if isinstance(item, dict):
                     agent_name = item.get("agent")
                     subtask = item.get("task")
-                    delegation_plan.append(item)
+
+                    # Log task to message bus
+                    self.message_bus.append({
+                        "from": "router",
+                        "to": agent_name,
+                        "type": "task",
+                        "content": subtask,
+                        "timestamp": datetime.now().isoformat(),
+                    })
 
                     if agent_name in self.agents:
                         agent = self.agents[agent_name]
-                        res = await self._run_sync(agent.execute, subtask)
+                        res = agent.execute(subtask)
                         results.append(res)
+
+                        # Log result to message bus
+                        self.message_bus.append({
+                            "from": agent_name,
+                            "to": "router",
+                            "type": "result",
+                            "content": res,
+                            "timestamp": datetime.now().isoformat(),
+                        })
                     else:
-                        results.append(f"Error: Agent {agent_name} not found.")
-        
+                        error_msg = f"Error: Unknown agent '{agent_name}'"
+                        results.append(error_msg)
+
         # Synthesize
         if hasattr(router, "synthesize_results"):
-             final_res = await self._run_sync(router.synthesize_results, delegation_plan, results)
+            return router.synthesize_results(delegations, results)
         else:
-             final_res = "\n".join([str(r) for r in results])
+            return "\n".join([str(r) for r in results])
 
-        return final_res
+    def _strategy_broadcast_sync(self, task: str) -> str:
+        """Synchronous broadcast strategy."""
+        results = {}
+        for name, agent in self.agents.items():
+            if name != "router":
+                results[name] = agent.execute(task)
+        return str(results)
+
+    def _strategy_consensus_sync(self, task: str) -> str:
+        """Synchronous consensus strategy."""
+        results = {}
+        for name, agent in self.agents.items():
+            if name != "router":
+                results[name] = agent.execute(task)
+        return str(results)
+
+    async def _strategy_router(self, task: str) -> Any:
+        """Use RouterAgent to delegate (async version)."""
+        return self._strategy_router_sync(task)
 
     async def _strategy_broadcast(self, task: str) -> Dict[str, Any]:
         """Send task to all agents (except router)."""

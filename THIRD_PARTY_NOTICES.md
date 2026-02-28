@@ -45,6 +45,12 @@ The Ark Sovereign Stack includes the following third-party software. This file l
 | **getrandom** | 0.2 | MIT / Apache-2.0 | https://crates.io/crates/getrandom |
 | **js-sys** | 0.3 | MIT / Apache-2.0 | https://crates.io/crates/js-sys |
 
+## Derived Works
+
+| Name | License | Source | Notes |
+| :--- | :--- | :--- | :--- |
+| **OpenFang** | MIT / Apache-2.0 | https://github.com/ArcadeLabsInc/openfang | Ark's 24-module Rust agent substrate (~13,350 LOC) was written with architecture informed by OpenFang. Covers agent security, LLM routing, lifecycle, and semantic memory. |
+
 ## License Compatibility Note
 
 Sovereign Systems respects the intellectual property of the open-source community.

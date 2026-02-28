@@ -6,6 +6,7 @@
  * LICENSE: DUAL-LICENSED (AGPLv3 or COMMERCIAL).
  */
 
+use crate::adn;
 use crate::persistent::{PMap, PVec};
 use crate::runtime::{NativeFn, RuntimeError, Scope, Value};
 use regex::Regex;
@@ -25,14 +26,14 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use aes_gcm::{
-    aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
+    aead::{Aead, KeyInit},
 };
 use ed25519_dalek::{Signer, SigningKey, Verifier, VerifyingKey};
 use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2;
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use sha2::{Digest, Sha512};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -90,9 +91,10 @@ impl IntrinsicRegistry {
             "intrinsic_not" => Some(intrinsic_not),
             "intrinsic_print" => Some(intrinsic_print),
             "print" => Some(intrinsic_print),
-            // Core aliases for Python parity
-            "get" => Some(intrinsic_list_get),
-            "len" => Some(intrinsic_len),
+            // Core aliases for Python parity (non-linear wrappers for bytecode VM)
+            "get" => Some(core_get),
+            "len" => Some(core_len),
+            "get_item" => Some(core_get),
             "intrinsic_ask_ai" | "sys.ai.ask" | "ai.ask" => Some(intrinsic_ask_ai),
             "sys_exec" | "intrinsic_exec" => Some(intrinsic_exec),
             "sys_fs_write" | "intrinsic_fs_write" | "sys.fs.write" => Some(intrinsic_fs_write),
@@ -147,6 +149,10 @@ impl IntrinsicRegistry {
             "intrinsic_math_acos" | "math.acos" => Some(intrinsic_math_acos),
             "intrinsic_math_atan" | "math.atan" => Some(intrinsic_math_atan),
             "intrinsic_math_atan2" | "math.atan2" => Some(intrinsic_math_atan2),
+            "intrinsic_math_ln" | "math.ln" => Some(intrinsic_math_ln),
+            "intrinsic_math_exp" | "math.exp" => Some(intrinsic_math_exp),
+            "intrinsic_math_abs" | "math.abs" => Some(intrinsic_math_abs),
+            "intrinsic_gcd_normalize" | "gcd.normalize" => Some(intrinsic_gcd_normalize),
             "intrinsic_io_cls" | "io.cls" => Some(intrinsic_io_cls),
             "intrinsic_list_set" | "sys.list.set" => Some(intrinsic_list_set),
             "intrinsic_chain_height" | "sys.chain.height" => Some(intrinsic_chain_height),
@@ -169,6 +175,7 @@ impl IntrinsicRegistry {
                 Some(intrinsic_io_read_file_async)
             }
             "sys.extract_code" | "intrinsic_extract_code" => Some(intrinsic_extract_code),
+            "sys.resource.usage" | "intrinsic_resource_usage" => Some(intrinsic_resource_usage),
             // Networking Intrinsics
             "net.http.request" | "intrinsic_http_request" | "sys.net.http.request" => {
                 Some(intrinsic_http_request)
@@ -235,6 +242,16 @@ impl IntrinsicRegistry {
             "pmap.get" | "sys.pmap.get" | "intrinsic_pmap_get" => Some(intrinsic_pmap_get),
             "pmap.keys" | "sys.pmap.keys" | "intrinsic_pmap_keys" => Some(intrinsic_pmap_keys),
             "pmap.merge" | "sys.pmap.merge" | "intrinsic_pmap_merge" => Some(intrinsic_pmap_merge),
+            // ADN Data Notation Intrinsics
+            "data.to_adn" | "sys.data.to_adn" | "intrinsic_data_to_adn" => {
+                Some(intrinsic_data_to_adn)
+            }
+            "data.from_adn" | "sys.data.from_adn" | "intrinsic_data_from_adn" => {
+                Some(intrinsic_data_from_adn)
+            }
+            // Unified data namespace aliases for JSON
+            "data.to_json" | "sys.data.to_json" => Some(intrinsic_json_stringify),
+            "data.from_json" | "sys.data.from_json" => Some(intrinsic_json_parse),
             // WASM Component Interop Intrinsics (native only)
             #[cfg(not(target_arch = "wasm32"))]
             "sys.wasm.load" | "wasm.load" | "intrinsic_wasm_load" => {
@@ -329,6 +346,11 @@ impl IntrinsicRegistry {
         );
 
         // System
+        // Bare aliases for common builtins (compiler emits Load("len") / Load("get"))
+        // Use non-linear wrappers so bytecode programs get scalar results
+        scope.set("len".to_string(), Value::NativeFunction(core_len));
+        scope.set("get".to_string(), Value::NativeFunction(core_get));
+        scope.set("get_item".to_string(), Value::NativeFunction(core_get));
         scope.set("sys.len".to_string(), Value::NativeFunction(intrinsic_len));
         scope.set(
             "sys.exec".to_string(),
@@ -508,6 +530,39 @@ impl IntrinsicRegistry {
             "math.atan2".to_string(),
             Value::NativeFunction(intrinsic_math_atan2),
         );
+        // GCD parity intrinsics (Phase: Epistemic Firewall)
+        scope.set(
+            "intrinsic_math_ln".to_string(),
+            Value::NativeFunction(intrinsic_math_ln),
+        );
+        scope.set(
+            "math.ln".to_string(),
+            Value::NativeFunction(intrinsic_math_ln),
+        );
+        scope.set(
+            "intrinsic_math_exp".to_string(),
+            Value::NativeFunction(intrinsic_math_exp),
+        );
+        scope.set(
+            "math.exp".to_string(),
+            Value::NativeFunction(intrinsic_math_exp),
+        );
+        scope.set(
+            "intrinsic_math_abs".to_string(),
+            Value::NativeFunction(intrinsic_math_abs),
+        );
+        scope.set(
+            "math.abs".to_string(),
+            Value::NativeFunction(intrinsic_math_abs),
+        );
+        scope.set(
+            "intrinsic_gcd_normalize".to_string(),
+            Value::NativeFunction(intrinsic_gcd_normalize),
+        );
+        scope.set(
+            "gcd.normalize".to_string(),
+            Value::NativeFunction(intrinsic_gcd_normalize),
+        );
         scope.set(
             "io.cls".to_string(),
             Value::NativeFunction(intrinsic_io_cls),
@@ -600,6 +655,14 @@ impl IntrinsicRegistry {
         scope.set(
             "sys.extract_code".to_string(),
             Value::NativeFunction(intrinsic_extract_code),
+        );
+        scope.set(
+            "sys.resource.usage".to_string(),
+            Value::NativeFunction(intrinsic_resource_usage),
+        );
+        scope.set(
+            "intrinsic_resource_usage".to_string(),
+            Value::NativeFunction(intrinsic_resource_usage),
         );
         /*
          */
@@ -715,6 +778,25 @@ impl IntrinsicRegistry {
         scope.set(
             "governance.verify_chain".to_string(),
             Value::NativeFunction(intrinsic_governance_verify_chain),
+        );
+
+        // ── ADN Data Notation intrinsics ──
+        scope.set(
+            "data.to_adn".to_string(),
+            Value::NativeFunction(intrinsic_data_to_adn),
+        );
+        scope.set(
+            "data.from_adn".to_string(),
+            Value::NativeFunction(intrinsic_data_from_adn),
+        );
+        // Unified data namespace aliases for JSON
+        scope.set(
+            "data.to_json".to_string(),
+            Value::NativeFunction(intrinsic_json_stringify),
+        );
+        scope.set(
+            "data.from_json".to_string(),
+            Value::NativeFunction(intrinsic_json_parse),
         );
     }
 }
@@ -861,63 +943,56 @@ pub fn intrinsic_ask_ai(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
         println!("[Ark:AI] Contacting Gemini (Native Rust)...");
 
-        // Execute async logic within blocking context
-        // SAFETY: This blocks the current thread. Do not call this from within an existing
-        // Tokio runtime context (e.g., inside an async function running on a runtime)
-        // or it will panic. The VM is designed to run in a dedicated thread or process.
-        // Create a new runtime for this blocking operation
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            // Simple Retry Logic
-            for attempt in 0..3 {
-                match client
-                    .post(&url)
-                    .header("x-goog-api-key", &api_key)
-                    .json(&payload)
-                    .send()
-                {
-                    Ok(resp) => {
-                        if resp.status().is_success() {
-                            let json_resp = match resp.json::<serde_json::Value>() {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    println!("[Ark:AI] JSON Error: {}", e);
-                                    return Err(RuntimeError::NotExecutable);
-                                }
-                            };
-
-                            if let Some(text) =
-                                json_resp["candidates"][0]["content"]["parts"][0]["text"].as_str()
-                            {
-                                // Store in Cache
-                                if let Ok(mut guard) = cache.lock() {
-                                    if guard.len() > 1000 {
-                                        guard.clear(); // Simple eviction
-                                    }
-                                    guard.insert(prompt.clone(), text.to_string());
-                                }
-                                return Ok(Value::String(text.to_string()));
+        // Optimization: Direct Blocking Call (No Tokio Runtime Overhead)
+        // Simple Retry Logic
+        for attempt in 0..3 {
+            match client
+                .post(&url)
+                .header("x-goog-api-key", &api_key)
+                .json(&payload)
+                .send()
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        let json_resp = match resp.json::<serde_json::Value>() {
+                            Ok(v) => v,
+                            Err(e) => {
+                                println!("[Ark:AI] JSON Error: {}", e);
+                                return Err(RuntimeError::NotExecutable);
                             }
-                        } else if resp.status().as_u16() == 429 {
-                            println!("[Ark:AI] Rate limit (429). Retrying...");
-                            tokio::time::sleep(Duration::from_secs(2u64.pow(attempt))).await;
-                            continue;
-                        } else {
-                            println!("[Ark:AI] HTTP Error: {}", resp.status());
-                        }
-                    }
-                    Err(e) => println!("[Ark:AI] Network Error: {}", e),
-                }
-            }
+                        };
 
-            // Fallback Mock
-            println!("[Ark:AI] WARNING: API Failed. Using Fallback Mock.");
-            let start = "```python\n";
-            let code =
-                "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
-            let end = "```";
-            Ok(Value::String(format!("{}{}{}", start, code, end)))
-        })
+                        if let Some(text) =
+                            json_resp["candidates"][0]["content"]["parts"][0]["text"].as_str()
+                        {
+                            // Store in Cache
+                            if let Ok(mut guard) = cache.lock() {
+                                if guard.len() > 1000 {
+                                    guard.clear(); // Simple eviction
+                                }
+                                guard.insert(prompt.clone(), text.to_string());
+                            }
+                            return Ok(Value::String(text.to_string()));
+                        }
+                    } else if resp.status().as_u16() == 429 {
+                        println!("[Ark:AI] Rate limit (429). Retrying...");
+                        std::thread::sleep(Duration::from_secs(2u64.pow(attempt)));
+                        continue;
+                    } else {
+                        println!("[Ark:AI] HTTP Error: {}", resp.status());
+                    }
+                }
+                Err(e) => println!("[Ark:AI] Network Error: {}", e),
+            }
+        }
+
+        // Fallback Mock
+        println!("[Ark:AI] WARNING: API Failed. Using Fallback Mock.");
+        let start = "```python\n";
+        let code =
+            "import datetime\nprint(f'Sovereignty Established: {datetime.datetime.now()}')\n";
+        let end = "```";
+        Ok(Value::String(format!("{}{}{}", start, code, end)))
     }
 }
 
@@ -985,10 +1060,8 @@ pub fn intrinsic_exec(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
         if !allow_unsafe {
             // Allowed binaries (safe-ish subset)
-            let whitelist = [
-                "ls", "grep", "cat", "echo", "date", "whoami", "clear", "python3", "python",
-                "cargo", "rustc", "node", "git",
-            ];
+            // HARDENED: Removed python, node, cargo, rustc, git to prevent arbitrary code execution
+            let whitelist = ["ls", "grep", "cat", "echo", "date", "whoami", "clear"];
 
             // Check strictly against whitelist (exact match on binary name)
             // If program is a path (e.g. /bin/ls), extract file_name.
@@ -1066,6 +1139,32 @@ pub fn intrinsic_fs_write(args: Vec<Value>) -> Result<Value, RuntimeError> {
         fs::write(path_str, content).map_err(|_| RuntimeError::NotExecutable)?;
         Ok(Value::Unit)
     }
+}
+
+/// Non-linear `len` — returns just the count as Integer (not the linear pair).
+/// Used by bytecode VM where imperative programs expect `len(x)` to return a scalar.
+pub fn core_len(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let result = intrinsic_len(args)?;
+    // intrinsic_len returns List([Integer(count), original_value])
+    if let Value::List(items) = result {
+        if !items.is_empty() {
+            return Ok(items[0].clone());
+        }
+    }
+    Ok(Value::Integer(0))
+}
+
+/// Non-linear `get` — returns just the element value (not the linear pair).
+/// Used by bytecode VM for subscript access `x[i]`.
+pub fn core_get(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let result = intrinsic_list_get(args)?;
+    // intrinsic_list_get returns List([element, original_list])
+    if let Value::List(items) = result {
+        if !items.is_empty() {
+            return Ok(items[0].clone());
+        }
+    }
+    Err(RuntimeError::NotExecutable)
 }
 
 pub fn intrinsic_add(args: Vec<Value>) -> Result<Value, RuntimeError> {
@@ -1167,14 +1266,10 @@ pub fn intrinsic_gt(args: Vec<Value>) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::NotExecutable);
     }
     match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(if a > b { 1 } else { 0 })),
-        (Value::String(a), Value::String(b)) => Ok(Value::Integer(if a > b { 1 } else { 0 })),
-        (Value::String(a), Value::Integer(b)) => {
-            Ok(Value::Integer(if a > &b.to_string() { 1 } else { 0 }))
-        }
-        (Value::Integer(a), Value::String(b)) => {
-            Ok(Value::Integer(if &a.to_string() > b { 1 } else { 0 }))
-        }
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a > b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a > b)),
+        (Value::String(a), Value::Integer(b)) => Ok(Value::Boolean(a > &b.to_string())),
+        (Value::Integer(a), Value::String(b)) => Ok(Value::Boolean(&a.to_string() > b)),
         _ => Err(RuntimeError::TypeMismatch(
             "Integer or String".to_string(),
             args[0].clone(),
@@ -1202,8 +1297,10 @@ pub fn intrinsic_not(args: Vec<Value>) -> Result<Value, RuntimeError> {
     }
     match &args[0] {
         Value::Boolean(b) => Ok(Value::Boolean(!b)),
+        Value::Integer(n) => Ok(Value::Boolean(*n == 0)),
+        Value::String(s) => Ok(Value::Boolean(s.is_empty() || s == "0" || s == "false")),
         _ => Err(RuntimeError::TypeMismatch(
-            "Boolean".to_string(),
+            "Boolean, Integer, or String".to_string(),
             args[0].clone(),
         )),
     }
@@ -1214,14 +1311,10 @@ pub fn intrinsic_ge(args: Vec<Value>) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::NotExecutable);
     }
     match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(if a >= b { 1 } else { 0 })),
-        (Value::String(a), Value::String(b)) => Ok(Value::Integer(if a >= b { 1 } else { 0 })),
-        (Value::String(a), Value::Integer(b)) => {
-            Ok(Value::Integer(if a >= &b.to_string() { 1 } else { 0 }))
-        }
-        (Value::Integer(a), Value::String(b)) => {
-            Ok(Value::Integer(if &a.to_string() >= b { 1 } else { 0 }))
-        }
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a >= b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a >= b)),
+        (Value::String(a), Value::Integer(b)) => Ok(Value::Boolean(a >= &b.to_string())),
+        (Value::Integer(a), Value::String(b)) => Ok(Value::Boolean(&a.to_string() >= b)),
         _ => Err(RuntimeError::TypeMismatch(
             "Integer or String".to_string(),
             args[0].clone(),
@@ -1234,14 +1327,10 @@ pub fn intrinsic_le(args: Vec<Value>) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::NotExecutable);
     }
     match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(if a <= b { 1 } else { 0 })),
-        (Value::String(a), Value::String(b)) => Ok(Value::Integer(if a <= b { 1 } else { 0 })),
-        (Value::String(a), Value::Integer(b)) => {
-            Ok(Value::Integer(if a <= &b.to_string() { 1 } else { 0 }))
-        }
-        (Value::Integer(a), Value::String(b)) => {
-            Ok(Value::Integer(if &a.to_string() <= b { 1 } else { 0 }))
-        }
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a <= b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a <= b)),
+        (Value::String(a), Value::Integer(b)) => Ok(Value::Boolean(a <= &b.to_string())),
+        (Value::Integer(a), Value::String(b)) => Ok(Value::Boolean(&a.to_string() <= b)),
         _ => Err(RuntimeError::TypeMismatch(
             "Integer or String".to_string(),
             args[0].clone(),
@@ -1254,10 +1343,13 @@ pub fn intrinsic_eq(args: Vec<Value>) -> Result<Value, RuntimeError> {
         return Err(RuntimeError::NotExecutable);
     }
     match (&args[0], &args[1]) {
-        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Integer(if a == b { 1 } else { 0 })),
-        (Value::String(a), Value::String(b)) => Ok(Value::Integer(if a == b { 1 } else { 0 })),
-        (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Integer(if a == b { 1 } else { 0 })),
-        _ => Ok(Value::Integer(0)), // Default inequality for mismatched types/objects
+        (Value::Integer(a), Value::Integer(b)) => Ok(Value::Boolean(a == b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a == b)),
+        (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
+        // Cross-type: Integer vs String (common in Ark scripts)
+        (Value::Integer(a), Value::String(b)) => Ok(Value::Boolean(&a.to_string() == b)),
+        (Value::String(a), Value::Integer(b)) => Ok(Value::Boolean(a == &b.to_string())),
+        _ => Ok(Value::Boolean(false)), // Default inequality for mismatched types/objects
     }
 }
 
@@ -2313,6 +2405,105 @@ pub fn intrinsic_math_sqrt(args: Vec<Value>) -> Result<Value, RuntimeError> {
     }
 }
 
+/// Natural logarithm (ln). Input is Ark fixed-point integer (×10000).
+/// Returns ln(x/10000) * 10000 as integer.
+pub fn intrinsic_math_ln(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => {
+            if *n <= 0 {
+                return Err(RuntimeError::InvalidOperation(
+                    "Logarithm of non-positive number".to_string(),
+                ));
+            }
+            let x = *n as f64 / 10000.0;
+            let res = x.ln() * 10000.0;
+            Ok(Value::Integer(res as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+/// Exponential (e^x). Input is Ark fixed-point integer (×10000).
+/// Returns e^(x/10000) * 10000 as integer.
+pub fn intrinsic_math_exp(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => {
+            let x = *n as f64 / 10000.0;
+            let res = x.exp() * 10000.0;
+            if res.is_infinite() || res.is_nan() {
+                return Err(RuntimeError::InvalidOperation(
+                    "math.exp overflow: result is infinite".to_string(),
+                ));
+            }
+            Ok(Value::Integer(res as i64))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+/// Absolute value. Works on raw integers (no fixed-point scaling).
+pub fn intrinsic_math_abs(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    match &args[0] {
+        Value::Integer(n) => Ok(Value::Integer(n.abs())),
+        _ => Err(RuntimeError::TypeMismatch(
+            "Integer".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
+/// GCD normalize: clamp each value in a list to [epsilon, 10000-epsilon].
+/// Args: (list: List<Integer>, epsilon: Integer)
+/// Returns: new List with clamped values.
+pub fn intrinsic_gcd_normalize(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 2 {
+        return Err(RuntimeError::NotExecutable);
+    }
+    let epsilon = match &args[1] {
+        Value::Integer(e) => *e,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Integer".to_string(),
+                args[1].clone(),
+            ));
+        }
+    };
+    match &args[0] {
+        Value::List(items) => {
+            let clamped: Vec<Value> = items
+                .iter()
+                .map(|v| match v {
+                    Value::Integer(n) => {
+                        let c = (*n).max(epsilon).min(10000 - epsilon);
+                        Value::Integer(c)
+                    }
+                    other => other.clone(),
+                })
+                .collect();
+            Ok(Value::List(clamped))
+        }
+        _ => Err(RuntimeError::TypeMismatch(
+            "List".to_string(),
+            args[0].clone(),
+        )),
+    }
+}
+
 pub fn intrinsic_math_sin(args: Vec<Value>) -> Result<Value, RuntimeError> {
     if args.len() != 1 {
         return Err(RuntimeError::NotExecutable);
@@ -2808,6 +2999,47 @@ pub fn intrinsic_extract_code(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     Ok(Value::List(blocks))
 }
+
+pub fn intrinsic_resource_usage(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if !args.is_empty() {
+        return Err(RuntimeError::NotExecutable);
+    }
+
+    // Get Memory Usage (RSS)
+    let memory = {
+        #[cfg(target_os = "linux")]
+        {
+            // read /proc/self/statm
+            if let Ok(content) = fs::read_to_string("/proc/self/statm") {
+                let parts: Vec<&str> = content.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    // RSS is the second value (in pages)
+                    if let Ok(pages) = parts[1].parse::<i64>() {
+                        // Assume 4KB pages
+                        pages * 4096
+                    } else {
+                        0
+                    }
+                } else {
+                    0
+                }
+            } else {
+                0
+            }
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            0
+        }
+    };
+
+    let mut map = HashMap::new();
+    map.insert("memory".to_string(), Value::Integer(memory));
+    map.insert("cpu".to_string(), Value::Integer(0)); // Placeholder
+
+    Ok(Value::Struct(map))
+}
+
 // ----------------------------------------------------------------------
 // NETWORKING INTRINSICS
 // ----------------------------------------------------------------------
@@ -3465,7 +3697,7 @@ fn json_to_value(s: &str) -> Result<Value, String> {
             }
             let key = kv[0].trim();
             let val_str = kv[1..].join(":"); // rejoin in case value contains colons
-                                             // Strip quotes from key
+            // Strip quotes from key
             let key = if key.starts_with('"') && key.ends_with('"') && key.len() >= 2 {
                 &key[1..key.len() - 1]
             } else {
@@ -3555,6 +3787,42 @@ fn value_to_json(val: &Value) -> String {
         }
         _ => "null".into(),
     }
+}
+
+// =============================================================================
+// ADN Data Notation Intrinsics (Phase 80)
+// =============================================================================
+
+/// data.to_adn(value) → String
+/// Serialize any Ark Value to ADN (Ark Data Notation) string.
+fn intrinsic_data_to_adn(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::InvalidOperation(
+            "data.to_adn expects 1 argument".into(),
+        ));
+    }
+    let adn_str = adn::to_adn_pretty(&args[0]);
+    Ok(Value::String(adn_str))
+}
+
+/// data.from_adn(string) → Value
+/// Parse an ADN string into an Ark Value.
+fn intrinsic_data_from_adn(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    if args.len() != 1 {
+        return Err(RuntimeError::InvalidOperation(
+            "data.from_adn expects 1 argument (string)".into(),
+        ));
+    }
+    let adn_str = match &args[0] {
+        Value::String(s) => s.clone(),
+        _ => {
+            return Err(RuntimeError::InvalidOperation(
+                "data.from_adn expects a string".into(),
+            ));
+        }
+    };
+    adn::from_adn(&adn_str)
+        .map_err(|e| RuntimeError::InvalidOperation(format!("ADN Parse Error: {}", e)))
 }
 
 /// sys.log(args...) → Unit
@@ -4429,7 +4697,7 @@ mod tests {
 
         // sin(PI/2) approx 10000 (PI/2 = 1.5707... * 10000 = 15707)
         let args = vec![Value::Integer(15708)]; // 1.5708
-                                                // sin(1.5708) is close to 1
+        // sin(1.5708) is close to 1
         let res = intrinsic_math_sin(args).unwrap();
         if let Value::Integer(v) = res {
             assert!(v >= 9999 && v <= 10000);
@@ -4759,46 +5027,46 @@ mod tests {
         match res {
             Value::String(s) => {
                 assert_eq!(s.len(), 32); // 16 bytes = 32 hex chars
-                                         // Verify hex
+                // Verify hex
                 assert!(hex::decode(&s).is_ok());
             }
             _ => panic!("Expected String"),
         }
+    }
 
-        // Networking Tests
-        #[test]
-        fn test_socket_bind_close() {
-            // Bind to port 0 (ephemeral)
-            let args = vec![Value::Integer(0)];
-            let res = intrinsic_socket_bind(args).unwrap();
-            let id = match res {
-                Value::Integer(i) => i,
-                _ => panic!("Expected Integer ID"),
-            };
-            assert!(id > 0);
+    // Networking Tests
+    #[test]
+    fn test_socket_bind_close() {
+        // Bind to port 0 (ephemeral)
+        let args = vec![Value::Integer(0)];
+        let res = intrinsic_socket_bind(args).unwrap();
+        let id = match res {
+            Value::Integer(i) => i,
+            _ => panic!("Expected Integer ID"),
+        };
+        assert!(id > 0);
 
-            // Close it
-            let args_close = vec![Value::Integer(id)];
-            let res_close = intrinsic_socket_close(args_close).unwrap();
-            assert_eq!(res_close, Value::Boolean(true));
-        }
+        // Close it
+        let args_close = vec![Value::Integer(id)];
+        let res_close = intrinsic_socket_close(args_close).unwrap();
+        assert_eq!(res_close, Value::Boolean(true));
+    }
 
-        #[test]
-        fn test_close_nonexistent() {
-            let args_close = vec![Value::Integer(999999)];
-            let res_close = intrinsic_socket_close(args_close).unwrap();
-            assert_eq!(res_close, Value::Boolean(false));
-        }
+    #[test]
+    fn test_close_nonexistent() {
+        let args_close = vec![Value::Integer(999999)];
+        let res_close = intrinsic_socket_close(args_close).unwrap();
+        assert_eq!(res_close, Value::Boolean(false));
+    }
 
-        #[test]
-        fn test_http_request_invalid_url() {
-            let args = vec![
-                Value::String("GET".to_string()),
-                Value::String("http://invalid.url.local".to_string()),
-            ];
-            let res = intrinsic_http_request(args);
-            // Should return Error, not panic
-            assert!(res.is_err());
-        }
+    #[test]
+    fn test_http_request_invalid_url() {
+        let args = vec![
+            Value::String("GET".to_string()),
+            Value::String("http://invalid.url.local".to_string()),
+        ];
+        let res = intrinsic_http_request(args);
+        // Should return Error, not panic
+        assert!(res.is_err());
     }
 }

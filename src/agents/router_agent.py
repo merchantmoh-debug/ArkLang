@@ -70,8 +70,6 @@ class RouterAgent(BaseAgent):
         task_lower = task.lower()
         
         # Heuristics based on keyword presence
-        # Prioritize specifically requested actions
-        
         if any(kw in task_lower for kw in ["review", "audit", "check code", "review code"]):
             return {"destination": "ReviewerAgent", "confidence": 0.9, "reasoning": "Keyword match: review/audit"}
         
@@ -82,6 +80,59 @@ class RouterAgent(BaseAgent):
             return {"destination": "CoderAgent", "confidence": 0.9, "reasoning": "Keyword match: coding terms"}
 
         return {"destination": "CoderAgent", "confidence": 0.5, "reasoning": "Default fallback"}
+
+    def analyze_and_delegate(self, task: str) -> list:
+        """Analyze task and return delegation list (backward-compat for tests).
+        
+        Parses DELEGATION format from execute() output:
+            DELEGATION:
+            - agent: coder
+            - task: Write code
+        
+        Falls back to _simple_delegate if parsing fails.
+        """
+        response = self.execute(task)
+        delegations = self._parse_delegations(response)
+        
+        if not delegations:
+            # Fallback to keyword-based delegation
+            return self._simple_delegate(task)
+        
+        return delegations
+
+    def _parse_delegations(self, text: str) -> list:
+        """Parse DELEGATION format from text."""
+        delegations = []
+        current_delegation = None
+        
+        for line in text.strip().split('\n'):
+            line = line.strip()
+            if line.startswith('- agent:'):
+                # First, save any complete previous delegation
+                if current_delegation and 'task' in current_delegation:
+                    delegations.append(current_delegation)
+                current_delegation = {'agent': line.split(':', 1)[1].strip()}
+            elif line.startswith('- task:') and current_delegation:
+                current_delegation['task'] = line.split(':', 1)[1].strip()
+        
+        # Don't forget the last one
+        if current_delegation and 'task' in current_delegation:
+            delegations.append(current_delegation)
+        
+        return delegations
+
+    def _simple_delegate(self, task: str) -> list:
+        """Simple keyword-based delegation fallback."""
+        task_lower = task.lower()
+        
+        if any(kw in task_lower for kw in ["review", "audit", "check"]):
+            agent = "reviewer"
+        elif any(kw in task_lower for kw in ["research", "find", "search", "analyze"]):
+            agent = "researcher"
+        else:
+            agent = "coder"
+        
+        return [{"agent": agent, "task": task}]
 
 if __name__ == "__main__":
     import asyncio

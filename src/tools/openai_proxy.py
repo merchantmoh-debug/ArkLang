@@ -200,3 +200,57 @@ mcp_tool_def = {
         "required": ["prompt"]
     }
 }
+
+
+def call_openai_chat(
+    prompt: str,
+    system: Optional[str] = None,
+    model: Optional[str] = None
+) -> str:
+    """
+    Synchronous wrapper for OpenAI-compatible chat completions.
+    Uses requests.post directly.
+    """
+    base_url = settings.OPENAI_BASE_URL
+    if not base_url:
+        return "Error: OPENAI_BASE_URL is not configured."
+
+    use_model = model or settings.OPENAI_MODEL
+    if not use_model:
+        return "Error: OPENAI_MODEL is not configured."
+
+    api_key = getattr(settings, "OPENAI_API_KEY", "")
+    timeout = getattr(settings, "LLM_TIMEOUT", 30)
+
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    url = f"{base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    payload = {
+        "model": use_model,
+        "messages": messages,
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        return f"Error calling OpenAI-compatible API: {e}"
+
+    try:
+        data = response.json()
+    except (ValueError, Exception) as e:
+        return f"Error: Could not parse JSON response: {response.text}"
+
+    try:
+        return data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return f"Error: Unexpected response format: {data}"

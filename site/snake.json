@@ -144,11 +144,21 @@
                   {
                     "If": {
                       "condition": {
-                        "GetField": {
-                          "obj": {
-                            "Variable": "state"
-                          },
-                          "field": "game_over"
+                        "Call": {
+                          "function_hash": "intrinsic_eq",
+                          "args": [
+                            {
+                              "GetField": {
+                                "obj": {
+                                  "Variable": "state"
+                                },
+                                "field": "game_over"
+                              }
+                            },
+                            {
+                              "Literal": "1"
+                            }
+                          ]
                         }
                       },
                       "then_block": [

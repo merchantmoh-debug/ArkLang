@@ -18,8 +18,18 @@
 
 #![allow(unexpected_cfgs)]
 
+pub mod a2a;
 pub mod adn;
+pub mod approval;
 pub mod ast;
+pub mod audit;
+pub mod capability;
+pub mod channel_formatter;
+pub mod channel_router;
+pub mod channel_types;
+pub mod context_budget;
+pub mod context_overflow;
+
 pub mod blockchain;
 #[cfg(feature = "ipc")]
 #[allow(dead_code)]
@@ -30,19 +40,39 @@ pub mod compiler;
 pub mod consensus;
 pub mod crypto;
 pub mod debugger;
+pub mod diagnostic;
+pub mod embedding;
 #[cfg(test)]
 pub mod eval; // Deprecated by VM, enabled for tests
 pub mod ffi;
 pub mod governance;
+pub mod graceful_shutdown;
+pub mod hooks;
 pub mod intrinsics;
+pub mod kernel_handle;
+pub mod llm_driver;
 pub mod loader;
+pub mod loop_guard;
 pub mod macros;
+pub mod manifest_signing;
+pub mod metering;
+pub mod model_catalog;
 pub mod parser;
 pub mod persistent;
+pub mod provider_health;
 // pub mod repl; // Deprecated interpreter REPL
 #[cfg(test)]
 pub mod bench_intrinsics;
+pub mod retry;
+pub mod routing;
 pub mod runtime;
+pub mod semantic_memory;
+pub mod shell_bleed;
+#[cfg(test)]
+pub mod snapshot_tests;
+pub mod taint;
+pub mod tool_policy;
+pub mod triggers;
 pub mod types;
 pub mod vm;
 pub mod wasm;

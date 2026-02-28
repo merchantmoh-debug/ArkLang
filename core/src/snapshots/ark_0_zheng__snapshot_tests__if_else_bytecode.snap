@@ -1,0 +1,19 @@
+---
+source: core/src/snapshot_tests.rs
+expression: opcodes
+---
+[
+    "Push(Integer(10))",
+    "Store(\"x\")",
+    "Load(\"x\")",
+    "Push(Integer(5))",
+    "Gt",
+    "JmpIfFalse(10)",
+    "Push(String(\"big\"))",
+    "Print",
+    "Push(Unit)",
+    "Jmp(13)",
+    "Push(String(\"small\"))",
+    "Print",
+    "Push(Unit)",
+]

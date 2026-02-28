@@ -79,7 +79,10 @@ class TestSandboxFactory(unittest.TestCase):
 
     def test_default_sandbox_is_docker(self):
         get_sandbox, DockerSandbox, _ = self._import_sandbox()
-        sandbox = get_sandbox()
+        # Mock Docker availability so the factory creates DockerSandbox
+        # even when Docker is not installed on the host
+        with patch.object(DockerSandbox, '_docker_available', return_value=(True, None)):
+            sandbox = get_sandbox()
         self.assertIsInstance(sandbox, DockerSandbox)
 
     def test_explicit_docker_sandbox(self):

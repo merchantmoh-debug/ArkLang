@@ -1,0 +1,47 @@
+---
+source: core/src/snapshot_tests.rs
+expression: ast
+---
+Statement(
+    Block(
+        [
+            Let {
+                name: "i",
+                ty: None,
+                value: Integer(
+                    0,
+                ),
+            },
+            While {
+                condition: Call {
+                    function_hash: "lt",
+                    args: [
+                        Variable(
+                            "i",
+                        ),
+                        Integer(
+                            10,
+                        ),
+                    ],
+                },
+                body: [
+                    Let {
+                        name: "i",
+                        ty: None,
+                        value: Call {
+                            function_hash: "add",
+                            args: [
+                                Variable(
+                                    "i",
+                                ),
+                                Integer(
+                                    1,
+                                ),
+                            ],
+                        },
+                    },
+                ],
+            },
+        ],
+    ),
+)

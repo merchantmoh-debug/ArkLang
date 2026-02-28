@@ -1,0 +1,12 @@
+---
+source: core/src/snapshot_tests.rs
+expression: opcodes
+---
+[
+    "Push(Function(Chunk { code: [Push(Function(Chunk { code: [Store(\"x\"), Load(\"x\"), Push(Integer(2)), Mul, Ret, Ret], constants: [], source_map: [SourceLocation { line: 0, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }], current_loc: SourceLocation { line: 2, col: 0 } })), Store(\"inner\"), Push(Integer(21)), Load(\"inner\"), Call(1), Ret, Ret], constants: [], source_map: [SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }], current_loc: SourceLocation { line: 3, col: 0 } }))",
+    "Store(\"outer\")",
+    "Load(\"outer\")",
+    "Call(0)",
+    "Print",
+    "Push(Unit)",
+]

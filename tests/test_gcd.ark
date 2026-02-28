@@ -1,0 +1,97 @@
+// GCD Integration Test Suite
+// Verifies Tier-1 kernel identities and the AM-GM integrity bound.
+//
+// Three kernel invariants tested:
+//   1. F + omega = 1.0 (complementarity)
+//   2. IC <= F (AM-GM integrity bound)
+//   3. Bottleneck detection (delta > 0 with weak channel)
+
+import std.math
+import std.gcd
+
+print("=== GCD Tier-1 Kernel Test Suite ===")
+
+// --- Test 1: Uniform Trace (all channels = 0.5) ---
+
+trace_uniform := [5000, 5000, 5000]
+weights_equal := [3333, 3333, 3334]
+
+f_u := gcd.fidelity(trace_uniform, weights_equal)
+w_u := gcd.drift(trace_uniform, weights_equal)
+ic_u := gcd.integrity_composite(trace_uniform, weights_equal)
+
+// Identity 1: F + omega = 10000 (= 1.0 scaled)
+sum_fw := f_u + w_u
+if sum_fw == 10000 {
+    print("PASS: Complementarity (F + omega = 1.0)")
+} else {
+    print("FAIL: Complementarity. F + omega = " + sum_fw + " (expected 10000)")
+}
+
+// Identity 2: IC <= F (AM-GM)
+if ic_u <= f_u {
+    print("PASS: AM-GM Bound (IC <= F) for uniform trace")
+} else {
+    print("FAIL: AM-GM violated. IC=" + ic_u + " > F=" + f_u)
+}
+
+print("  Uniform: F=" + f_u + " IC=" + ic_u + " omega=" + w_u)
+
+// --- Test 2: Weak Channel Trace ---
+
+trace_weak := [9000, 9000, 100]
+weights_equal2 := [3333, 3333, 3334]
+
+f_w := gcd.fidelity(trace_weak, weights_equal2)
+ic_w := gcd.integrity_composite(trace_weak, weights_equal2)
+delta_w := gcd.heterogeneity_gap(trace_weak, weights_equal2)
+rho_w := gcd.coherence_efficiency(trace_weak, weights_equal2)
+
+// AM-GM must hold even with extreme heterogeneity
+if ic_w <= f_w {
+    print("PASS: AM-GM Bound (IC <= F) for weak-channel trace")
+} else {
+    print("FAIL: AM-GM violated. IC=" + ic_w + " > F=" + f_w)
+}
+
+// Delta must be positive (weak channel detected)
+if delta_w > 0 {
+    print("PASS: Bottleneck detected (delta > 0)")
+} else {
+    print("FAIL: Bottleneck not detected. delta=" + delta_w)
+}
+
+// Rho must be < 10000 (< 1.0, imperfect coherence)
+if rho_w < 10000 {
+    print("PASS: Coherence degraded (rho < 1.0)")
+} else {
+    print("FAIL: rho=" + rho_w + " (expected < 10000)")
+}
+
+print("  Weak: F=" + f_w + " IC=" + ic_w + " delta=" + delta_w + " rho=" + rho_w)
+
+// --- Test 3: Full Kernel Evaluation ---
+
+result := gcd.evaluate(trace_weak, weights_equal2)
+print("  Full Kernel: F=" + result.F + " omega=" + result.omega + " IC=" + result.IC + " kappa=" + result.kappa + " delta=" + result.delta + " rho=" + result.rho)
+
+// --- Test 4: Contract Freezing ---
+
+contract_a := gcd.create_contract("linear", 10, weights_equal2, "fidelity", 100)
+contract_b := gcd.create_contract("linear", 10, weights_equal2, "fidelity", 100)
+contract_c := gcd.create_contract("log", 10, weights_equal2, "fidelity", 100)
+
+if gcd.is_comparable(contract_a, contract_b) {
+    print("PASS: Identical contracts are comparable")
+} else {
+    print("FAIL: Identical contracts should be comparable")
+}
+
+if gcd.is_comparable(contract_a, contract_c) == false {
+    print("PASS: Different adapters are not comparable")
+} else {
+    print("FAIL: Different adapters should not be comparable")
+}
+
+print("")
+print("=== GCD Test Suite Complete ===")

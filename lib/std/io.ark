@@ -1,4 +1,8 @@
 // lib/std/io.ark
+// (c) 2026 Sovereign Systems
+//
+// I/O operations, formatting utilities, and output handling.
+// Pagination pattern stolen from ElevenLabs MCP utils.py (handle_large_text).
 
 // Async Operations
 func read_file_async(path, cb) {
@@ -18,13 +22,6 @@ func write_file(path, content) {
     sys.fs.write(path, content)
 }
 
-io := {
-    read_file_async: read_file_async,
-    net_request_async: net_request_async,
-    read_file: read_file,
-    write_file: write_file
-}
-
 func print(msg) {
     sys.io.write(msg)
 }
@@ -33,11 +30,146 @@ func println(msg) {
     sys.io.write(msg + "\n")
 }
 
+// --- Pagination ---
+// Pattern stolen from ElevenLabs utils.py handle_large_text().
+// Prevents buffer overflow when handling large agent responses or file contents.
+//
+// Usage:
+//   pages := io.paginate(long_text, 1000)
+//   i := 0
+//   while i < len(pages) {
+//       print("Page " + str(i + 1) + ": " + pages[i])
+//       i := i + 1
+//   }
+
+func paginate(text, page_size) {
+    pages := []
+    total := len(text)
+    pos := 0
+    while pos < total {
+        end := pos + page_size
+        if end > total { end := total }
+        page := sys.str.slice(text, pos, end)
+        sys.list.append(pages, page)
+        pos := end
+    }
+    return pages
+}
+
+// truncate(text: String, max_len: Int, suffix: String) -> String
+// Truncates text to max_len, appending suffix if truncated.
+func truncate(text, max_len) {
+    suffix := "..."
+    if len(text) <= max_len {
+        return text
+    }
+    cut := max_len - len(suffix)
+    if cut < 0 { cut := 0 }
+    return sys.str.slice(text, 0, cut) + suffix
+}
+
+// format_bytes(bytes: Int) -> String
+// Converts a byte count to a human-readable string (KB, MB, GB).
+func format_bytes(bytes) {
+    if bytes < 1024 {
+        return str(bytes) + " B"
+    }
+    if bytes < 1048576 {
+        kb := bytes / 1024
+        return str(kb) + " KB"
+    }
+    if bytes < 1073741824 {
+        mb := bytes / 1048576
+        return str(mb) + " MB"
+    }
+    gb := bytes / 1073741824
+    return str(gb) + " GB"
+}
+
+// format_table(headers: List[String], rows: List[List[String]]) -> String
+// Formats data as an aligned text table.
+//
+// Usage:
+//   tbl := io.format_table(["Name", "Score"], [["math.ark", "95"], ["net.ark", "42"]])
+//   print(tbl)
+func format_table(headers, rows) {
+    // Calculate column widths
+    widths := []
+    i := 0
+    while i < len(headers) {
+        sys.list.append(widths, len(headers[i]))
+        i := i + 1
+    }
+    // Expand widths based on data
+    r := 0
+    while r < len(rows) {
+        c := 0
+        while c < len(rows[r]) {
+            if c < len(widths) {
+                if len(rows[r][c]) > widths[c] {
+                    widths[c] := len(rows[r][c])
+                }
+            }
+            c := c + 1
+        }
+        r := r + 1
+    }
+    // Build header
+    output := ""
+    i := 0
+    while i < len(headers) {
+        cell := headers[i]
+        // Pad with spaces
+        while len(cell) < widths[i] {
+            cell := cell + " "
+        }
+        if i > 0 { output := output + " | " }
+        output := output + cell
+        i := i + 1
+    }
+    output := output + "\n"
+    // Separator line
+    i := 0
+    while i < len(headers) {
+        sep := ""
+        while len(sep) < widths[i] {
+            sep := sep + "-"
+        }
+        if i > 0 { output := output + "-+-" }
+        output := output + sep
+        i := i + 1
+    }
+    output := output + "\n"
+    // Build rows
+    r := 0
+    while r < len(rows) {
+        c := 0
+        while c < len(rows[r]) {
+            cell := rows[r][c]
+            if c < len(widths) {
+                while len(cell) < widths[c] {
+                    cell := cell + " "
+                }
+            }
+            if c > 0 { output := output + " | " }
+            output := output + cell
+            c := c + 1
+        }
+        output := output + "\n"
+        r := r + 1
+    }
+    return output
+}
+
 io := {
     read_file_async: read_file_async,
     net_request_async: net_request_async,
     read_file: read_file,
     write_file: write_file,
     print: print,
-    println: println
+    println: println,
+    paginate: paginate,
+    truncate: truncate,
+    format_bytes: format_bytes,
+    format_table: format_table
 }

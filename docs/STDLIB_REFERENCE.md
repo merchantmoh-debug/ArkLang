@@ -13,6 +13,7 @@ The standard library (`lib/std/`) provides higher-level wrappers around system i
 - [Net](#net)
 - [Result](#result)
 - [String](#string)
+- [Sync](#sync)
 - [Crypto](#crypto)
 - [Time](#time)
 
@@ -73,6 +74,29 @@ Pipeline execution: each agent receives the previous agent's output.
 
 ```ark
 final := swarm.run_chain("Build a REST API")
+```
+
+### `Swarm.wait_for_convergence(task, max_rounds)`
+Runs iterative rounds until agent outputs stabilize (identical between rounds) or `max_rounds` is reached. Returns the final results list.
+
+```ark
+swarm := Swarm.new([Agent.new("Analyst"), Agent.new("Critic")])
+results := swarm.wait_for_convergence("Evaluate this strategy", 3)
+if swarm.has_converged() { print("Agents reached consensus") }
+```
+
+### `Swarm.has_converged()`
+Returns `true` if the last `wait_for_convergence()` call achieved output stability.
+
+### `Swarm.history()`
+Returns the full audit trail of all swarm run results as a list of lists.
+
+### `Swarm.summarize(task)`
+Meta-analysis: runs all agents, then asks the first agent to synthesize all outputs into a final answer.
+
+```ark
+synthesis := swarm.summarize("Review this architecture")
+print(synthesis)
 ```
 
 ### `pipeline(prompts)`
@@ -200,28 +224,42 @@ Returns latest block number from the JSON-RPC endpoint (hex string).
 
 ## Event
 
-Non-blocking event loop for asynchronous I/O and timers.
+Non-blocking event loop, pub/sub emitter, and event collection with stable IDs.
 
 ### `loop()`
 Starts the event loop. Blocks until all registered handlers complete.
 
 ```ark
-event.on("data", func(d) { print("Got:", d) })
 event.loop()
 ```
 
 ### `poll()`
 Polls for pending events without blocking. Returns immediately.
 
-```ark
-event.poll()
-```
-
 ### `sleep(s)`
 Async-compatible sleep. Yields control to the event loop for `s` seconds.
 
+### `EventCollector.new(context_name, max_segments)`
+Creates a context-scoped event collector with stable ID assignment and history splitting.
+
 ```ark
-event.sleep(1)  // non-blocking pause
+collector := EventCollector.new("session_1", 5)
+id := collector.add({ type: "click", target: "btn" })
+evt := collector.get_by_id(id)
+collector.split()  // Start new history segment
+all := collector.get_all(true)  // Include history
+print(collector.size())         // Total events
+collector.clear()               // Reset
+```
+
+### `Emitter.new()`
+Creates a pub/sub event emitter.
+
+```ark
+emitter := Emitter.new()
+emitter.on("click", func(data) { print("Clicked:", data) })
+emitter.emit("click", "button_1")
+emitter.off("click")  // Remove handlers
 ```
 
 ---
@@ -271,6 +309,28 @@ if fs.exists("config.json") { print("Found config") }
 ### `fs.size(path)`
 Returns the size of a file in bytes.
 
+### `fs.list_dir(path)`
+Lists all files and directories at the given path. Requires `fs_read`.
+
+```ark
+files := fs.list_dir("/project/src/")
+```
+
+### `fs.find_similar(target, directory)`
+Fuzzy file search using Levenshtein distance. Returns matches scored 0–100, sorted by relevance.
+
+```ark
+matches := fs.find_similar("mth.ark", "/lib/std/")
+// [{name: "math.ark", score: 86, path: "/lib/std/math.ark"}, ...]
+```
+
+### `fs.search(directory, pattern)`
+Recursive glob search for files matching a pattern. Requires `fs_read`.
+
+```ark
+ark_files := fs.search("/project/", "*.ark")
+```
+
 ---
 
 ## Io
@@ -313,6 +373,32 @@ Asynchronous HTTP GET. Calls `cb(response_body)` when complete.
 io.net_request_async("https://api.example.com", func(body) {
     print(body)
 })
+```
+
+### `io.paginate(text, page_size)`
+Splits large text into fixed-size pages. Prevents buffer overflow in agent responses.
+
+```ark
+pages := io.paginate(long_text, 1000)
+print("Total pages:", len(pages))
+```
+
+### `io.truncate(text, max_len)`
+Truncates text to `max_len` characters, appending `...` if truncated.
+
+### `io.format_bytes(n)`
+Converts byte count to human-readable string (B, KB, MB, GB).
+
+```ark
+print(io.format_bytes(1048576))  // "1 MB"
+```
+
+### `io.format_table(headers, rows)`
+Formats data as an aligned text table.
+
+```ark
+tbl := io.format_table(["Name", "Score"], [["math.ark", "95"], ["net.ark", "42"]])
+print(tbl)
 ```
 
 ---
@@ -555,9 +641,68 @@ Returns `true` if the character `c` is a whitespace character.
 
 ---
 
+## Sync
+
+Concurrency primitives built on Ark's linear type system. Import with `sys.vm.source("lib/std/sync.ark")`.
+
+> **Design:** Guards are linear resources — the compiler enforces that every acquired lock is released exactly once. Forgetting to release a Guard is a compile-time error in strict linear mode.
+
+### `Mutex.new()`
+Creates a new mutual exclusion lock with FIFO ordering.
+
+```ark
+mutex := Mutex.new()
+```
+
+### `Mutex.acquire()`
+Acquires the lock. Returns a `Guard` (linear resource). Blocks via cooperative polling if the lock is held.
+
+```ark
+guard := mutex.acquire()
+// ... critical section ...
+guard.release()  // Compiler enforces this
+```
+
+### `Mutex.try_acquire()`
+Non-blocking acquire attempt. Returns a `Guard` on success, `null` on failure.
+
+```ark
+guard := mutex.try_acquire()
+if guard != null {
+    // Got the lock
+    guard.release()
+}
+```
+
+### `Mutex.is_locked()`
+Returns `true` if the mutex is currently held.
+
+### `RwLock.new()`
+Creates a reader-writer lock. Allows multiple concurrent readers OR one exclusive writer.
+
+```ark
+lock := RwLock.new()
+rg := lock.read_acquire()   // Shared read access
+rg.release()
+wg := lock.write_acquire()  // Exclusive write access
+wg.release()
+```
+
+### `Once.new()`
+Creates a run-exactly-once synchronization primitive.
+
+```ark
+init := Once.new()
+init.call(func() { print("runs once") })
+init.call(func() { print("skipped") })  // Not executed
+print(init.is_done())  // true
+```
+
+---
+
 ## Crypto
 
-Sovereign cryptographic primitives. See also: [Crypto Intrinsics](API_REFERENCE.md#crypto).
+Cryptographic primitives. See also: [Crypto Intrinsics](API_REFERENCE.md#crypto).
 
 ### `crypto.hash(data)`
 SHA-256 hash. Returns hex-encoded digest.

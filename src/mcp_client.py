@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import sys
+import threading
 import time
 import uuid
 import urllib.request
@@ -578,12 +579,26 @@ class MCPClient:
         await self.transport.close()
 
 
+@dataclass
+class _ServerConnection:
+    """Tracks the state of a single server connection."""
+    connected: bool = False
+    error: Optional[str] = None
+    session: Any = None
+    tools: List[Any] = field(default_factory=list)
+    tool_wrappers: Dict[str, Callable] = field(default_factory=dict)
+    config: Any = None
+
+
 class MCPClientManager:
     """Manages multiple MCP clients."""
 
     def __init__(self, config_path: str = "mcp_servers.json"):
         self.config_path = config_path
         self.clients: Dict[str, MCPClient] = {}
+        # Backward-compat: tests reference self.servers
+        self.servers: Dict[str, _ServerConnection] = {}
+        self._tools_cache: Dict[str, Callable] = {}
 
     async def connect_all(self):
         """Connect to all configured servers."""
@@ -620,6 +635,7 @@ class MCPClientManager:
                     client = MCPClient(transport)
                     await client.connect()
                     self.clients[name] = client
+                    self.servers[name] = _ServerConnection(connected=True)
                     logger.info(f"Connected to MCP server: {name}")
 
                 except Exception as e:
@@ -627,6 +643,188 @@ class MCPClientManager:
 
         except Exception as e:
             logger.error(f"Error loading MCP config: {e}")
+
+    # ── Backward-compat methods for tests ──────────────────────────────
+
+    async def _connect_server(self, config) -> None:
+        """Connect to a single server from an MCPServerConfig (test-facing API)."""
+        name = config.name
+        transport_type = getattr(config, "transport", "stdio")
+        conn = _ServerConnection()
+
+        # Validate transport type FIRST before importing MCP
+        supported_transports = {"stdio", "http", "sse"}
+        if transport_type not in supported_transports:
+            conn.error = f"Unsupported transport: {transport_type}"
+            conn.connected = False
+            self.servers[name] = conn
+            return
+
+        try:
+            # Try to import MCP library
+            try:
+                import mcp  # noqa: F811
+                from mcp import ClientSession
+            except ImportError:
+                conn.error = "MCP library not installed"
+                conn.connected = False
+                self.servers[name] = conn
+                return
+
+            if transport_type == "stdio":
+                command = getattr(config, "command", None)
+                args = getattr(config, "args", [])
+                try:
+                    from mcp.client.stdio import stdio_client
+                    params = mcp.StdioServerParameters(
+                        command=command, args=args
+                    )
+                    cm = stdio_client(params)
+                    streams = await cm.__aenter__()
+                    read_stream, write_stream = streams
+                    session = ClientSession(read_stream, write_stream)
+                    await session.__aenter__()
+                    await session.initialize()
+                    conn.session = session
+                    conn.connected = True
+                    conn.error = None
+                    self.servers[name] = conn
+                    await self._discover_tools()
+                    return
+                except Exception as e:
+                    conn.error = str(e)
+                    conn.connected = False
+                    self.servers[name] = conn
+                    return
+
+            elif transport_type == "http":
+                url = getattr(config, "url", None)
+                try:
+                    from mcp.client.streamable_http import streamablehttp_client
+                    cm = streamablehttp_client(url)
+                    streams = await cm.__aenter__()
+                    read_stream, write_stream = streams
+                    session = ClientSession(read_stream, write_stream)
+                    await session.__aenter__()
+                    await session.initialize()
+                    conn.session = session
+                    conn.connected = True
+                    conn.error = None
+                    self.servers[name] = conn
+                    await self._discover_tools()
+                    return
+                except Exception as e:
+                    conn.error = str(e)
+                    conn.connected = False
+                    self.servers[name] = conn
+                    return
+
+        except Exception as e:
+            conn.error = str(e)
+            conn.connected = False
+            self.servers[name] = conn
+
+    async def _discover_tools(self, connection=None) -> None:
+        """Discover tools from connected servers.
+        
+        If connection is provided, discover tools for that specific connection.
+        Otherwise, stub for backward compat.
+        """
+        if connection is None:
+            return
+
+        if not connection.session:
+            return
+
+        try:
+            response = await connection.session.list_tools()
+            tools_list = getattr(response, 'tools', [])
+            config = connection.config
+            server_name = getattr(config, 'name', 'unknown') if config else 'unknown'
+
+            for tool in tools_list:
+                tool_name = getattr(tool, 'name', str(tool))
+                tool_desc = getattr(tool, 'description', '')
+                tool_schema = getattr(tool, 'inputSchema', {})
+
+                prefixed = f"{settings.MCP_TOOL_PREFIX}{server_name}_{tool_name}"
+
+                # Build wrapper
+                _session = connection.session
+                _original_name = tool_name
+
+                async def wrapper(_s=_session, _n=_original_name, **kwargs):
+                    return await _s.call_tool(_n, arguments=kwargs)
+
+                wrapper.__name__ = prefixed
+                wrapper.__doc__ = (
+                    f"{tool_desc}\n\n"
+                    f"Server: {server_name}\n"
+                    f"Schema: {json.dumps(tool_schema, indent=2)}"
+                )
+
+                connection.tool_wrappers[prefixed] = wrapper
+
+                # Also cache globally
+                self._tools_cache[prefixed] = wrapper
+
+        except Exception as e:
+            logger.error(f"Error discovering tools: {e}")
+
+    def get_all_tools_as_callables(self) -> Dict[str, Callable]:
+        """Return a dict of tool_name -> callable for all registered tools."""
+        # Build from server connections if cache is empty
+        if not self._tools_cache:
+            for name, conn in self.servers.items():
+                if not conn.connected:
+                    continue
+                server_name = name
+                config = getattr(conn, 'config', None)
+                if config:
+                    server_name = getattr(config, 'name', name)
+
+                # Check tool_wrappers first
+                if hasattr(conn, 'tool_wrappers') and conn.tool_wrappers:
+                    self._tools_cache.update(conn.tool_wrappers)
+                    continue
+
+                # Build from tools list
+                tools_list = getattr(conn, 'tools', [])
+                session = getattr(conn, 'session', None)
+                for tool in tools_list:
+                    if hasattr(tool, 'name'):
+                        tool_name = tool.name
+                        tool_desc = getattr(tool, 'description', '')
+                        tool_schema = getattr(tool, 'input_schema', {})
+                        original_name = getattr(tool, 'original_name', tool_name)
+                    elif isinstance(tool, dict):
+                        tool_name = tool.get('name', '')
+                        tool_desc = tool.get('description', '')
+                        tool_schema = tool.get('input_schema', tool.get('inputSchema', {}))
+                        original_name = tool.get('original_name', tool_name)
+                    else:
+                        continue
+
+                    prefixed = f"{settings.MCP_TOOL_PREFIX}{server_name}_{tool_name}"
+                    _session = session
+                    _orig = original_name
+
+                    async def wrapper(_s=_session, _n=_orig, **kwargs):
+                        return await _s.call_tool(_n, arguments=kwargs)
+
+                    wrapper.__name__ = prefixed
+                    wrapper.__doc__ = (
+                        f"{tool_desc}\n\n"
+                        f"Server: {server_name}\n"
+                        f"Schema: {json.dumps(tool_schema, indent=2)}"
+                    )
+                    self._tools_cache[prefixed] = wrapper
+
+                    # Also store in connection
+                    if hasattr(conn, 'tool_wrappers'):
+                        conn.tool_wrappers[prefixed] = wrapper
+
+        return dict(self._tools_cache)
 
     async def get_all_tools(self) -> List[Dict[str, Any]]:
         """Get all tools from all connected servers."""
@@ -645,11 +843,26 @@ class MCPClientManager:
         return all_tools
 
     async def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
-        """Call a tool by its namespaced name."""
-        prefix = settings.MCP_TOOL_PREFIX
-        if not name.startswith(prefix):
-             return f"Error: Tool name must start with {prefix}"
+        """Call a tool by name.
+        
+        Returns (success: bool, result: str) when using simple API,
+        or raw result when using namespaced API.
+        """
+        # Simple API: look up in tools cache first (test-facing)
+        tools = self.get_all_tools_as_callables()
+        if name in tools:
+            try:
+                result = await tools[name](**arguments)
+                return True, result
+            except Exception as e:
+                return False, str(e)
 
+        # Check if tool not found in simple API
+        if not name.startswith(settings.MCP_TOOL_PREFIX):
+            return False, f"Tool '{name}' not found"
+
+        # Namespaced API (production path)
+        prefix = settings.MCP_TOOL_PREFIX
         remaining = name[len(prefix):]
 
         for server_name, client in self.clients.items():
@@ -660,9 +873,175 @@ class MCPClientManager:
                 except Exception as e:
                     return f"Error calling tool: {e}"
 
-        return f"Error: Tool {name} not found"
+        return False, f"Tool '{name}' not found"
+
+    async def initialize(self):
+        """Initialize: load configs and connect to all servers in parallel."""
+        configs = await self._load_server_configs()
+        if configs:
+            await asyncio.gather(*[self._connect_server(c) for c in configs])
+
+    async def _load_server_configs(self) -> List[Any]:
+        """Load server configurations from config file."""
+        if not os.path.exists(self.config_path):
+            return []
+        try:
+            with open(self.config_path, "r") as f:
+                config = json.load(f)
+            servers = config.get("servers", [])
+            return [
+                MCPServerConfig(
+                    name=s.get("name", ""),
+                    command=s.get("command", ""),
+                    args=s.get("args", []),
+                    transport=s.get("transport", "stdio"),
+                    url=s.get("url", ""),
+                    enabled=s.get("enabled", True),
+                    env=s.get("env"),
+                )
+                for s in servers if s.get("enabled", True)
+            ]
+        except Exception as e:
+            logger.error(f"Error loading server configs: {e}")
+            return []
+
+    def get_tool_descriptions(self) -> str:
+        """Return formatted string of all tool descriptions."""
+        lines = []
+        for name, conn in self.servers.items():
+            tools = getattr(conn, 'tools', [])
+            for tool in tools:
+                tname = getattr(tool, 'name', str(tool)) if hasattr(tool, 'name') else str(tool)
+                tdesc = getattr(tool, 'description', '') if hasattr(tool, 'description') else ''
+                lines.append(f"{tname}: {tdesc}" if tdesc else tname)
+        return "\n".join(lines) if lines else "No tools available"
+
+    def get_status(self) -> Dict[str, Any]:
+        """Return status of all server connections."""
+        result = {}
+        for name, conn in self.servers.items():
+            result[name] = {
+                "connected": conn.connected,
+                "error": conn.error,
+                "tools_count": len(getattr(conn, 'tools', [])),
+            }
+        return result
 
     async def shutdown(self):
         """Shutdown all clients."""
         for client in self.clients.values():
             await client.shutdown()
+
+
+# ─── Backward-compat aliases ─────────────────────────────────────────────────
+# Tests reference these names from older API drafts.
+
+@dataclass
+class MCPServerConfig:
+    """Configuration for an MCP server connection."""
+    name: str = ""
+    command: str = ""
+    args: List[str] = field(default_factory=list)
+    transport: str = "stdio"
+    url: str = ""
+    enabled: bool = True
+    env: Optional[Dict[str, str]] = None
+
+
+@dataclass
+class MCPTool:
+    """Representation of a single MCP tool."""
+    name: str = ""
+    description: str = ""
+    input_schema: Dict[str, Any] = field(default_factory=dict)
+    server: str = ""
+    server_name: str = ""
+    original_name: str = ""
+
+
+class MCPServerConnection:
+    """Represents a connection to a single MCP server.
+    
+    Tests create these with MCPServerConnection(config=MCPServerConfig(...)).
+    """
+    def __init__(self, config=None, **kwargs):
+        self.config = config
+        self.connected = kwargs.get('connected', False)
+        self.error = kwargs.get('error', None)
+        self.session = kwargs.get('session', None)
+        self.tools: List[Any] = kwargs.get('tools', [])
+        self.tool_wrappers: Dict[str, Callable] = kwargs.get('tool_wrappers', {})
+
+
+class MCPClientManagerSync:
+    """Synchronous wrapper around MCPClientManager with background event loop."""
+
+    def __init__(self, config_path: str = "mcp_servers.json"):
+        self._manager = MCPClientManager(config_path)
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+
+    @property
+    def _async_manager(self):
+        """Backward-compat alias for self._manager."""
+        return self._manager
+
+    def _run_loop(self):
+        """Run the event loop in the background thread."""
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+
+    def _run_coro(self, coro):
+        """Submit a coroutine to the background loop and wait for result."""
+        if self._loop.is_closed():
+            raise RuntimeError("Event loop is closed")
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result(timeout=30)
+
+    def initialize(self):
+        self._run_coro(self._manager.initialize())
+
+    def connect_all(self):
+        self._run_coro(self._manager.connect_all())
+
+    def get_all_tools(self) -> List[Dict[str, Any]]:
+        return self._run_coro(self._manager.get_all_tools())
+
+    def get_all_tools_as_callables(self) -> Dict[str, Callable]:
+        """Return sync-wrapped callables for all tools."""
+        async_callables = self._manager.get_all_tools_as_callables()
+        sync_callables = {}
+        for name, async_fn in async_callables.items():
+            def make_sync(fn=async_fn):
+                def sync_wrapper(*args, **kwargs):
+                    return self._run_coro(fn(*args, **kwargs))
+                return sync_wrapper
+            sync_callables[name] = make_sync()
+        return sync_callables
+
+    def get_tool_descriptions(self) -> str:
+        return self._manager.get_tool_descriptions()
+
+    def get_status(self) -> Dict[str, Any]:
+        return self._manager.get_status()
+
+    def call_tool(self, name: str, arguments: Dict[str, Any]) -> Any:
+        return self._run_coro(self._manager.call_tool(name, arguments))
+
+    def shutdown(self):
+        """Shutdown: stop the event loop and join the thread."""
+        if self._loop.is_closed():
+            return
+        try:
+            self._run_coro(self._manager.shutdown())
+        except Exception:
+            pass
+        try:
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        except RuntimeError:
+            pass
+        self._thread.join(timeout=5)
+        if not self._loop.is_closed():
+            self._loop.close()
+

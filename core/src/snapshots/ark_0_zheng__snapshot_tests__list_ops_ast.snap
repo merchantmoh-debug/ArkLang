@@ -1,0 +1,57 @@
+---
+source: core/src/snapshot_tests.rs
+expression: ast
+---
+Statement(
+    Block(
+        [
+            Let {
+                name: "items",
+                ty: None,
+                value: List(
+                    [
+                        Integer(
+                            1,
+                        ),
+                        Integer(
+                            2,
+                        ),
+                        Integer(
+                            3,
+                        ),
+                        Integer(
+                            4,
+                        ),
+                        Integer(
+                            5,
+                        ),
+                    ],
+                ),
+            },
+            LetDestructure {
+                names: [
+                    "l",
+                    "_",
+                ],
+                value: Call {
+                    function_hash: "sys.len",
+                    args: [
+                        Variable(
+                            "items",
+                        ),
+                    ],
+                },
+            },
+            Expression(
+                Call {
+                    function_hash: "print",
+                    args: [
+                        Variable(
+                            "l",
+                        ),
+                    ],
+                },
+            ),
+        ],
+    ),
+)

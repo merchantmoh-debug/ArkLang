@@ -67,7 +67,7 @@ class TestMemoryFallback(unittest.TestCase):
              # If cryptography is mocked, Fernet() returns our mock.
              # If real, it tries to read key.
              # We might need to mock environment for key to avoid key generation message?
-             with patch.dict(os.environ, {"MEMORY_ENCRYPTION_KEY": "test_key_12345"}):
+             with patch.dict(os.environ, {"MEMORY_ENCRYPTION_KEY": "H2aJv5GHfVmNgXBFbdTqRxtY0Vyu3kD8xoK1p_LwC4o="}):
                  mm = MemoryManager(memory_file=self.test_file)
 
              # Wait for async task if needed

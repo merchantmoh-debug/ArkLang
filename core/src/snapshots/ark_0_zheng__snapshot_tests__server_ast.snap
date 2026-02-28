@@ -1,0 +1,121 @@
+---
+source: core/src/snapshot_tests.rs
+expression: ast
+---
+Statement(
+    Block(
+        [
+            Function(
+                FunctionDef {
+                    name: "handle",
+                    inputs: [
+                        (
+                            "path",
+                            Any,
+                        ),
+                    ],
+                    output: Any,
+                    body: MastNode {
+                        hash: "d3b9dcd1317f71c9dced1f634fbd90a06904c19011766b1acf53ef108b2e2835",
+                        content: Statement(
+                            Block(
+                                [
+                                    Expression(
+                                        Call {
+                                            function_hash: "print",
+                                            args: [
+                                                Literal(
+                                                    "Request for:",
+                                                ),
+                                                Variable(
+                                                    "path",
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                    If {
+                                        condition: Call {
+                                            function_hash: "eq",
+                                            args: [
+                                                Variable(
+                                                    "path",
+                                                ),
+                                                Literal(
+                                                    "/",
+                                                ),
+                                            ],
+                                        },
+                                        then_block: [
+                                            Return(
+                                                Literal(
+                                                    "<h1>Welcome to Ark Server</h1><p>Running on Protocol Omega v112.0</p>",
+                                                ),
+                                            ),
+                                        ],
+                                        else_block: None,
+                                    },
+                                    Return(
+                                        Literal(
+                                            "<h1>404 Not Found</h1>",
+                                        ),
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Expression(
+                Call {
+                    function_hash: "print",
+                    args: [
+                        Literal(
+                            "Starting server on port 8080...",
+                        ),
+                    ],
+                },
+            ),
+            Expression(
+                Call {
+                    function_hash: "serve",
+                    args: [
+                        GetField {
+                            obj: GetField {
+                                obj: Variable(
+                                    "sys",
+                                ),
+                                field: "net",
+                            },
+                            field: "http",
+                        },
+                        Integer(
+                            8080,
+                        ),
+                        Variable(
+                            "handle",
+                        ),
+                    ],
+                },
+            ),
+            While {
+                condition: Integer(
+                    1,
+                ),
+                body: [
+                    Expression(
+                        Call {
+                            function_hash: "sys.time.sleep",
+                            args: [
+                                Integer(
+                                    1,
+                                ),
+                            ],
+                        },
+                    ),
+                ],
+            },
+        ],
+    ),
+)

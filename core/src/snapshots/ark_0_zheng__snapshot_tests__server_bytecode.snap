@@ -1,0 +1,28 @@
+---
+source: core/src/snapshot_tests.rs
+expression: opcodes
+---
+[
+    "Push(Function(Chunk { code: [Store(\"path\"), Push(String(\"Request for:\")), Print, Load(\"path\"), Print, Push(Unit), Pop, Load(\"path\"), Push(String(\"/\")), Eq, JmpIfFalse(13), Push(String(\"<h1>Welcome to Ark Server</h1><p>Running on Protocol Omega v112.0</p>\")), Ret, Push(String(\"<h1>404 Not Found</h1>\")), Ret, Ret], constants: [], source_map: [SourceLocation { line: 0, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 4, col: 0 }, SourceLocation { line: 4, col: 0 }, SourceLocation { line: 5, col: 0 }, SourceLocation { line: 5, col: 0 }, SourceLocation { line: 5, col: 0 }], current_loc: SourceLocation { line: 5, col: 0 } }))",
+    "Store(\"handle\")",
+    "Push(String(\"Starting server on port 8080...\"))",
+    "Print",
+    "Push(Unit)",
+    "Pop",
+    "Load(\"sys\")",
+    "GetField(\"net\")",
+    "GetField(\"http\")",
+    "Push(Integer(8080))",
+    "Load(\"handle\")",
+    "Load(\"serve\")",
+    "Call(3)",
+    "Pop",
+    "Push(Integer(1))",
+    "JmpIfFalse(21)",
+    "Push(Integer(1))",
+    "Load(\"sys.time.sleep\")",
+    "Call(1)",
+    "Pop",
+    "Jmp(14)",
+    "Push(Unit)",
+]

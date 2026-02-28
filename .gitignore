@@ -56,3 +56,57 @@ trace.log
 *.wav
 build_log.txt
 ark-pkg
+.gitnexus
+
+# AI Tooling Context Files (NEVER commit)
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.claude/
+
+# Debug output (never commit raw dumps)
+debug_*.txt
+debug_*.py
+
+# Test output dumps (never commit)
+test_*.txt
+
+# Dev-only artifacts
+config_dev.json
+agent_memory.json
+parsed_config.*
+proof_of_matter.json
+verification_screenshot.png
+verify_frontend.py
+verify_ui.py
+ark_hardware_compiler.py
+
+# Debug apps
+apps/compiler/debug_*
+apps/compiler/parser_output.txt
+apps/compiler/test_debug.*
+apps/debug_*
+
+# Compiled binaries (keep site/wasm/ark.wasm for GitHub Pages)
+*.arkb
+*.glb
+tests/*.wasm
+!site/wasm/ark.wasm
+
+# Build output
+core/check_output.txt
+core/ffi_cargo_additions.txt
+config_prod.adn
+config_prod.json
+
+# Conductor (Gemini internal)
+conductor/
+
+# Redundant web directory
+web/
+
+# VS Code extension dev files (tracked in .vscode/ only)
+vscode/
+
+# Root-level loose files
+/index.html

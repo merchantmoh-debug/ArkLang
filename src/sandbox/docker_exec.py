@@ -213,8 +213,12 @@ class DockerSandbox(BaseSandbox):
 
         duration_ms = (time.time() - start_time) * 1000
 
-        trunc_out, is_trunc1 = truncate_output(stdout_str)
-        trunc_err, is_trunc2 = truncate_output(stderr_str)
+        # Read configurable max output size (default 100KB)
+        max_kb = int(os.environ.get("SANDBOX_MAX_OUTPUT_KB", "100"))
+        max_bytes = max_kb * 1024
+
+        trunc_out, is_trunc1 = truncate_output(stdout_str, max_bytes=max_bytes)
+        trunc_err, is_trunc2 = truncate_output(stderr_str, max_bytes=max_bytes)
 
         if timed_out:
             return ExecutionResult(

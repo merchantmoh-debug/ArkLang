@@ -11,10 +11,13 @@ from src.sandbox.local import LocalSandbox
 class TestLocalSandboxSecurity(unittest.TestCase):
     def setUp(self):
         # Nuclear Option: Force reload src.config to clear mock pollution
+        import importlib
         if 'src.config' in sys.modules:
-            import importlib
             import src.config
             importlib.reload(src.config)
+        else:
+            # Module not cached yet — just import it fresh
+            import src.config
         
         # Reload LocalSandbox to pick up fresh settings
         if 'src.sandbox.local' in sys.modules:

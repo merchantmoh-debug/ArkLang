@@ -1,0 +1,262 @@
+// Ark Standard Library: Sync (Concurrency Primitives)
+// (c) 2026 Sovereign Systems
+//
+// Provides synchronization primitives built on Ark's linear type system.
+// Inspired by the FIFO Mutex pattern from Google Chrome DevTools MCP.
+//
+// The core insight: a Mutex Guard is a *linear resource* — the compiler
+// can enforce that you release it exactly once. This is something no other
+// language's stdlib does at the type level.
+
+// --- Mutex ---
+// A mutual exclusion lock with FIFO ordering and Guard-based release.
+//
+// Usage:
+//   mutex := Mutex.new()
+//   guard := mutex.acquire()
+//   // ... critical section ...
+//   guard.release()   // Compiler enforces this happens exactly once
+//
+// The acquire() method returns a Guard object. The Guard is a linear
+// resource — it must be consumed by calling release(). Failing to
+// release a guard is a compile-time error in strict linear mode.
+
+class Mutex {
+    func new() {
+        m := Mutex()
+        m._locked := false
+        m._waiters := []
+        m._next_id := 0
+        return m
+    }
+
+    // acquire() -> Guard
+    // Blocks (via polling) until the lock is available, then returns a Guard.
+    // FIFO ordering: waiters are served in the order they called acquire().
+    func acquire() {
+        if this._locked == false {
+            this._locked := true
+            return Guard.new(this)
+        }
+        // FIFO queue: register as waiter and spin until our turn
+        my_id := this._next_id
+        this._next_id := this._next_id + 1
+        sys.list.append(this._waiters, my_id)
+        // Spin-wait with yield (cooperative scheduling)
+        while this._locked == true {
+            sys.time.sleep(0)
+            // Check if we're next in line and lock was released
+            if this._locked == false {
+                if len(this._waiters) > 0 {
+                    if this._waiters[0] == my_id {
+                        // Our turn
+                        sys.list.remove(this._waiters, 0)
+                        this._locked := true
+                        return Guard.new(this)
+                    }
+                }
+            }
+        }
+        return Guard.new(this)
+    }
+
+    // try_acquire() -> Guard | null
+    // Non-blocking attempt to acquire the lock.
+    // Returns a Guard on success, null on failure.
+    func try_acquire() {
+        if this._locked == false {
+            this._locked := true
+            return Guard.new(this)
+        }
+        return null
+    }
+
+    // is_locked() -> Bool
+    func is_locked() {
+        return this._locked
+    }
+
+    // _release() -> null
+    // Internal: called by Guard.release(). Do not call directly.
+    func _release() {
+        this._locked := false
+    }
+}
+
+// --- Guard ---
+// A linear resource representing ownership of a Mutex lock.
+// MUST be consumed by calling release() exactly once.
+//
+// In strict linear mode, the compiler will error if:
+// - A Guard goes out of scope without release() being called
+// - release() is called more than once on the same Guard
+
+class Guard {
+    func new(mutex) {
+        g := Guard()
+        g._mutex := mutex
+        g._released := false
+        return g
+    }
+
+    // release() -> null
+    // Releases the mutex lock. Must be called exactly once.
+    func release() {
+        if this._released == true {
+            print("ERROR: Guard.release() called more than once")
+            return null
+        }
+        this._released := true
+        this._mutex._release()
+        return null
+    }
+
+    // is_released() -> Bool
+    func is_released() {
+        return this._released
+    }
+}
+
+// --- RwLock ---
+// A reader-writer lock allowing multiple concurrent readers OR one exclusive writer.
+// Readers are non-exclusive (shared access). Writers are exclusive (linear access).
+//
+// Usage:
+//   lock := RwLock.new()
+//   rg := lock.read_acquire()    // Multiple readers OK
+//   rg.release()
+//   wg := lock.write_acquire()   // Exclusive writer
+//   wg.release()
+
+class RwLock {
+    func new() {
+        rw := RwLock()
+        rw._readers := 0
+        rw._writer := false
+        rw._write_waiters := []
+        rw._next_id := 0
+        return rw
+    }
+
+    // read_acquire() -> ReadGuard
+    // Acquires a shared read lock. Blocks if a writer holds the lock.
+    func read_acquire() {
+        while this._writer == true {
+            sys.time.sleep(0)
+        }
+        this._readers := this._readers + 1
+        return ReadGuard.new(this)
+    }
+
+    // write_acquire() -> WriteGuard
+    // Acquires an exclusive write lock. Blocks until all readers and writers release.
+    func write_acquire() {
+        my_id := this._next_id
+        this._next_id := this._next_id + 1
+        sys.list.append(this._write_waiters, my_id)
+        // Wait for all readers to drain and no other writer active
+        while this._writer == true {
+            sys.time.sleep(0)
+        }
+        while this._readers > 0 {
+            sys.time.sleep(0)
+        }
+        // Check FIFO ordering
+        while len(this._write_waiters) > 0 {
+            if this._write_waiters[0] == my_id {
+                sys.list.remove(this._write_waiters, 0)
+                this._writer := true
+                return WriteGuard.new(this)
+            }
+            sys.time.sleep(0)
+        }
+        this._writer := true
+        return WriteGuard.new(this)
+    }
+
+    func _read_release() {
+        this._readers := this._readers - 1
+    }
+
+    func _write_release() {
+        this._writer := false
+    }
+}
+
+class ReadGuard {
+    func new(lock) {
+        g := ReadGuard()
+        g._lock := lock
+        g._released := false
+        return g
+    }
+
+    func release() {
+        if this._released == true {
+            print("ERROR: ReadGuard.release() called more than once")
+            return null
+        }
+        this._released := true
+        this._lock._read_release()
+        return null
+    }
+}
+
+class WriteGuard {
+    func new(lock) {
+        g := WriteGuard()
+        g._lock := lock
+        g._released := false
+        return g
+    }
+
+    func release() {
+        if this._released == true {
+            print("ERROR: WriteGuard.release() called more than once")
+            return null
+        }
+        this._released := true
+        this._lock._write_release()
+        return null
+    }
+}
+
+// --- Once ---
+// A synchronization primitive that ensures a function runs exactly once.
+//
+// Usage:
+//   init := Once.new()
+//   init.call(func() { print("runs once") })
+//   init.call(func() { print("skipped") })
+
+class Once {
+    func new() {
+        o := Once()
+        o._done := false
+        o._result := null
+        return o
+    }
+
+    func call(f) {
+        if this._done == false {
+            this._done := true
+            this._result := f()
+        }
+        return this._result
+    }
+
+    func is_done() {
+        return this._done
+    }
+}
+
+// --- Module Export ---
+
+sync := {
+    Mutex: Mutex,
+    Guard: Guard,
+    RwLock: RwLock,
+    ReadGuard: ReadGuard,
+    WriteGuard: WriteGuard,
+    Once: Once
+}

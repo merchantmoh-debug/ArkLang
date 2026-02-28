@@ -1,0 +1,75 @@
+---
+source: core/src/snapshot_tests.rs
+expression: ast
+---
+Statement(
+    Block(
+        [
+            Function(
+                FunctionDef {
+                    name: "add",
+                    inputs: [
+                        (
+                            "a",
+                            Any,
+                        ),
+                        (
+                            "b",
+                            Any,
+                        ),
+                    ],
+                    output: Any,
+                    body: MastNode {
+                        hash: "3df8c52103d37d27f1c476418192015e2c118f40e10abf88e0779b46a22905f0",
+                        content: Statement(
+                            Block(
+                                [
+                                    Return(
+                                        Call {
+                                            function_hash: "add",
+                                            args: [
+                                                Variable(
+                                                    "a",
+                                                ),
+                                                Variable(
+                                                    "b",
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Let {
+                name: "result",
+                ty: None,
+                value: Call {
+                    function_hash: "add",
+                    args: [
+                        Integer(
+                            3,
+                        ),
+                        Integer(
+                            4,
+                        ),
+                    ],
+                },
+            },
+            Expression(
+                Call {
+                    function_hash: "print",
+                    args: [
+                        Variable(
+                            "result",
+                        ),
+                    ],
+                },
+            ),
+        ],
+    ),
+)

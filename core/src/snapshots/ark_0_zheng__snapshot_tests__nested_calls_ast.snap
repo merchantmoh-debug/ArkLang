@@ -1,0 +1,85 @@
+---
+source: core/src/snapshot_tests.rs
+expression: ast
+---
+Statement(
+    Block(
+        [
+            Function(
+                FunctionDef {
+                    name: "outer",
+                    inputs: [],
+                    output: Any,
+                    body: MastNode {
+                        hash: "287a909bf360850806691205f11e5b706adc8f63d60527d07f219caa2102945e",
+                        content: Statement(
+                            Block(
+                                [
+                                    Function(
+                                        FunctionDef {
+                                            name: "inner",
+                                            inputs: [
+                                                (
+                                                    "x",
+                                                    Any,
+                                                ),
+                                            ],
+                                            output: Any,
+                                            body: MastNode {
+                                                hash: "dbc7b4d3424b3265a9465f5f1a4d805bac3a4fac679d1c69df5f7ca58d3cf48a",
+                                                content: Statement(
+                                                    Block(
+                                                        [
+                                                            Return(
+                                                                Call {
+                                                                    function_hash: "mul",
+                                                                    args: [
+                                                                        Variable(
+                                                                            "x",
+                                                                        ),
+                                                                        Integer(
+                                                                            2,
+                                                                        ),
+                                                                    ],
+                                                                },
+                                                            ),
+                                                        ],
+                                                    ),
+                                                ),
+                                                span: None,
+                                            },
+                                            attributes: [],
+                                        },
+                                    ),
+                                    Return(
+                                        Call {
+                                            function_hash: "inner",
+                                            args: [
+                                                Integer(
+                                                    21,
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Expression(
+                Call {
+                    function_hash: "print",
+                    args: [
+                        Call {
+                            function_hash: "outer",
+                            args: [],
+                        },
+                    ],
+                },
+            ),
+        ],
+    ),
+)

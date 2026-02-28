@@ -1,4 +1,8 @@
 // lib/std/event.ark
+// (c) 2026 Sovereign Systems
+//
+// Event system with polling, pub/sub, and event collection.
+// EventCollector pattern stolen from Chrome DevTools PageCollector.
 
 // Define unit value for comparison (since is_truthy doesn't support List/Unit checks nicely yet)
 // sys.time.sleep(0) returns Unit
@@ -39,8 +43,166 @@ func sleep(s) {
     _event_sleep(s)
 }
 
+// --- EventCollector ---
+// Pattern stolen from Chrome DevTools PageCollector (414 lines).
+// A generic event collector that:
+//   1. Scopes events to a named context (like PageCollector scopes to a Page)
+//   2. Assigns stable IDs to events for later retrieval
+//   3. Splits history on context changes (like navigation splits)
+//   4. Supports maximum history depth (prevents unbounded memory growth)
+//
+// Usage:
+//   collector := EventCollector.new("session_1", 5)
+//   id := collector.add({ type: "click", target: "button_1" })
+//   evt := collector.get_by_id(id)
+//   collector.split()  // Start new history segment (e.g., after navigation)
+//   all := collector.get_all()
+
+class EventCollector {
+    func new(context_name, max_segments) {
+        ec := EventCollector()
+        ec.context := context_name
+        ec._next_id := 0
+        ec._current := []
+        ec._history := []
+        ec._max_segments := max_segments
+        ec._id_map := {}
+        return ec
+    }
+
+    // add(event: Any) -> Int
+    // Adds an event to the current segment and returns its stable ID.
+    func add(event) {
+        id := this._next_id
+        this._next_id := this._next_id + 1
+        entry := { id: id, event: event, context: this.context }
+        sys.list.append(this._current, entry)
+        this._id_map[str(id)] := entry
+        return id
+    }
+
+    // get_by_id(id: Int) -> Struct | null
+    // Retrieves an event by its stable ID (searches across all segments).
+    func get_by_id(id) {
+        key := str(id)
+        if this._id_map[key] != null {
+            return this._id_map[key]
+        }
+        return null
+    }
+
+    // get_all(include_history: Bool = false) -> List[Struct]
+    // Returns events from the current segment. If include_history is true,
+    // also includes events from previous segments.
+    func get_all(include_history) {
+        if include_history == false {
+            return this._current
+        }
+        all := []
+        i := 0
+        while i < len(this._history) {
+            segment := this._history[i]
+            j := 0
+            while j < len(segment) {
+                sys.list.append(all, segment[j])
+                j := j + 1
+            }
+            i := i + 1
+        }
+        // Append current
+        j := 0
+        while j < len(this._current) {
+            sys.list.append(all, this._current[j])
+            j := j + 1
+        }
+        return all
+    }
+
+    // split() -> null
+    // Starts a new history segment (like PageCollector's splitAfterNavigation).
+    // Preserves up to max_segments previous segments.
+    func split() {
+        sys.list.append(this._history, this._current)
+        // Trim old segments if we exceed max
+        while len(this._history) > this._max_segments {
+            sys.list.remove(this._history, 0)
+        }
+        this._current := []
+        return null
+    }
+
+    // size() -> Int
+    // Returns the total number of events across all segments.
+    func size() {
+        total := len(this._current)
+        i := 0
+        while i < len(this._history) {
+            total := total + len(this._history[i])
+            i := i + 1
+        }
+        return total
+    }
+
+    // clear() -> null
+    // Drops all events and resets the collector.
+    func clear() {
+        this._current := []
+        this._history := []
+        this._id_map := {}
+        return null
+    }
+}
+
+// --- Emitter ---
+// Simple pub/sub event emitter.
+//
+// Usage:
+//   emitter := Emitter.new()
+//   emitter.on("click", func(data) { print("clicked: " + data) })
+//   emitter.emit("click", "button_1")
+
+class Emitter {
+    func new() {
+        e := Emitter()
+        e._handlers := {}
+        return e
+    }
+
+    // on(event_name: String, handler: Function) -> null
+    func on(event_name, handler) {
+        if this._handlers[event_name] == null {
+            this._handlers[event_name] := []
+        }
+        sys.list.append(this._handlers[event_name], handler)
+        return null
+    }
+
+    // emit(event_name: String, data: Any) -> null
+    func emit(event_name, data) {
+        handlers := this._handlers[event_name]
+        if handlers != null {
+            i := 0
+            while i < len(handlers) {
+                handlers[i](data)
+                i := i + 1
+            }
+        }
+        return null
+    }
+
+    // off(event_name: String) -> null
+    // Removes all handlers for the given event.
+    func off(event_name) {
+        this._handlers[event_name] := []
+        return null
+    }
+}
+
 event := {
     poll: _event_poll,
     loop: _event_loop,
-    sleep: _event_sleep
+    sleep: _event_sleep,
+    EventCollector: EventCollector,
+    Emitter: Emitter
 }
+

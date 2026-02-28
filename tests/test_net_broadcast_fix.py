@@ -12,11 +12,27 @@ import ark
 
 class TestNetBroadcast(unittest.TestCase):
     def setUp(self):
+        # Grant capabilities needed for sys.vm.source (fs_read) and net operations.
+        # Must directly mutate the CAPABILITIES dict on the *actual* loaded module.
+        # ark imports from "meta.ark_security" (not bare "ark_security"), so we
+        # must find and patch whichever module variant is actually in sys.modules.
+        sec_mod = sys.modules.get("meta.ark_security") or sys.modules.get("ark_security")
+        if sec_mod is None:
+            import ark_security as sec_mod
+        self._sec_mod = sec_mod
+        self._original_caps_dict = dict(sec_mod.CAPABILITIES)
+        sec_mod.CAPABILITIES["fs_read"] = None  # None = global (unscoped)
+        sec_mod.CAPABILITIES["net"] = None
+
         # Save original intrinsic
         self.original_send = ark.INTRINSICS.get("sys.net.socket.send")
         self.original_close = ark.INTRINSICS.get("sys.net.socket.close")
 
     def tearDown(self):
+        # Restore capabilities
+        self._sec_mod.CAPABILITIES.clear()
+        self._sec_mod.CAPABILITIES.update(self._original_caps_dict)
+
         # Restore original intrinsic
         if self.original_send:
             ark.INTRINSICS["sys.net.socket.send"] = self.original_send

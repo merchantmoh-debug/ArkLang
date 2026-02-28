@@ -244,7 +244,7 @@ quit()
 
 ## Crypto
 
-Pure sovereign cryptographic operations. Zero external dependencies — all algorithms are implemented directly in the Ark runtime (Rust core + Python fallback).
+Cryptographic operations implemented in the Ark runtime (Rust core + Python fallback). No external dependencies for core primitives.
 
 ### `sys.crypto.aes_gcm_decrypt`
 AES-256-GCM authenticated decryption. Takes hex-encoded ciphertext+nonce+tag and a 32-byte hex key. Returns the plaintext string.

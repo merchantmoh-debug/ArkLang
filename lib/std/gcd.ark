@@ -1,0 +1,274 @@
+// Standard Library: GCD (Generative Collapse Dynamics)
+// UMCP/GCD Tier-1 Kernel - Contract-Frozen Measurement Discipline
+//
+// Reference: Clement Paulus, "GCD: Enabling Cross-Domain Comparability
+// via Contract-Frozen Kernel Invariants and Typed Return" (v2.1.3)
+// DOI: 10.5281/zenodo.18819238
+//
+// All values use Ark fixed-point convention (scale = 10000).
+// Trace channels in [epsilon, 1-epsilon] via gcd.normalize().
+// Weights w_k must sum to 10000 (= 1.0 scaled).
+
+// --- Tier-1 Kernel Functions ---
+
+// Weighted Fidelity (F): arithmetic mean of channel values.
+// F = sum(w_k * psi_k) - all scaled by 10000.
+func fidelity(trace, weights) {
+    sum := 0
+    i := 0
+    while i < len(trace) {
+        sum := sum + (weights[i] * trace[i]) / 10000
+        i := i + 1
+    }
+    return sum
+}
+
+// Drift (omega): complement of fidelity. omega = 1 - F.
+func drift(trace, weights) {
+    return 10000 - fidelity(trace, weights)
+}
+
+// Log-Integrity (kappa): weighted sum of ln(channel).
+// kappa = sum(w_k * ln(psi_k)) - result is scaled x10000.
+func log_integrity(trace, weights) {
+    sum := 0
+    i := 0
+    while i < len(trace) {
+        ln_val := math.ln(trace[i])
+        sum := sum + (weights[i] * ln_val) / 10000
+        i := i + 1
+    }
+    return sum
+}
+
+// Integrity Composite (IC): exp(kappa) = weighted geometric mean.
+// IC = exp(kappa). The AM-GM bound guarantees IC <= F.
+func integrity_composite(trace, weights) {
+    k := log_integrity(trace, weights)
+    return math.exp(k)
+}
+
+// Heterogeneity Gap (delta): where the bottleneck hides.
+// delta = F - IC >= 0 (by AM-GM inequality).
+func heterogeneity_gap(trace, weights) {
+    f := fidelity(trace, weights)
+    ic := integrity_composite(trace, weights)
+    return f - ic
+}
+
+// Coherence Efficiency (rho): multiplicative survival relative to mean.
+// rho = IC / F. Perfect coherence -> rho = 1.0 (= 10000).
+func coherence_efficiency(trace, weights) {
+    f := fidelity(trace, weights)
+    if f == 0 { return 0 }
+    ic := integrity_composite(trace, weights)
+    return (ic * 10000) / f
+}
+
+// Entropy (S): Bernoulli-field dispersion functional.
+// S = -sum(w_k * [psi_k * ln(psi_k) + (1-psi_k) * ln(1-psi_k)])
+func entropy(trace, weights) {
+    sum := 0
+    i := 0
+    while i < len(trace) {
+        psi := trace[i]
+        comp := 10000 - psi
+        // psi * ln(psi)
+        term_a := (psi * math.ln(psi)) / 10000
+        // (1 - psi) * ln(1 - psi)
+        term_b := (comp * math.ln(comp)) / 10000
+        sum := sum + (weights[i] * (term_a + term_b)) / 10000
+        i := i + 1
+    }
+    // Negate (entropy is defined with leading minus)
+    return 0 - sum
+}
+
+// Curvature (C): normalized population standard deviation.
+// C = std(psi) / 0.5 (since max std on [0,1] is 0.5).
+func curvature(trace) {
+    n := len(trace)
+    if n == 0 { return 0 }
+    // Mean (unweighted for curvature)
+    sum := 0
+    i := 0
+    while i < n {
+        sum := sum + trace[i]
+        i := i + 1
+    }
+    mean := sum / n
+    // Variance
+    var_sum := 0
+    i := 0
+    while i < n {
+        diff := trace[i] - mean
+        var_sum := var_sum + (diff * diff) / 10000
+        i := i + 1
+    }
+    variance := var_sum / n
+    std_dev := math.sqrt(variance)
+    // Normalize by max possible std (0.5 x 10000 = 5000)
+    return (std_dev * 10000) / 5000
+}
+
+// --- Contract / RunID ---
+
+// Create a frozen evaluation contract. Returns {contract, run_id}.
+// RunID = SHA-256(json(contract)). Any parameter change breaks the hash.
+func create_contract(adapter, epsilon, weights, metric, tolerance) {
+    contract := {
+        adapter: adapter,
+        epsilon: epsilon,
+        weights: weights,
+        metric: metric,
+        tolerance: tolerance
+    }
+    run_id := sys.crypto.hash(sys.json.stringify(contract))
+    return { contract: contract, run_id: run_id }
+}
+
+// Check if two results are audit-comparable (same frozen contract).
+func is_comparable(result_a, result_b) {
+    return result_a.run_id == result_b.run_id
+}
+
+// --- Full Kernel Evaluation ---
+
+// Compute the full Tier-1 kernel ledger {F, omega, S, C, kappa, IC, delta, rho}.
+// Returns a struct with all kernel values.
+func evaluate(trace, weights) {
+    f := fidelity(trace, weights)
+    w := 10000 - f
+    k := log_integrity(trace, weights)
+    ic := math.exp(k)
+    delta := f - ic
+    rho := 0
+    if f != 0 {
+        rho := (ic * 10000) / f
+    }
+    s := entropy(trace, weights)
+    c := curvature(trace)
+    return {
+        F: f,
+        omega: w,
+        S: s,
+        C: c,
+        kappa: k,
+        IC: ic,
+        delta: delta,
+        rho: rho
+    }
+}
+
+// --- Tier-0 Adapter: Orthogonalization ---
+
+// Detect correlated channel pairs and collapse them.
+// Addresses the Covariance Trap: if Channel A and Channel B
+// are measuring the same physical failure, the geometric mean
+// penalizes the system twice. This function ensures channels
+// entering the Tier-1 kernel are approximately independent.
+//
+// threshold: correlation coefficient threshold, scaled x10000.
+//   Typical: 9000 (= 0.90 correlation = highly correlated)
+// Returns: {trace: cleaned_trace, weights: adjusted_weights, dropped: count}
+func decorrelate(trace, weights, threshold) {
+    n := len(trace)
+    if n < 2 { return { trace: trace, weights: weights, dropped: 0 } }
+
+    // Compute means for Pearson correlation
+    means := []
+    i := 0
+    while i < n {
+        means := sys.list.append(means, trace[i])
+        i := i + 1
+    }
+
+    // Find correlated pairs: Pearson r = cov(a,b) / (std_a * std_b)
+    // For single-value channels, we use a proxy: if |a - b| / max(a,b) < epsilon
+    // (channels within epsilon of each other => likely measuring same thing)
+    // This is a simplified but production-safe approximation.
+    keep := []
+    new_weights := []
+    dropped := 0
+    i := 0
+    skip := []
+    while i < n {
+        // Check if this channel is already marked for skip
+        is_skipped := false
+        j := 0
+        while j < len(skip) {
+            if skip[j] == i { is_skipped := true }
+            j := j + 1
+        }
+
+        if is_skipped == false {
+            // Check against all subsequent channels
+            k := i + 1
+            merged := trace[i]
+            merged_weight := weights[i]
+            merge_count := 1
+            while k < n {
+                // Proximity check: are these channels echoes?
+                diff := trace[i] - trace[k]
+                if diff < 0 { diff := 0 - diff }
+                max_val := trace[i]
+                if trace[k] > max_val { max_val := trace[k] }
+                if max_val == 0 { max_val := 1 }
+
+                // Correlation proxy (scaled): diff/max < (10000 - threshold)/10000
+                ratio := (diff * 10000) / max_val
+                corr_threshold := 10000 - threshold
+
+                if ratio < corr_threshold {
+                    // Channels are correlated. Merge: average value, sum weights
+                    merged := (merged * merge_count + trace[k]) / (merge_count + 1)
+                    merged_weight := merged_weight + weights[k]
+                    merge_count := merge_count + 1
+                    skip := sys.list.append(skip, k)
+                    dropped := dropped + 1
+                }
+                k := k + 1
+            }
+            keep := sys.list.append(keep, merged)
+            new_weights := sys.list.append(new_weights, merged_weight)
+        }
+        i := i + 1
+    }
+
+    return { trace: keep, weights: new_weights, dropped: dropped }
+}
+
+// --- Epistemic Firewall (Audit / Veto) ---
+
+// Compute kernel under contract and VETO if delta exceeds threshold.
+// This is the UMCP epistemic lockout: halts execution when a channel is dying
+// but the arithmetic mean still looks healthy.
+// max_delta: Integer (scaled x10000). Typical: 2000 (= 0.20)
+func audit_dataset(trace, weights, max_delta) {
+    ledger := evaluate(trace, weights)
+    if ledger.delta > max_delta {
+        print("UMCP VETO: Multiplicative collapse. delta=" + ledger.delta + " > max_delta=" + max_delta)
+        print("  F=" + ledger.F + " IC=" + ledger.IC + " rho=" + ledger.rho)
+        sys.exit(1)
+    }
+    return ledger
+}
+
+// --- Module Export ---
+
+gcd := {
+    fidelity: fidelity,
+    drift: drift,
+    log_integrity: log_integrity,
+    integrity_composite: integrity_composite,
+    heterogeneity_gap: heterogeneity_gap,
+    coherence_efficiency: coherence_efficiency,
+    entropy: entropy,
+    curvature: curvature,
+    create_contract: create_contract,
+    is_comparable: is_comparable,
+    evaluate: evaluate,
+    audit_dataset: audit_dataset,
+    decorrelate: decorrelate,
+    normalize: intrinsic_gcd_normalize
+}

@@ -746,12 +746,16 @@ DOC_COMMENT    = "///" [^\n]* ;
 ## Appendix A: CLI Reference
 
 ```bash
-ark run <file.ark>        # Parse and execute Ark source
-ark run <file.json>       # Load and execute JSON MAST (legacy)
-ark check <file>          # Run linear type checker
-ark parse <file.ark>      # Dump AST as JSON
-ark version               # Print version
-ark help                  # Print usage
+ark run <file.ark>         # Run source or MAST JSON
+ark build <file.ark>       # Compile to native .wasm binary
+ark run-wasm <file.wasm>   # Execute compiled WASM via wasmtime
+ark check <file.ark>       # Static linear type checker
+ark diagnose <file.ark>    # Diagnostic proof suite (cryptographic verification)
+ark parse <file.ark>       # Dump AST as JSON
+ark debug <file.ark>       # Interactive step-through debugger
+ark repl                   # Interactive REPL
+ark wit <file.ark>         # Generate WIT interface definition
+ark adn <file.ark>         # Run and output in ADN format
 ```
 
 ## Appendix B: Environment Variables
@@ -769,6 +773,7 @@ core/src/
 ├── bytecode.rs     # OpCode enum and Chunk struct
 ├── checker.rs      # Linear type checker
 ├── compiler.rs     # AST → bytecode compiler with optimizations
+├── diagnostic.rs   # Diagnostic Proof Suite (Merkle + HMAC verification)
 ├── intrinsics.rs   # 109 built-in intrinsic functions
 ├── loader.rs       # JSON MAST loader with integrity verification
 ├── parser.rs       # Rust-native recursive descent parser
@@ -776,5 +781,5 @@ core/src/
 ├── types.rs        # ArkType enum and compatibility rules
 ├── vm.rs           # Stack-based virtual machine
 └── bin/
-    └── ark_loader.rs   # CLI binary (ark run/check/parse/version)
+    └── ark_loader.rs   # CLI binary (ark run/check/diagnose/parse/version)
 ```

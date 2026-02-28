@@ -76,10 +76,10 @@ class TestLocalSandbox(unittest.TestCase):
         self.assertIn("Execution timed out", result.stderr)
 
     def test_unsupported_language(self):
-        result = self.sandbox.execute("console.log('hello')", language="javascript")
+        result = self.sandbox.execute("puts 'hello'", language="ruby")
 
         self.assertEqual(result.exit_code, 1)
-        self.assertIn("Unsupported language: javascript", result.stderr)
+        self.assertIn("Unsupported language: ruby", result.stderr)
         self.assertEqual(result.stdout, "")
 
     @patch("subprocess.run")

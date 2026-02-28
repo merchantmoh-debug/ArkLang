@@ -1,17 +1,26 @@
 import unittest
-import urllib.request
-import urllib.error
 import subprocess
 import time
 import os
-import signal
 import sys
 import json
+
+try:
+    import urllib.request
+    import urllib.error
+except ImportError:
+    pass
 
 SERVER_SCRIPT = "scripts/server.py"
 PORT = 8000
 BASE_URL = f"http://localhost:{PORT}"
 
+HAS_SERVER_SCRIPT = os.path.exists(SERVER_SCRIPT)
+IS_WINDOWS = sys.platform == "win32"
+
+
+@unittest.skipUnless(HAS_SERVER_SCRIPT, "Server script not found — skip neural pulse tests")
+@unittest.skipIf(IS_WINDOWS, "Neural pulse server tests use os.setsid (Unix-only)")
 class TestNeuralPulse(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -21,12 +30,16 @@ class TestNeuralPulse(unittest.TestCase):
         env = os.environ.copy()
         env["PYTHONPATH"] = os.getcwd() # Ensure root is in path
 
+        kwargs = {}
+        if not IS_WINDOWS:
+            kwargs["preexec_fn"] = os.setsid
+
         cls.server_process = subprocess.Popen(
             [sys.executable, SERVER_SCRIPT],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            preexec_fn=os.setsid, # Create new process group for clean kill
-            env=env
+            env=env,
+            **kwargs
         )
 
         # Wait for server to come up
@@ -43,8 +56,15 @@ class TestNeuralPulse(unittest.TestCase):
 
         # Kill if timeout
         if cls.server_process:
-            os.killpg(os.getpgid(cls.server_process.pid), signal.SIGTERM)
-            cls.server_process.wait()
+            try:
+                if not IS_WINDOWS:
+                    import signal
+                    os.killpg(os.getpgid(cls.server_process.pid), signal.SIGTERM)
+                else:
+                    cls.server_process.terminate()
+                cls.server_process.wait()
+            except Exception:
+                pass
             stdout, stderr = cls.server_process.communicate()
             print(f"Server STDOUT: {stdout.decode()}")
             print(f"Server STDERR: {stderr.decode()}")
@@ -56,7 +76,11 @@ class TestNeuralPulse(unittest.TestCase):
         print("[TEST] Stopping server...")
         if cls.server_process:
             try:
-                os.killpg(os.getpgid(cls.server_process.pid), signal.SIGTERM)
+                if not IS_WINDOWS:
+                    import signal
+                    os.killpg(os.getpgid(cls.server_process.pid), signal.SIGTERM)
+                else:
+                    cls.server_process.terminate()
                 cls.server_process.wait(timeout=2)
                 stdout, stderr = cls.server_process.communicate()
                 print(f"--- Server STDOUT ---\n{stdout.decode()}\n---------------------")

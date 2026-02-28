@@ -90,23 +90,58 @@ def create_sandbox(sandbox_type: str = "auto", capabilities: Set[str] = None) ->
         return _SANDBOX_CACHE[cache_key]
 
     if sandbox_type == "docker":
-        ds = DockerSandbox(capabilities)
-        # We don't check availability here, we let it fail at runtime if requested explicitly?
-        # Or should we raise immediately?
-        # "raise if Docker not available"
-        is_available, reason = ds._docker_available()
-        if not is_available:
-             raise SandboxError(f"Docker sandbox unavailable: {reason}")
-
+        try:
+            from .docker_exec import DockerSandbox as _DockerSandbox
+        except ImportError:
+            raise RuntimeError(
+                "Docker sandbox requested but 'docker' package is not installed. "
+                "Install it with: pip install docker"
+            )
+        try:
+            ds = _DockerSandbox(capabilities)
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize Docker sandbox: {e}")
         _SANDBOX_CACHE[cache_key] = ds
         return ds
 
     if sandbox_type == "local":
+        import sys as _sys
+        print("WARNING: LocalSandbox is insecure. Use Docker or E2B for production.", file=_sys.stderr)
         ls = LocalSandbox(capabilities)
         _SANDBOX_CACHE[cache_key] = ls
         return ls
 
-    raise SandboxError(f"Unknown sandbox type: {sandbox_type}")
+    if sandbox_type == "e2b":
+        try:
+            try:
+                from src.sandbox.e2b_exec import E2BSandbox  # type: ignore
+            except ImportError:
+                from sandbox.e2b_exec import E2BSandbox  # type: ignore
+        except ImportError:
+            raise RuntimeError(
+                "E2B sandbox requested but 'e2b' package is not installed. "
+                "Install it with: pip install e2b"
+            )
+        try:
+            sb = E2BSandbox(capabilities)
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize E2B sandbox: {e}")
+        _SANDBOX_CACHE[cache_key] = sb
+        return sb
+
+    raise ValueError(f"Unknown sandbox type: {sandbox_type}")
+
+
+def get_sandbox(capabilities: Set[str] = None) -> BaseSandbox:
+    """
+    Backward-compatible factory alias.
+
+    Reads SANDBOX_TYPE from environment (default: "auto") and delegates
+    to create_sandbox(). Tests and src modules that import get_sandbox
+    continue to work.
+    """
+    sandbox_type = os.environ.get("SANDBOX_TYPE", "auto").lower()
+    return create_sandbox(sandbox_type, capabilities)
 
 
 if __name__ == "__main__":

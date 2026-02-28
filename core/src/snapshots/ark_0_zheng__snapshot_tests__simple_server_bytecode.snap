@@ -1,0 +1,12 @@
+---
+source: core/src/snapshot_tests.rs
+expression: opcodes
+---
+[
+    "Push(Function(Chunk { code: [Store(\"path\"), Push(String(\"Received request for: \")), Load(\"path\"), Add, Print, Push(Unit), Pop, Push(String(\"Hello from Ark Bridge! You requested: \")), Load(\"path\"), Add, Ret, Ret], constants: [], source_map: [SourceLocation { line: 0, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }], current_loc: SourceLocation { line: 3, col: 0 } }))",
+    "Store(\"handler\")",
+    "Push(Function(Chunk { code: [Push(String(\"Starting Ark HTTP Server on port 8087...\")), Print, Push(Unit), Pop, Load(\"sys\"), GetField(\"net\"), GetField(\"http\"), Push(Integer(8087)), Load(\"handler\"), Load(\"serve\"), Call(3), Ret], constants: [], source_map: [SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 2, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }, SourceLocation { line: 3, col: 0 }], current_loc: SourceLocation { line: 3, col: 0 } }))",
+    "Store(\"main\")",
+    "Load(\"main\")",
+    "Call(0)",
+]

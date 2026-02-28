@@ -61,7 +61,8 @@ try:
             default={
                 "os", "sys", "subprocess", "shutil", "importlib", "socket",
                 "pickle", "urllib", "http", "xml", "base64", "pty", "pdb",
-                "platform", "venv", "ensurepip", "site", "imp", "posix", "nt"
+                "platform", "venv", "ensurepip", "site", "imp", "posix", "nt",
+                "ctypes", "builtins"
             },
             description="Set of banned modules for local sandbox execution"
         )
@@ -78,7 +79,7 @@ try:
             default={
                 "__subclasses__", "__bases__", "__globals__", "__code__",
                 "__closure__", "__func__", "__self__", "__module__", "__dict__",
-                "__builtins__"
+                "__builtins__", "__class__", "__base__", "open"
             },
             description="Set of banned attributes for local sandbox execution"
         )
@@ -95,13 +96,20 @@ try:
             default="mcp_", description="Prefix for MCP tool names to avoid conflicts"
         )
 
+        # Compute env_file list safely — Path.home() can fail when env is cleared
+        try:
+            _home = Path.home()
+            _env_files = [
+                str(_home / ".ark" / "config.toml"),
+                str(_home / ".ark" / "config.json"),
+                ".env",
+            ]
+        except (RuntimeError, KeyError):
+            _env_files = [".env"]
+
         model_config = SettingsConfigDict(
             env_prefix="ARK_",  # Prefix for environment variables
-            env_file=[
-                str(Path.home() / ".ark" / "config.toml"),
-                str(Path.home() / ".ark" / "config.json"),
-                ".env"
-            ],
+            env_file=_env_files,
             env_file_encoding="utf-8",
             extra="ignore",
         )

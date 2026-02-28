@@ -6,15 +6,38 @@ import json
 import os
 import signal
 import sys
+import socket
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SERVER_SCRIPT = os.path.join(REPO_ROOT, "scripts", "server.py")
+
+def _port_available(port):
+    """Check if a TCP port is available for binding."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("", port))
+        return True
+    except OSError:
+        return False
+
+@unittest.skipUnless(os.path.exists(SERVER_SCRIPT), "scripts/server.py not found")
+@unittest.skipUnless(_port_available(8000), "Port 8000 is already in use")
 class TestServerResilience(unittest.TestCase):
     def setUp(self):
         # Start server in background
         print(f"Starting server with {sys.executable}")
+
+        # Set up environment: server needs PYTHONPATH to find src.sandbox.*
+        env = os.environ.copy()
+        env["PYTHONPATH"] = REPO_ROOT
+        env.setdefault("ARK_CAPABILITIES", "exec,net,fs_read")
+
         self.server_process = subprocess.Popen(
-            [sys.executable, "server.py"],
+            [sys.executable, SERVER_SCRIPT],
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
+            cwd=REPO_ROOT,
+            env=env,
         )
 
         # Poll for readiness

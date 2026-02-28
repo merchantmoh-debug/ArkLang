@@ -1,5 +1,5 @@
 
-// @capabilities: thread, net
+// @capabilities: thread, net, fs_read
 sys.vm.source("lib/std/net.ark")
 
 func dummy_handler(peer, msg) {

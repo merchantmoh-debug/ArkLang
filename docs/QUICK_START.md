@@ -7,8 +7,8 @@ Ark is a Python-based language. To run Ark, you need Python 3.11+.
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/merchantmoh-debug/ark-compiler.git
-   cd ark-compiler
+   git clone https://github.com/merchantmoh-debug/ArkLang.git
+   cd ArkLang
    ```
 
 2. Install Python dependencies:
@@ -36,6 +36,16 @@ Run it:
 ```bash
 python meta/ark.py run hello.ark
 ```
+
+## Verify Your Code (Diagnostic Proof)
+
+Ark can cryptographically prove the compiler verified your code correctly:
+
+```bash
+cargo run --bin ark_loader -- diagnose hello.ark
+```
+
+This runs a 5-phase pipeline and produces a signed proof bundle. Use `--tier pro --json` for full cryptographic output suitable for CI/CD pipelines.
 
 ## Basic Syntax
 
@@ -117,10 +127,31 @@ python meta/ark.py run hello_ai.ark
 | `python meta/ark.py repl` | Start the interactive REPL |
 | `python meta/ark.py version` | Print the compiler version |
 | `python meta/ark.py compile <file.ark>` | Compile to bytecode |
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named 'lark'`
+
+You skipped step 2. Run this from the `ArkLang` directory:
+
+```bash
+pip install -r requirements.txt
+```
+
+> On macOS/Linux, use `pip3` if `pip` points to Python 2. If you use virtual environments:
+> ```bash
+> python -m venv .venv
+> source .venv/bin/activate   # macOS/Linux
+> .venv\Scripts\activate      # Windows
+> pip install -r requirements.txt
+> ```
+
+### `ModuleNotFoundError: No module named 'meta'`
+
+Make sure you are running from the **repository root** (the `ArkLang/` directory), not from inside `meta/`.
 
 ## Docker (Recommended)
 
 ```bash
-docker build -t ark-compiler .
-docker run -it --rm ark-compiler
+docker build -t ark .
+docker run -it --rm ark
 ```

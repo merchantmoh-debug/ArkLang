@@ -1,22 +1,73 @@
+"""
+Swarm Orchestration Tests — Isolated from agent module namespace.
+
+Uses setUpClass/tearDownClass to inject and clean up sys.modules mocks,
+preventing collection-time pollution of src.agents.* for other test files.
+"""
 import sys
 import os
+import importlib
 import unittest
 from unittest.mock import MagicMock, patch
 
 # Ensure src is in sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Mock dependencies
-sys.modules["src.agents.router_agent"] = MagicMock()
-sys.modules["src.agents.coder_agent"] = MagicMock()
-sys.modules["src.agents.reviewer_agent"] = MagicMock()
-sys.modules["src.agents.researcher_agent"] = MagicMock()
+_MOCKED_MODULES = [
+    "src.agents.router_agent",
+    "src.agents.coder_agent",
+    "src.agents.reviewer_agent",
+    "src.agents.researcher_agent",
+]
 
-from src.swarm import MessageBus, SwarmOrchestrator
 
-class TestMessageBus(unittest.TestCase):
+class _SwarmTestMixin:
+    """Mixin that manages sys.modules lifecycle for swarm tests."""
+
+    _saved_modules = {}
+    _swarm_module = None
+
+    @classmethod
+    def _install_mocks(cls):
+        """Save originals and inject MagicMock for agent modules."""
+        for mod in _MOCKED_MODULES:
+            cls._saved_modules[mod] = sys.modules.get(mod)
+            sys.modules[mod] = MagicMock()
+        # Remove cached src.swarm so it re-imports with mocked agents
+        cls._saved_modules["src.swarm"] = sys.modules.pop("src.swarm", None)
+
+    @classmethod
+    def _uninstall_mocks(cls):
+        """Restore original sys.modules state."""
+        for mod in _MOCKED_MODULES + ["src.swarm"]:
+            original = cls._saved_modules.get(mod)
+            if original is None:
+                sys.modules.pop(mod, None)
+            else:
+                sys.modules[mod] = original
+        cls._saved_modules.clear()
+
+    @classmethod
+    def _import_swarm(cls):
+        """Import src.swarm with mocks active."""
+        cls._install_mocks()
+        cls._swarm_module = importlib.import_module("src.swarm")
+        return cls._swarm_module
+
+
+class TestMessageBus(unittest.TestCase, _SwarmTestMixin):
+
+    @classmethod
+    def setUpClass(cls):
+        swarm = cls._import_swarm()
+        cls.MessageBus = swarm.MessageBus
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._uninstall_mocks()
+
     def setUp(self):
-        self.bus = MessageBus()
+        self.bus = self.MessageBus()
 
     def test_send_and_retrieve(self):
         self.bus.send("router", "coder", "task", "Write code")
@@ -43,7 +94,17 @@ class TestMessageBus(unittest.TestCase):
         self.assertEqual(len(self.bus.get_all_messages()), 0)
 
 
-class TestSwarmOrchestrator(unittest.TestCase):
+class TestSwarmOrchestrator(unittest.TestCase, _SwarmTestMixin):
+
+    @classmethod
+    def setUpClass(cls):
+        swarm = cls._import_swarm()
+        cls.SwarmOrchestrator = swarm.SwarmOrchestrator
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._uninstall_mocks()
+
     @patch("src.swarm.RouterAgent")
     @patch("src.swarm.CoderAgent")
     @patch("src.swarm.ReviewerAgent")
@@ -63,7 +124,7 @@ class TestSwarmOrchestrator(unittest.TestCase):
         mock_coder_instance.execute.return_value = "Code Written"
 
         # Initialize Swarm
-        swarm = SwarmOrchestrator()
+        swarm = self.SwarmOrchestrator()
         
         # Execute
         result = swarm.execute("Build a utility", verbose=False)
@@ -102,7 +163,7 @@ class TestSwarmOrchestrator(unittest.TestCase):
         mock_reviewer_instance.execute.return_value = "Code Reviewed"
 
         # Initialize Swarm
-        swarm = SwarmOrchestrator()
+        swarm = self.SwarmOrchestrator()
 
         # Execute
         result = swarm.execute("Build and review a utility", verbose=False)
@@ -137,7 +198,7 @@ class TestSwarmOrchestrator(unittest.TestCase):
         mock_router_instance.synthesize_results.return_value = "Synthesis with error"
 
         # Initialize Swarm
-        swarm = SwarmOrchestrator()
+        swarm = self.SwarmOrchestrator()
 
         # Execute
         result = swarm.execute("Clean logs", verbose=False)
@@ -164,7 +225,7 @@ class TestSwarmOrchestrator(unittest.TestCase):
         mock_router_instance.synthesize_results.return_value = "Nothing to do"
 
         # Initialize Swarm
-        swarm = SwarmOrchestrator()
+        swarm = self.SwarmOrchestrator()
 
         # Execute
         result = swarm.execute("Do nothing", verbose=False)
@@ -178,5 +239,5 @@ class TestSwarmOrchestrator(unittest.TestCase):
         self.assertEqual(delegations, [])
         self.assertEqual(results, [])
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

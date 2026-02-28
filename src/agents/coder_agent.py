@@ -21,8 +21,10 @@ class CoderAgent(BaseAgent):
     
     def __init__(self, name: str = "Coder", **kwargs):
         system_prompt = (
-            "You are the Ark Coder Agent — a specialist in the Ark Sovereign Language.\n"
-            "You write, modify, test, and compile Ark code (.ark files).\n\n"
+            "You are the Coder Agent — a specialist in software development "
+            "and the Ark Sovereign Language.\n"
+            "You write, modify, test, and compile code following Python best practices "
+            "and Google style conventions.\n\n"
             "ARK LANGUAGE QUICK REFERENCE:\n"
             "  Variables:     x := 42          (walrus operator, no 'let')\n"
             "  Functions:     func add(a, b) { return a + b }\n"
@@ -45,9 +47,6 @@ class CoderAgent(BaseAgent):
             "  sys.crypto.hash(data)      — Cryptographic hash\n"
             "  sys.vm.eval(code)          — Eval Ark code at runtime\n"
             "  sys.vm.source(path)        — Load and run another .ark file\n\n"
-            "STANDARD LIBRARY:\n"
-            "  import lib.std.string      — String utilities (trim, split, etc.)\n"
-            "  sys.vm.source(\"lib/std/ai.ark\") — AI Agent/Swarm classes\n\n"
             "OUTPUT: JSON with keys 'files_changed' (list), 'tests_added' (list), 'summary' (str)."
         )
         super().__init__(name=name, system_prompt=system_prompt, **kwargs)
@@ -117,10 +116,22 @@ class CoderAgent(BaseAgent):
     def run_command(self, command: str) -> str:
         """Run a shell command in the project root."""
         try:
-            # Security check: simplistic, but prevents some obvious issues
-            # In production, this should be much stricter
-            if "rm -rf /" in command:
-                return "Error: Command blocked for security."
+            # Security check: detect shell metacharacters and dangerous patterns
+            # Block command chaining, redirection, and subshells
+            # metacharacters to block: ; & | ` $ > <
+            forbidden_chars = [';', '&', '|', '`', '$', '>', '<']
+            for char in forbidden_chars:
+                if char in command:
+                    return f"Error: Command blocked for security. Shell metacharacter '{char}' detected."
+
+            # Normalize command for dangerous pattern matching
+            normalized_command = " ".join(command.split()).lower()
+
+            # Block dangerous commands like rm -rf on absolute paths or root
+            if "rm -rf" in normalized_command:
+                # If rm -rf is used with / anywhere, block it
+                if "/" in normalized_command:
+                    return "Error: Command blocked for security. Dangerous 'rm -rf' detected."
 
             result = subprocess.run(
                 command,

@@ -1,28 +1,60 @@
 import sys
 import unittest
+import asyncio
 from unittest.mock import patch, MagicMock
 import os
-
-# Mock dependencies before imports to handle missing packages in restricted environments
-mock_config = MagicMock()
-mock_config.settings.BANNED_IMPORTS = set()
-mock_config.settings.BANNED_FUNCTIONS = set()
-mock_config.settings.BANNED_ATTRIBUTES = set()
-
-sys.modules["src.config"] = mock_config
-sys.modules["pydantic"] = MagicMock()
-sys.modules["pydantic_settings"] = MagicMock()
 
 # Add root to path
 sys.path.append(os.path.abspath("."))
 
-from src.sandbox.docker_exec import DockerSandbox, DEFAULT_DOCKER_IMAGE, ALLOWED_DOCKER_IMAGES
 
 class TestDockerSecurity(unittest.TestCase):
+    """Tests for DockerSandbox image security.
+    
+    Uses setUpClass/tearDownClass for sys.modules isolation.
+    """
+    _saved_modules = {}
+    DockerSandboxClass = None
+    DEFAULT_DOCKER_IMAGE_VAL = None
+    ALLOWED_DOCKER_IMAGES_VAL = None
+
+    @classmethod
+    def setUpClass(cls):
+        """Save original modules and inject mocks for import."""
+        cls._saved_modules = {}
+        for mod_name in ["pydantic", "pydantic_settings", "src.config"]:
+            cls._saved_modules[mod_name] = sys.modules.get(mod_name)
+
+        mock_config = MagicMock()
+        mock_config.settings.BANNED_IMPORTS = set()
+        mock_config.settings.BANNED_FUNCTIONS = set()
+        mock_config.settings.BANNED_ATTRIBUTES = set()
+        sys.modules["src.config"] = mock_config
+        sys.modules["pydantic"] = MagicMock()
+        sys.modules["pydantic_settings"] = MagicMock()
+
+        from src.sandbox.docker_exec import (
+            DockerSandbox as DS,
+            DEFAULT_DOCKER_IMAGE as DDI,
+            ALLOWED_DOCKER_IMAGES as ADI,
+        )
+        cls.DockerSandboxClass = DS
+        cls.DEFAULT_DOCKER_IMAGE_VAL = DDI
+        cls.ALLOWED_DOCKER_IMAGES_VAL = ADI
+
+    @classmethod
+    def tearDownClass(cls):
+        """Restore original modules to prevent pollution."""
+        for mod_name, original in cls._saved_modules.items():
+            if original is None:
+                sys.modules.pop(mod_name, None)
+            else:
+                sys.modules[mod_name] = original
+
     def setUp(self):
         # Reset the cached client to ensure clean state for each test
-        DockerSandbox._client = None
-        self.sandbox = DockerSandbox()
+        self.DockerSandboxClass._client = None
+        self.sandbox = self.DockerSandboxClass()
 
     def test_invalid_image_fallback(self):
         # Mock docker module
@@ -42,13 +74,15 @@ class TestDockerSecurity(unittest.TestCase):
             with patch.dict(sys.modules, {"docker": mock_docker}):
                 mock_client.ping.return_value = True
 
-                self.sandbox.execute("print('hello')")
+                # DockerSandbox.execute is async
+                asyncio.run(self.sandbox.execute("print('hello')"))
 
                 # Verify that the default image was used instead of the malicious one
                 mock_client.containers.run.assert_called()
                 args, kwargs = mock_client.containers.run.call_args
-                self.assertEqual(kwargs['image'], DEFAULT_DOCKER_IMAGE)
-                self.assertNotIn(malicious_image, kwargs['image'])
+                actual_image = args[0] if args else kwargs.get('image', '')
+                self.assertEqual(actual_image, self.DEFAULT_DOCKER_IMAGE_VAL)
+                self.assertNotEqual(actual_image, malicious_image)
 
     def test_allowed_image_usage(self):
         # Mock docker module
@@ -63,18 +97,20 @@ class TestDockerSecurity(unittest.TestCase):
 
         # Scenario: user sets an allowed image
         # Pick one from ALLOWED_DOCKER_IMAGES that is NOT the default
-        allowed_image = [img for img in ALLOWED_DOCKER_IMAGES if img != DEFAULT_DOCKER_IMAGE][0]
+        allowed_image = [img for img in self.ALLOWED_DOCKER_IMAGES_VAL if img != self.DEFAULT_DOCKER_IMAGE_VAL][0]
 
         with patch.dict(os.environ, {"DOCKER_IMAGE": allowed_image}):
             with patch.dict(sys.modules, {"docker": mock_docker}):
                 mock_client.ping.return_value = True
 
-                self.sandbox.execute("print('hello')")
+                # DockerSandbox.execute is async
+                asyncio.run(self.sandbox.execute("print('hello')"))
 
                 # Verify that the allowed image was used
                 mock_client.containers.run.assert_called()
                 args, kwargs = mock_client.containers.run.call_args
-                self.assertEqual(kwargs['image'], allowed_image)
+                actual_image = args[0] if args else kwargs.get('image', '')
+                self.assertEqual(actual_image, allowed_image)
 
 if __name__ == "__main__":
     unittest.main()

@@ -28,7 +28,8 @@ class ArkConfigFallback:
         self.BANNED_IMPORTS: Set[str] = {
             "os", "sys", "subprocess", "shutil", "importlib", "socket",
             "pickle", "urllib", "http", "xml", "base64", "pty", "pdb",
-            "platform", "venv", "ensurepip", "site", "imp", "posix", "nt"
+            "platform", "venv", "ensurepip", "site", "imp", "posix", "nt",
+            "ctypes", "builtins"
         }
         self.BANNED_FUNCTIONS: Set[str] = {
             "open", "exec", "eval", "compile", "__import__", "input",
@@ -39,7 +40,7 @@ class ArkConfigFallback:
         self.BANNED_ATTRIBUTES: Set[str] = {
             "__subclasses__", "__bases__", "__globals__", "__code__",
             "__closure__", "__func__", "__self__", "__module__", "__dict__",
-            "__builtins__"
+            "__builtins__", "__class__", "__base__", "open"
         }
 
         # MCP Configuration

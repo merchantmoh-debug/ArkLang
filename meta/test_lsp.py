@@ -39,6 +39,8 @@ def test_lsp():
     # Ensure PYTHONPATH includes current dir so imports work if needed
     env = os.environ.copy()
     env["PYTHONPATH"] = os.getcwd()
+    # Grant fs_read capability so the LSP server can parse .ark files
+    env["ARK_CAPABILITIES"] = "fs_read"
 
     proc = subprocess.Popen(
         [sys.executable, "meta/ark_lsp.py"],

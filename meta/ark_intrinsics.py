@@ -35,7 +35,8 @@ try:
     )
     from meta.ark_security import (
         SandboxViolation, check_path_security, check_exec_security,
-        validate_url_security, SafeRedirectHandler, check_capability, has_capability
+        validate_url_security, SafeRedirectHandler, check_capability, has_capability,
+        check_tool_allowed, is_read_only
     )
 except ModuleNotFoundError:
     from ark_types import (
@@ -44,7 +45,8 @@ except ModuleNotFoundError:
     )
     from ark_security import (
         SandboxViolation, check_path_security, check_exec_security,
-        validate_url_security, SafeRedirectHandler, check_capability, has_capability
+        validate_url_security, SafeRedirectHandler, check_capability, has_capability,
+        check_tool_allowed, is_read_only
     )
 
 
@@ -91,8 +93,8 @@ def core_get(args: List[ArkValue]):
 
 def load_whitelist():
     default_whitelist = {
-        "ls", "grep", "cat", "echo", "python", "python3",
-        "cargo", "rustc", "git", "date", "whoami", "pwd", "mkdir", "touch"
+        "ls", "grep", "cat", "echo",
+        "date", "whoami", "pwd", "mkdir", "touch"
     }
     if os.path.exists("security.json"):
         try:
@@ -304,6 +306,56 @@ def intrinsic_math_atan2(args: List[ArkValue]):
     y = args[0].val / 10000.0
     x = args[1].val / 10000.0
     return ArkValue(int(math.atan2(y, x) * 10000), "Integer")
+
+def intrinsic_math_ln(args: List[ArkValue]):
+    """math.ln(x) → Integer. Natural log. Input/output scaled by 10000."""
+    if len(args) != 1: raise Exception("math.ln expects 1 arg")
+    val = args[0].val / 10000.0
+    if val <= 0: raise Exception("math.ln: domain error (x must be > 0)")
+    return ArkValue(int(math.log(val) * 10000), "Integer")
+
+def intrinsic_math_exp(args: List[ArkValue]):
+    """math.exp(x) → Integer. Exponential. Input/output scaled by 10000."""
+    if len(args) != 1: raise Exception("math.exp expects 1 arg")
+    val = args[0].val / 10000.0
+    return ArkValue(int(math.exp(val) * 10000), "Integer")
+
+def intrinsic_math_abs(args: List[ArkValue]):
+    """math.abs(x) → Integer. Absolute value."""
+    if len(args) != 1: raise Exception("math.abs expects 1 arg")
+    return ArkValue(abs(args[0].val), "Integer")
+
+def gcd_normalize(args: List[ArkValue]):
+    """gcd.normalize(raw_data, bounds, epsilon) → List.
+    Projects raw channel values into [ε, 1−ε] via declared bounds.
+    All values scaled by 10000 (Ark fixed-point convention).
+    raw_data: List of Integer (raw channel values, ×10000)
+    bounds: List of [min, max] pairs (each ×10000)
+    epsilon: Integer (ε-clip, ×10000, default 10 = 0.001)
+    """
+    if len(args) < 2: raise Exception("gcd.normalize expects (raw_data, bounds[, epsilon])")
+    if args[0].type != "List": raise Exception("gcd.normalize: raw_data must be List")
+    if args[1].type != "List": raise Exception("gcd.normalize: bounds must be List")
+    raw = args[0].val
+    bounds = args[1].val
+    epsilon = args[2].val if len(args) > 2 else 10  # 0.001 × 10000 = 10
+    if len(raw) != len(bounds):
+        raise Exception(f"gcd.normalize: raw_data length ({len(raw)}) != bounds length ({len(bounds)})")
+    trace = []
+    ceil = 10000 - epsilon  # 1.0 - ε in fixed-point
+    for i in range(len(raw)):
+        val = raw[i].val if isinstance(raw[i], ArkValue) else raw[i]
+        bound_pair = bounds[i].val if isinstance(bounds[i], ArkValue) else bounds[i]
+        lo = bound_pair[0].val if isinstance(bound_pair[0], ArkValue) else bound_pair[0]
+        hi = bound_pair[1].val if isinstance(bound_pair[1], ArkValue) else bound_pair[1]
+        if hi != lo:
+            normalized = ((val - lo) * 10000) // (hi - lo)
+        else:
+            normalized = 5000  # 0.5 × 10000
+        clipped = max(epsilon, min(ceil, normalized))
+        trace.append(ArkValue(clipped, "Integer"))
+    return ArkValue(trace, "List")
+
 
 # ─── Tensor Math ──────────────────────────────────────────────────────────────
 # Tensors are ArkValue(Instance) with fields: data (flat ArkValue List), shape (dim List)
@@ -1432,6 +1484,10 @@ INTRINSICS = {
     "math.acos": intrinsic_math_acos,
     "math.atan": intrinsic_math_atan,
     "math.atan2": intrinsic_math_atan2,
+    "math.ln": intrinsic_math_ln,
+    "math.exp": intrinsic_math_exp,
+    "math.abs": intrinsic_math_abs,
+    "gcd.normalize": gcd_normalize,
 
     # Tensor Math
     "math.Tensor": math_tensor,
@@ -1470,6 +1526,10 @@ INTRINSICS = {
     "intrinsic_math_acos": intrinsic_math_acos,
     "intrinsic_math_atan": intrinsic_math_atan,
     "intrinsic_math_atan2": intrinsic_math_atan2,
+    "intrinsic_math_ln": intrinsic_math_ln,
+    "intrinsic_math_exp": intrinsic_math_exp,
+    "intrinsic_math_abs": intrinsic_math_abs,
+    "intrinsic_gcd_normalize": gcd_normalize,
 }
 
 # Binop helper for INTRINSICS lambdas (avoids circular import with interpreter)

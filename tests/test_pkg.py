@@ -53,8 +53,9 @@ class TestPkg(unittest.TestCase):
         with patch('sys.stdout', new=io.StringIO()) as fake_out:
             cmd_list(args)
             output = fake_out.getvalue()
-            self.assertIn("[dependencies]", output)
-            self.assertEqual(output.strip(), "[dependencies]")
+            # cmd_list prints "[foo v0.1.0]\n\n  (no dependencies)\n" for empty deps
+            self.assertIn("foo", output)
+            self.assertIn("(no dependencies)", output)
 
     @patch('urllib.request.urlopen')
     def test_install_mock(self, mock_urlopen):

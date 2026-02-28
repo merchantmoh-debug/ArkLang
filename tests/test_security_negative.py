@@ -25,7 +25,7 @@ class TestSecurityNegative(unittest.TestCase):
             MockFernet.side_effect = ValueError("Simulated Encryption Failure")
 
             # We expect the constructor to propagate the error, NOT suppress it.
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError, RuntimeError)):
                 MemoryManager(memory_file="test_fail_closed.enc")
 
     def test_no_plaintext_fallback(self):
@@ -37,7 +37,7 @@ class TestSecurityNegative(unittest.TestCase):
         # (simulating the current behavior) and then verify save_memory fails.
 
         # Create instance but bypass __init__ logic or mock it
-        with patch.object(MemoryManager, '_init_encryption', return_value=None):
+        with patch.object(MemoryManager, '_init_file_based_encryption', return_value=None):
             mm = MemoryManager(memory_file="test_fail_closed.enc")
             # Manually ensure _fernet is None (as per current broken logic)
             mm._fernet = None

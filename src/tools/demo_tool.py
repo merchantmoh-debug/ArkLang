@@ -8,6 +8,17 @@ def echo_message(message: str) -> str:
     """Echo the message back."""
     return f"Echo: {message}"
 
+
+def greet_user(name: str) -> str:
+    """Greet a user by name (backward-compat alias)."""
+    return f"Hello, {name}! 🎉 Welcome to the Antigravity Agent with dynamic tool loading!"
+
+
+def reverse_text(text: str) -> str:
+    """Reverse the input text (backward-compat alias)."""
+    return text[::-1]
+
+
 # MCP Tool Definition
 mcp_tool_def = {
     "name": "echo_message",
@@ -20,3 +31,4 @@ mcp_tool_def = {
         "required": ["message"]
     }
 }
+

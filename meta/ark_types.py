@@ -3,8 +3,17 @@ Ark Type System — Core data types for the Ark runtime.
 
 Extracted from ark.py (Phase 72: Structural Hardening).
 """
+import sys
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
+
+# slots=True requires Python 3.10+. Gracefully degrade on older versions.
+if sys.version_info >= (3, 10):
+    def _dataclass_compat(cls):
+        return dataclass(slots=True)(cls)
+else:
+    def _dataclass_compat(cls):
+        return dataclass(cls)
 
 
 class RopeString:
@@ -91,7 +100,7 @@ class RopeString:
         return str(self) >= str(other)
 
 
-@dataclass(slots=True)
+@_dataclass_compat
 class ArkValue:
     val: Any
     type: str
@@ -99,13 +108,24 @@ class ArkValue:
 
 UNIT_VALUE = ArkValue(None, "Unit")
 
+# GCD Typed Return Sentinel — τ_R = ∞_rec (no return under contract)
+# Ref: Clement Paulus, UMCP/GCD v2.1.3 §5 (Typed Return)
+CENSORED_VALUE = ArkValue(None, "Censored")
+
+
+class CensoredAccessError(Exception):
+    """Raised when arithmetic is attempted on a Censored (∞_rec) value.
+    GCD contract: censored channels receive zero return credit.
+    Must be explicitly unwrapped via pattern matching."""
+    pass
+
 
 class ReturnException(Exception):
     def __init__(self, value):
         self.value = value
 
 
-@dataclass(slots=True)
+@_dataclass_compat
 class ArkFunction:
     name: str
     params: List[str]
@@ -113,13 +133,13 @@ class ArkFunction:
     closure: 'Scope'
 
 
-@dataclass(slots=True)
+@_dataclass_compat
 class ArkClass:
     name: str
     methods: Dict[str, ArkFunction]
 
 
-@dataclass(slots=True)
+@_dataclass_compat
 class ArkInstance:
     klass: ArkClass
     fields: Dict[str, ArkValue]

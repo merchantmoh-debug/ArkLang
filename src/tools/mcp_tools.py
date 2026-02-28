@@ -98,16 +98,55 @@ def initialize_registry():
     """Initialize the registry by discovering tools."""
     registry.discover_tools()
 
-def list_mcp_servers() -> str:
-    """List configured MCP servers (wrapper for MCPClientManager)."""
-    # This requires MCPClientManager to be initialized elsewhere or we init it here temporarily?
-    # Usually the Agent manages the MCPClientManager.
-    # We'll return a placeholder or connect if needed.
-    from src.mcp_client import MCPClientManager
+def _get_mcp_manager():
+    """Get or create the singleton MCPClientManager instance.
+    
+    Returns None if MCP is not available or not configured.
+    """
+    try:
+        from src.mcp_client import MCPClientManager
+        return MCPClientManager()
+    except ImportError:
+        return None
+    except Exception:
+        return None
 
-    manager = MCPClientManager()
-    # We can't async connect here easily if this is sync.
-    # But we can read config.
-    if os.path.exists(manager.config_path):
-        return f"Config found at {manager.config_path}. Use Agent to manage connections."
-    return "No MCP servers configured."
+
+def list_mcp_servers() -> str:
+    """List configured MCP servers with their status.
+    
+    Returns a human-readable status report of all MCP servers.
+    """
+    try:
+        manager = _get_mcp_manager()
+        if manager is None:
+            return "MCP integration is not initialized. Enable it in settings."
+        
+        status = manager.get_status()
+        
+        if not status.get("enabled", True):
+            return "MCP integration is disabled. Set MCP_ENABLED=true to enable."
+        
+        servers = status.get("servers", {})
+        if not servers:
+            return "No MCP servers configured."
+        
+        lines = ["MCP Servers Status", "=" * 40]
+        for name, info in servers.items():
+            transport = info.get("transport", "unknown")
+            connected = info.get("connected", False)
+            tools_count = info.get("tools_count", 0)
+            error = info.get("error")
+            
+            status_str = "Connected" if connected else "Disconnected"
+            line = f"  {name} ({transport}): {status_str}"
+            if connected:
+                line += f" — {tools_count} tools"
+            if error:
+                line += f" — Error: {error}"
+            lines.append(line)
+        
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error getting MCP status: {e}"
+

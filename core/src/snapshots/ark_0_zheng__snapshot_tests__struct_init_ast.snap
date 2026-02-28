@@ -1,0 +1,49 @@
+---
+source: core/src/snapshot_tests.rs
+expression: ast
+---
+Statement(
+    Block(
+        [
+            Let {
+                name: "state",
+                ty: None,
+                value: StructInit {
+                    fields: [
+                        (
+                            "x",
+                            Integer(
+                                10,
+                            ),
+                        ),
+                        (
+                            "y",
+                            Integer(
+                                20,
+                            ),
+                        ),
+                        (
+                            "name",
+                            Literal(
+                                "test",
+                            ),
+                        ),
+                    ],
+                },
+            },
+            Expression(
+                Call {
+                    function_hash: "print",
+                    args: [
+                        GetField {
+                            obj: Variable(
+                                "state",
+                            ),
+                            field: "x",
+                        },
+                    ],
+                },
+            ),
+        ],
+    ),
+)

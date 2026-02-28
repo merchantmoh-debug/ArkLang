@@ -144,6 +144,30 @@ async def generate_ollama(prompt: str, model: str = "llama3") -> str:
 # Alias for tool discovery
 ollama_generate = generate_ollama
 
+# Backward-compat sync function with SSRF protection
+def call_local_ollama(prompt: str, host: str = "http://localhost:11434", model: str = "llama3") -> str:
+    """Synchronous wrapper for Ollama generation with SSRF protection.
+    
+    Validates the host to ensure only localhost connections are allowed.
+    Returns security block messages for invalid hosts.
+    """
+    try:
+        parsed = urlparse(host)
+        if parsed.scheme not in ("http", "https"):
+            return f"[Security Block] Scheme '{parsed.scheme}' not allowed. Only http/https permitted."
+        if parsed.hostname not in ("127.0.0.1", "localhost"):
+            return f"[Security Block] Host '{parsed.hostname}' is not allowed. Only localhost permitted."
+        
+        # Valid host — make the actual request
+        url = f"{host.rstrip('/')}/api/generate"
+        resp = requests.post(url, json={"model": model, "prompt": prompt, "stream": False}, timeout=30)
+        resp.raise_for_status()
+        return resp.json().get("response", "")
+    except requests.exceptions.ConnectionError:
+        return f"Error: Ollama is not running at {host}"
+    except Exception as e:
+        return f"Error generating text: {e}"
+
 # MCP Tool Definition
 mcp_tool_def = {
     "name": "ollama_generate",

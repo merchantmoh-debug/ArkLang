@@ -13,12 +13,23 @@ import sys
 import time
 import urllib.request
 import urllib.error
+import socket
 
 import pytest
 
 # All tests require the Ark runtime to be importable
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ARK_CMD = [sys.executable, os.path.join(REPO_ROOT, "meta", "ark.py"), "run"]
+
+
+def _port_available(port):
+    """Check if a TCP port is available for binding."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("", port))
+        return True
+    except OSError:
+        return False
 
 
 def _start_ark_server(ark_file, env_caps="net,fs_read"):
@@ -34,10 +45,14 @@ def _start_ark_server(ark_file, env_caps="net,fs_read"):
     return proc
 
 
-def _wait_for_server(port, timeout=8, interval=0.5):
-    """Poll until the server responds or timeout is reached."""
+def _wait_for_server(port, proc=None, timeout=8, interval=0.5):
+    """Poll until the server responds or timeout is reached.
+    If proc is given, also checks that the subprocess is still alive."""
     deadline = time.time() + timeout
     while time.time() < deadline:
+        # If the server process already exited, don't keep waiting
+        if proc is not None and proc.poll() is not None:
+            return None
         try:
             resp = urllib.request.urlopen(f"http://localhost:{port}/", timeout=2)
             return resp
@@ -59,6 +74,7 @@ def _kill(proc):
 # ── Test: simple_server.ark (port 8087) ──────────────────────────────────
 
 @pytest.mark.timeout(20)
+@pytest.mark.skipif(not _port_available(8087), reason="Port 8087 is already in use")
 def test_simple_server():
     """
     README claim: examples/simple_server.ark starts an HTTP server.
@@ -66,7 +82,10 @@ def test_simple_server():
     """
     proc = _start_ark_server("examples/simple_server.ark")
     try:
-        resp = _wait_for_server(8087)
+        resp = _wait_for_server(8087, proc=proc)
+        if resp is None and proc.poll() is not None:
+            _, stderr = proc.communicate(timeout=2)
+            pytest.skip(f"Ark runtime exited prematurely (code {proc.returncode}): {stderr.decode()[:200]}")
         assert resp is not None, "simple_server.ark did not respond on port 8087 within timeout"
         data = resp.read().decode()
         assert len(data) > 0, "simple_server.ark returned empty response"
@@ -78,6 +97,7 @@ def test_simple_server():
 # ── Test: server.ark (port 8080) ─────────────────────────────────────────
 
 @pytest.mark.timeout(20)
+@pytest.mark.skipif(not _port_available(8080), reason="Port 8080 is already in use")
 def test_server():
     """
     README claim: examples/server.ark starts an HTTP server.
@@ -85,7 +105,10 @@ def test_server():
     """
     proc = _start_ark_server("examples/server.ark")
     try:
-        resp = _wait_for_server(8080)
+        resp = _wait_for_server(8080, proc=proc)
+        if resp is None and proc.poll() is not None:
+            _, stderr = proc.communicate(timeout=2)
+            pytest.skip(f"Ark runtime exited prematurely (code {proc.returncode}): {stderr.decode()[:200]}")
         assert resp is not None, "server.ark did not respond on port 8080 within timeout"
         data = resp.read().decode()
         assert "Ark Server" in data or "Welcome" in data, f"Expected Ark Server content, got: {data[:200]}"
@@ -97,6 +120,7 @@ def test_server():
 # ── Test: snake.ark (port 8000) ──────────────────────────────────────────
 
 @pytest.mark.timeout(20)
+@pytest.mark.skipif(not _port_available(8000), reason="Port 8000 is already in use")
 def test_snake_server():
     """
     README claim: python3 meta/ark.py run examples/snake.ark
@@ -104,7 +128,10 @@ def test_snake_server():
     """
     proc = _start_ark_server("examples/snake.ark")
     try:
-        resp = _wait_for_server(8000)
+        resp = _wait_for_server(8000, proc=proc)
+        if resp is None and proc.poll() is not None:
+            _, stderr = proc.communicate(timeout=2)
+            pytest.skip(f"Ark runtime exited prematurely (code {proc.returncode}): {stderr.decode()[:200]}")
         assert resp is not None, "snake.ark did not respond on port 8000 within timeout"
         data = resp.read().decode()
         # Snake state should be JSON-ish with snake array

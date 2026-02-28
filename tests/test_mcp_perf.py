@@ -1,6 +1,7 @@
 import unittest
 import asyncio
 import json
+import sys
 import time
 from unittest.mock import MagicMock, AsyncMock
 from src.mcp_client import MCPClientManager, MCPServerConnection, MCPServerConfig, MCPTool

@@ -42,6 +42,8 @@ class Swarm {
     func new(agents) {
         s := Swarm()
         s.agents := agents
+        s._history := []
+        s._converged := false
         return s
     }
 
@@ -54,6 +56,7 @@ class Swarm {
             sys.list.append(results, res)
             i := i + 1
         }
+        sys.list.append(this._history, results)
         return results
     }
 
@@ -66,7 +69,81 @@ class Swarm {
             current := a.chat(current)
             i := i + 1
         }
+        sys.list.append(this._history, [current])
         return current
+    }
+
+    // --- Convergence Detection ---
+    // Pattern stolen from Chrome DevTools WaitForHelper.
+    // Runs iterative rounds until agent outputs stabilize (no significant
+    // changes between rounds) or timeout is reached.
+    //
+    // How it works:
+    //   1. Run the swarm on the task
+    //   2. Run again with "review these results" prompt
+    //   3. Compare outputs — if outputs are identical or near-identical,
+    //      the swarm has "converged" (agents agree)
+    //   4. If not converged, repeat up to max_rounds
+    //
+    // Usage:
+    //   swarm := Swarm.new([analyst, critic, synthesizer])
+    //   result := swarm.wait_for_convergence("Analyze this data", 3)
+    //   if swarm.has_converged() { print("Agents agree") }
+
+    func wait_for_convergence(task, max_rounds) {
+        round := 0
+        prev_result := ""
+        while round < max_rounds {
+            results := this.run(task)
+            // Concatenate all agent outputs into a single string for comparison
+            combined := ""
+            i := 0
+            while i < len(results) {
+                combined := combined + results[i]
+                i := i + 1
+            }
+            // Stability check: if output matches previous round, we've converged
+            if combined == prev_result {
+                this._converged := true
+                return results
+            }
+            prev_result := combined
+            // Next round asks agents to review
+            task := "Review and refine your previous analysis. Previous results:\n" + combined
+            round := round + 1
+        }
+        // Did not converge within max_rounds
+        this._converged := false
+        return this.run(task)
+    }
+
+    // has_converged() -> Bool
+    // Returns true if the last wait_for_convergence() call resulted in convergence.
+    func has_converged() {
+        return this._converged
+    }
+
+    // history() -> List[List[String]]
+    // Returns all previous swarm run results for audit trail.
+    func history() {
+        return this._history
+    }
+
+    // summarize(task: String) -> String
+    // Meta-analysis: runs all agents, then asks each agent to critique
+    // the others' outputs, producing a synthesized final answer.
+    func summarize(task) {
+        results := this.run(task)
+        // Build a summary prompt with all agent outputs
+        summary_prompt := "Synthesize these analyses into a single coherent answer:\n"
+        i := 0
+        while i < len(results) {
+            summary_prompt := summary_prompt + "\nAnalyst " + str(i + 1) + ": " + results[i]
+            i := i + 1
+        }
+        // Use the first agent as synthesizer
+        synthesis := this.agents[0].chat(summary_prompt)
+        return synthesis
     }
 }
 

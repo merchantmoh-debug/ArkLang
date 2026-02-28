@@ -1,0 +1,1819 @@
+---
+source: core/src/snapshot_tests.rs
+expression: ast
+---
+Statement(
+    Block(
+        [
+            Let {
+                name: "state",
+                ty: None,
+                value: StructInit {
+                    fields: [
+                        (
+                            "w",
+                            Integer(
+                                20,
+                            ),
+                        ),
+                        (
+                            "h",
+                            Integer(
+                                20,
+                            ),
+                        ),
+                        (
+                            "snake",
+                            List(
+                                [
+                                    List(
+                                        [
+                                            Integer(
+                                                10,
+                                            ),
+                                            Integer(
+                                                10,
+                                            ),
+                                        ],
+                                    ),
+                                    List(
+                                        [
+                                            Integer(
+                                                10,
+                                            ),
+                                            Integer(
+                                                11,
+                                            ),
+                                        ],
+                                    ),
+                                    List(
+                                        [
+                                            Integer(
+                                                10,
+                                            ),
+                                            Integer(
+                                                12,
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                        ),
+                        (
+                            "dir",
+                            Integer(
+                                0,
+                            ),
+                        ),
+                        (
+                            "apple",
+                            List(
+                                [
+                                    Integer(
+                                        5,
+                                    ),
+                                    Integer(
+                                        5,
+                                    ),
+                                ],
+                            ),
+                        ),
+                        (
+                            "game_over",
+                            Integer(
+                                0,
+                            ),
+                        ),
+                        (
+                            "score",
+                            Integer(
+                                0,
+                            ),
+                        ),
+                    ],
+                },
+            },
+            Function(
+                FunctionDef {
+                    name: "sleep_ms",
+                    inputs: [
+                        (
+                            "ms",
+                            Any,
+                        ),
+                    ],
+                    output: Any,
+                    body: MastNode {
+                        hash: "6ed227291569bdd96500f46ca8fe4efede64c14c32864254751cfb4364227edd",
+                        content: Statement(
+                            Block(
+                                [
+                                    Let {
+                                        name: "start",
+                                        ty: None,
+                                        value: Call {
+                                            function_hash: "sys.time.now",
+                                            args: [],
+                                        },
+                                    },
+                                    While {
+                                        condition: Call {
+                                            function_hash: "lt",
+                                            args: [
+                                                Call {
+                                                    function_hash: "sub",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "sys.time.now",
+                                                            args: [],
+                                                        },
+                                                        Variable(
+                                                            "start",
+                                                        ),
+                                                    ],
+                                                },
+                                                Variable(
+                                                    "ms",
+                                                ),
+                                            ],
+                                        },
+                                        body: [],
+                                    },
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Function(
+                FunctionDef {
+                    name: "get_snake_len",
+                    inputs: [
+                        (
+                            "snake",
+                            Any,
+                        ),
+                    ],
+                    output: Any,
+                    body: MastNode {
+                        hash: "6721b5601032baa4c85cc227be9e4c4299b4d8a318166822002d494cd6a6ebbb",
+                        content: Statement(
+                            Block(
+                                [
+                                    LetDestructure {
+                                        names: [
+                                            "l",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.len",
+                                            args: [
+                                                Variable(
+                                                    "snake",
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    Return(
+                                        Variable(
+                                            "l",
+                                        ),
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Function(
+                FunctionDef {
+                    name: "get_head",
+                    inputs: [
+                        (
+                            "snake",
+                            Any,
+                        ),
+                    ],
+                    output: Any,
+                    body: MastNode {
+                        hash: "38d3e6778905528fff5bf2aa03b6c56e30e5bf2c6f086aa8d91de0a6df8db2bc",
+                        content: Statement(
+                            Block(
+                                [
+                                    Let {
+                                        name: "l",
+                                        ty: None,
+                                        value: Call {
+                                            function_hash: "get_snake_len",
+                                            args: [
+                                                Variable(
+                                                    "snake",
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    LetDestructure {
+                                        names: [
+                                            "head",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.list.get",
+                                            args: [
+                                                Variable(
+                                                    "snake",
+                                                ),
+                                                Call {
+                                                    function_hash: "sub",
+                                                    args: [
+                                                        Variable(
+                                                            "l",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    Return(
+                                        Variable(
+                                            "head",
+                                        ),
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Function(
+                FunctionDef {
+                    name: "update_game",
+                    inputs: [],
+                    output: Any,
+                    body: MastNode {
+                        hash: "b5f010b4be5b084df42709ccd82c65fe5cfeca8c8909813d455c3729bd88d7cc",
+                        content: Statement(
+                            Block(
+                                [
+                                    If {
+                                        condition: GetField {
+                                            obj: Variable(
+                                                "state",
+                                            ),
+                                            field: "game_over",
+                                        },
+                                        then_block: [
+                                            Return(
+                                                Integer(
+                                                    0,
+                                                ),
+                                            ),
+                                        ],
+                                        else_block: None,
+                                    },
+                                    Let {
+                                        name: "head",
+                                        ty: None,
+                                        value: Call {
+                                            function_hash: "get_head",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "snake",
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    LetDestructure {
+                                        names: [
+                                            "hx",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.list.get",
+                                            args: [
+                                                Variable(
+                                                    "head",
+                                                ),
+                                                Integer(
+                                                    0,
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    LetDestructure {
+                                        names: [
+                                            "hy",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.list.get",
+                                            args: [
+                                                Variable(
+                                                    "head",
+                                                ),
+                                                Integer(
+                                                    1,
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "eq",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "dir",
+                                                },
+                                                Integer(
+                                                    0,
+                                                ),
+                                            ],
+                                        },
+                                        then_block: [
+                                            Let {
+                                                name: "hy",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "sub",
+                                                    args: [
+                                                        Variable(
+                                                            "hy",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "eq",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "dir",
+                                                },
+                                                Integer(
+                                                    1,
+                                                ),
+                                            ],
+                                        },
+                                        then_block: [
+                                            Let {
+                                                name: "hy",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        Variable(
+                                                            "hy",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "eq",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "dir",
+                                                },
+                                                Integer(
+                                                    2,
+                                                ),
+                                            ],
+                                        },
+                                        then_block: [
+                                            Let {
+                                                name: "hx",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "sub",
+                                                    args: [
+                                                        Variable(
+                                                            "hx",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "eq",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "dir",
+                                                },
+                                                Integer(
+                                                    3,
+                                                ),
+                                            ],
+                                        },
+                                        then_block: [
+                                            Let {
+                                                name: "hx",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        Variable(
+                                                            "hx",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "or",
+                                            args: [
+                                                Call {
+                                                    function_hash: "or",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "or",
+                                                            args: [
+                                                                Call {
+                                                                    function_hash: "lt",
+                                                                    args: [
+                                                                        Variable(
+                                                                            "hx",
+                                                                        ),
+                                                                        Integer(
+                                                                            0,
+                                                                        ),
+                                                                    ],
+                                                                },
+                                                                Call {
+                                                                    function_hash: "ge",
+                                                                    args: [
+                                                                        Variable(
+                                                                            "hx",
+                                                                        ),
+                                                                        GetField {
+                                                                            obj: Variable(
+                                                                                "state",
+                                                                            ),
+                                                                            field: "w",
+                                                                        },
+                                                                    ],
+                                                                },
+                                                            ],
+                                                        },
+                                                        Call {
+                                                            function_hash: "lt",
+                                                            args: [
+                                                                Variable(
+                                                                    "hy",
+                                                                ),
+                                                                Integer(
+                                                                    0,
+                                                                ),
+                                                            ],
+                                                        },
+                                                    ],
+                                                },
+                                                Call {
+                                                    function_hash: "ge",
+                                                    args: [
+                                                        Variable(
+                                                            "hy",
+                                                        ),
+                                                        GetField {
+                                                            obj: Variable(
+                                                                "state",
+                                                            ),
+                                                            field: "h",
+                                                        },
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                        then_block: [
+                                            SetField {
+                                                obj_name: "state",
+                                                field: "game_over",
+                                                value: Integer(
+                                                    1,
+                                                ),
+                                            },
+                                            Expression(
+                                                Call {
+                                                    function_hash: "print",
+                                                    args: [
+                                                        Literal(
+                                                            "Game Over: Wall Collision",
+                                                        ),
+                                                    ],
+                                                },
+                                            ),
+                                            Return(
+                                                Integer(
+                                                    0,
+                                                ),
+                                            ),
+                                        ],
+                                        else_block: None,
+                                    },
+                                    LetDestructure {
+                                        names: [
+                                            "l",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.len",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "snake",
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    Let {
+                                        name: "i",
+                                        ty: None,
+                                        value: Integer(
+                                            0,
+                                        ),
+                                    },
+                                    While {
+                                        condition: Call {
+                                            function_hash: "lt",
+                                            args: [
+                                                Variable(
+                                                    "i",
+                                                ),
+                                                Variable(
+                                                    "l",
+                                                ),
+                                            ],
+                                        },
+                                        body: [
+                                            LetDestructure {
+                                                names: [
+                                                    "part",
+                                                    "_",
+                                                ],
+                                                value: Call {
+                                                    function_hash: "sys.list.get",
+                                                    args: [
+                                                        GetField {
+                                                            obj: Variable(
+                                                                "state",
+                                                            ),
+                                                            field: "snake",
+                                                        },
+                                                        Variable(
+                                                            "i",
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                            LetDestructure {
+                                                names: [
+                                                    "px",
+                                                    "_",
+                                                ],
+                                                value: Call {
+                                                    function_hash: "sys.list.get",
+                                                    args: [
+                                                        Variable(
+                                                            "part",
+                                                        ),
+                                                        Integer(
+                                                            0,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                            LetDestructure {
+                                                names: [
+                                                    "py",
+                                                    "_",
+                                                ],
+                                                value: Call {
+                                                    function_hash: "sys.list.get",
+                                                    args: [
+                                                        Variable(
+                                                            "part",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                            If {
+                                                condition: Call {
+                                                    function_hash: "and",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "eq",
+                                                            args: [
+                                                                Variable(
+                                                                    "px",
+                                                                ),
+                                                                Variable(
+                                                                    "hx",
+                                                                ),
+                                                            ],
+                                                        },
+                                                        Call {
+                                                            function_hash: "eq",
+                                                            args: [
+                                                                Variable(
+                                                                    "py",
+                                                                ),
+                                                                Variable(
+                                                                    "hy",
+                                                                ),
+                                                            ],
+                                                        },
+                                                    ],
+                                                },
+                                                then_block: [
+                                                    SetField {
+                                                        obj_name: "state",
+                                                        field: "game_over",
+                                                        value: Integer(
+                                                            1,
+                                                        ),
+                                                    },
+                                                    Expression(
+                                                        Call {
+                                                            function_hash: "print",
+                                                            args: [
+                                                                Literal(
+                                                                    "Game Over: Self Collision",
+                                                                ),
+                                                            ],
+                                                        },
+                                                    ),
+                                                    Return(
+                                                        Integer(
+                                                            0,
+                                                        ),
+                                                    ),
+                                                ],
+                                                else_block: None,
+                                            },
+                                            Let {
+                                                name: "i",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        Variable(
+                                                            "i",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                    },
+                                    Let {
+                                        name: "new_head",
+                                        ty: None,
+                                        value: List(
+                                            [
+                                                Variable(
+                                                    "hx",
+                                                ),
+                                                Variable(
+                                                    "hy",
+                                                ),
+                                            ],
+                                        ),
+                                    },
+                                    LetDestructure {
+                                        names: [
+                                            "ax",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.list.get",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "apple",
+                                                },
+                                                Integer(
+                                                    0,
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    LetDestructure {
+                                        names: [
+                                            "ay",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.list.get",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "apple",
+                                                },
+                                                Integer(
+                                                    1,
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    Let {
+                                        name: "eaten",
+                                        ty: None,
+                                        value: Integer(
+                                            0,
+                                        ),
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "and",
+                                            args: [
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Variable(
+                                                            "hx",
+                                                        ),
+                                                        Variable(
+                                                            "ax",
+                                                        ),
+                                                    ],
+                                                },
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Variable(
+                                                            "hy",
+                                                        ),
+                                                        Variable(
+                                                            "ay",
+                                                        ),
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                        then_block: [
+                                            Let {
+                                                name: "eaten",
+                                                ty: None,
+                                                value: Integer(
+                                                    1,
+                                                ),
+                                            },
+                                            SetField {
+                                                obj_name: "state",
+                                                field: "score",
+                                                value: Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        GetField {
+                                                            obj: Variable(
+                                                                "state",
+                                                            ),
+                                                            field: "score",
+                                                        },
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                            Expression(
+                                                Call {
+                                                    function_hash: "print",
+                                                    args: [
+                                                        Literal(
+                                                            "Apple Eaten! Score: ",
+                                                        ),
+                                                        GetField {
+                                                            obj: Variable(
+                                                                "state",
+                                                            ),
+                                                            field: "score",
+                                                        },
+                                                    ],
+                                                },
+                                            ),
+                                            Let {
+                                                name: "t",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "sys.time.now",
+                                                    args: [],
+                                                },
+                                            },
+                                            Let {
+                                                name: "ax",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "mod",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "div",
+                                                            args: [
+                                                                Variable(
+                                                                    "t",
+                                                                ),
+                                                                Integer(
+                                                                    10,
+                                                                ),
+                                                            ],
+                                                        },
+                                                        GetField {
+                                                            obj: Variable(
+                                                                "state",
+                                                            ),
+                                                            field: "w",
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            Let {
+                                                name: "ay",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "mod",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "div",
+                                                            args: [
+                                                                Variable(
+                                                                    "t",
+                                                                ),
+                                                                Integer(
+                                                                    100,
+                                                                ),
+                                                            ],
+                                                        },
+                                                        GetField {
+                                                            obj: Variable(
+                                                                "state",
+                                                            ),
+                                                            field: "h",
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                            SetField {
+                                                obj_name: "state",
+                                                field: "apple",
+                                                value: List(
+                                                    [
+                                                        Variable(
+                                                            "ax",
+                                                        ),
+                                                        Variable(
+                                                            "ay",
+                                                        ),
+                                                    ],
+                                                ),
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    Let {
+                                        name: "new_snake",
+                                        ty: None,
+                                        value: List(
+                                            [],
+                                        ),
+                                    },
+                                    Let {
+                                        name: "start_idx",
+                                        ty: None,
+                                        value: Integer(
+                                            0,
+                                        ),
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "eq",
+                                            args: [
+                                                Variable(
+                                                    "eaten",
+                                                ),
+                                                Integer(
+                                                    0,
+                                                ),
+                                            ],
+                                        },
+                                        then_block: [
+                                            Let {
+                                                name: "start_idx",
+                                                ty: None,
+                                                value: Integer(
+                                                    1,
+                                                ),
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    Let {
+                                        name: "i",
+                                        ty: None,
+                                        value: Variable(
+                                            "start_idx",
+                                        ),
+                                    },
+                                    While {
+                                        condition: Call {
+                                            function_hash: "lt",
+                                            args: [
+                                                Variable(
+                                                    "i",
+                                                ),
+                                                Variable(
+                                                    "l",
+                                                ),
+                                            ],
+                                        },
+                                        body: [
+                                            LetDestructure {
+                                                names: [
+                                                    "val",
+                                                    "_",
+                                                ],
+                                                value: Call {
+                                                    function_hash: "sys.list.get",
+                                                    args: [
+                                                        GetField {
+                                                            obj: Variable(
+                                                                "state",
+                                                            ),
+                                                            field: "snake",
+                                                        },
+                                                        Variable(
+                                                            "i",
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                            Expression(
+                                                Call {
+                                                    function_hash: "sys.list.append",
+                                                    args: [
+                                                        Variable(
+                                                            "new_snake",
+                                                        ),
+                                                        Variable(
+                                                            "val",
+                                                        ),
+                                                    ],
+                                                },
+                                            ),
+                                            Let {
+                                                name: "i",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        Variable(
+                                                            "i",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                    },
+                                    Expression(
+                                        Call {
+                                            function_hash: "sys.list.append",
+                                            args: [
+                                                Variable(
+                                                    "new_snake",
+                                                ),
+                                                Variable(
+                                                    "new_head",
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                    SetField {
+                                        obj_name: "state",
+                                        field: "snake",
+                                        value: Variable(
+                                            "new_snake",
+                                        ),
+                                    },
+                                    Return(
+                                        Integer(
+                                            1,
+                                        ),
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Function(
+                FunctionDef {
+                    name: "json_state",
+                    inputs: [],
+                    output: Any,
+                    body: MastNode {
+                        hash: "13e9847cadfd4d5ded82d21d40139505e5303da5fb3fb2b9d4ed612efd98fe6c",
+                        content: Statement(
+                            Block(
+                                [
+                                    Let {
+                                        name: "res",
+                                        ty: None,
+                                        value: Literal(
+                                            "{",
+                                        ),
+                                    },
+                                    Let {
+                                        name: "res",
+                                        ty: None,
+                                        value: Call {
+                                            function_hash: "add",
+                                            args: [
+                                                Variable(
+                                                    "res",
+                                                ),
+                                                Literal(
+                                                    "\"snake\": [",
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    LetDestructure {
+                                        names: [
+                                            "l",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.len",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "snake",
+                                                },
+                                            ],
+                                        },
+                                    },
+                                    Let {
+                                        name: "i",
+                                        ty: None,
+                                        value: Integer(
+                                            0,
+                                        ),
+                                    },
+                                    While {
+                                        condition: Call {
+                                            function_hash: "lt",
+                                            args: [
+                                                Variable(
+                                                    "i",
+                                                ),
+                                                Variable(
+                                                    "l",
+                                                ),
+                                            ],
+                                        },
+                                        body: [
+                                            If {
+                                                condition: Call {
+                                                    function_hash: "gt",
+                                                    args: [
+                                                        Variable(
+                                                            "i",
+                                                        ),
+                                                        Integer(
+                                                            0,
+                                                        ),
+                                                    ],
+                                                },
+                                                then_block: [
+                                                    Let {
+                                                        name: "res",
+                                                        ty: None,
+                                                        value: Call {
+                                                            function_hash: "add",
+                                                            args: [
+                                                                Variable(
+                                                                    "res",
+                                                                ),
+                                                                Literal(
+                                                                    ",",
+                                                                ),
+                                                            ],
+                                                        },
+                                                    },
+                                                ],
+                                                else_block: None,
+                                            },
+                                            LetDestructure {
+                                                names: [
+                                                    "part",
+                                                    "_",
+                                                ],
+                                                value: Call {
+                                                    function_hash: "sys.list.get",
+                                                    args: [
+                                                        GetField {
+                                                            obj: Variable(
+                                                                "state",
+                                                            ),
+                                                            field: "snake",
+                                                        },
+                                                        Variable(
+                                                            "i",
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                            LetDestructure {
+                                                names: [
+                                                    "x",
+                                                    "_",
+                                                ],
+                                                value: Call {
+                                                    function_hash: "sys.list.get",
+                                                    args: [
+                                                        Variable(
+                                                            "part",
+                                                        ),
+                                                        Integer(
+                                                            0,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                            LetDestructure {
+                                                names: [
+                                                    "y",
+                                                    "_",
+                                                ],
+                                                value: Call {
+                                                    function_hash: "sys.list.get",
+                                                    args: [
+                                                        Variable(
+                                                            "part",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                            Let {
+                                                name: "res",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "add",
+                                                            args: [
+                                                                Call {
+                                                                    function_hash: "add",
+                                                                    args: [
+                                                                        Call {
+                                                                            function_hash: "add",
+                                                                            args: [
+                                                                                Call {
+                                                                                    function_hash: "add",
+                                                                                    args: [
+                                                                                        Variable(
+                                                                                            "res",
+                                                                                        ),
+                                                                                        Literal(
+                                                                                            "[",
+                                                                                        ),
+                                                                                    ],
+                                                                                },
+                                                                                Variable(
+                                                                                    "x",
+                                                                                ),
+                                                                            ],
+                                                                        },
+                                                                        Literal(
+                                                                            ",",
+                                                                        ),
+                                                                    ],
+                                                                },
+                                                                Variable(
+                                                                    "y",
+                                                                ),
+                                                            ],
+                                                        },
+                                                        Literal(
+                                                            "]",
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                            Let {
+                                                name: "i",
+                                                ty: None,
+                                                value: Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        Variable(
+                                                            "i",
+                                                        ),
+                                                        Integer(
+                                                            1,
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                        ],
+                                    },
+                                    Let {
+                                        name: "res",
+                                        ty: None,
+                                        value: Call {
+                                            function_hash: "add",
+                                            args: [
+                                                Variable(
+                                                    "res",
+                                                ),
+                                                Literal(
+                                                    "],",
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    LetDestructure {
+                                        names: [
+                                            "ax",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.list.get",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "apple",
+                                                },
+                                                Integer(
+                                                    0,
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    LetDestructure {
+                                        names: [
+                                            "ay",
+                                            "_",
+                                        ],
+                                        value: Call {
+                                            function_hash: "sys.list.get",
+                                            args: [
+                                                GetField {
+                                                    obj: Variable(
+                                                        "state",
+                                                    ),
+                                                    field: "apple",
+                                                },
+                                                Integer(
+                                                    1,
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    Let {
+                                        name: "res",
+                                        ty: None,
+                                        value: Call {
+                                            function_hash: "add",
+                                            args: [
+                                                Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "add",
+                                                            args: [
+                                                                Call {
+                                                                    function_hash: "add",
+                                                                    args: [
+                                                                        Call {
+                                                                            function_hash: "add",
+                                                                            args: [
+                                                                                Variable(
+                                                                                    "res",
+                                                                                ),
+                                                                                Literal(
+                                                                                    "\"apple\": [",
+                                                                                ),
+                                                                            ],
+                                                                        },
+                                                                        Variable(
+                                                                            "ax",
+                                                                        ),
+                                                                    ],
+                                                                },
+                                                                Literal(
+                                                                    ",",
+                                                                ),
+                                                            ],
+                                                        },
+                                                        Variable(
+                                                            "ay",
+                                                        ),
+                                                    ],
+                                                },
+                                                Literal(
+                                                    "],",
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    Let {
+                                        name: "go",
+                                        ty: None,
+                                        value: Literal(
+                                            "false",
+                                        ),
+                                    },
+                                    If {
+                                        condition: GetField {
+                                            obj: Variable(
+                                                "state",
+                                            ),
+                                            field: "game_over",
+                                        },
+                                        then_block: [
+                                            Let {
+                                                name: "go",
+                                                ty: None,
+                                                value: Literal(
+                                                    "true",
+                                                ),
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    Let {
+                                        name: "res",
+                                        ty: None,
+                                        value: Call {
+                                            function_hash: "add",
+                                            args: [
+                                                Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        Variable(
+                                                            "res",
+                                                        ),
+                                                        Literal(
+                                                            "\"game_over\": ",
+                                                        ),
+                                                    ],
+                                                },
+                                                Variable(
+                                                    "go",
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    Let {
+                                        name: "res",
+                                        ty: None,
+                                        value: Call {
+                                            function_hash: "add",
+                                            args: [
+                                                Variable(
+                                                    "res",
+                                                ),
+                                                Literal(
+                                                    "}",
+                                                ),
+                                            ],
+                                        },
+                                    },
+                                    Return(
+                                        Variable(
+                                            "res",
+                                        ),
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Function(
+                FunctionDef {
+                    name: "handler",
+                    inputs: [
+                        (
+                            "path",
+                            Any,
+                        ),
+                    ],
+                    output: Any,
+                    body: MastNode {
+                        hash: "b217874a109a8982756157931160a40fe6d0afb3188ea929c18fcd6fc475cda3",
+                        content: Statement(
+                            Block(
+                                [
+                                    If {
+                                        condition: Call {
+                                            function_hash: "eq",
+                                            args: [
+                                                Variable(
+                                                    "path",
+                                                ),
+                                                Literal(
+                                                    "/",
+                                                ),
+                                            ],
+                                        },
+                                        then_block: [
+                                            Return(
+                                                Call {
+                                                    function_hash: "sys.fs.read",
+                                                    args: [
+                                                        Literal(
+                                                            "examples/snake.html",
+                                                        ),
+                                                    ],
+                                                },
+                                            ),
+                                        ],
+                                        else_block: None,
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "eq",
+                                            args: [
+                                                Variable(
+                                                    "path",
+                                                ),
+                                                Literal(
+                                                    "/state",
+                                                ),
+                                            ],
+                                        },
+                                        then_block: [
+                                            Return(
+                                                Call {
+                                                    function_hash: "json_state",
+                                                    args: [],
+                                                },
+                                            ),
+                                        ],
+                                        else_block: None,
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "and",
+                                            args: [
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Variable(
+                                                            "path",
+                                                        ),
+                                                        Literal(
+                                                            "/up",
+                                                        ),
+                                                    ],
+                                                },
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "eq",
+                                                            args: [
+                                                                GetField {
+                                                                    obj: Variable(
+                                                                        "state",
+                                                                    ),
+                                                                    field: "dir",
+                                                                },
+                                                                Integer(
+                                                                    1,
+                                                                ),
+                                                            ],
+                                                        },
+                                                        Integer(
+                                                            0,
+                                                        ),
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                        then_block: [
+                                            SetField {
+                                                obj_name: "state",
+                                                field: "dir",
+                                                value: Integer(
+                                                    0,
+                                                ),
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "and",
+                                            args: [
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Variable(
+                                                            "path",
+                                                        ),
+                                                        Literal(
+                                                            "/down",
+                                                        ),
+                                                    ],
+                                                },
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "eq",
+                                                            args: [
+                                                                GetField {
+                                                                    obj: Variable(
+                                                                        "state",
+                                                                    ),
+                                                                    field: "dir",
+                                                                },
+                                                                Integer(
+                                                                    0,
+                                                                ),
+                                                            ],
+                                                        },
+                                                        Integer(
+                                                            0,
+                                                        ),
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                        then_block: [
+                                            SetField {
+                                                obj_name: "state",
+                                                field: "dir",
+                                                value: Integer(
+                                                    1,
+                                                ),
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "and",
+                                            args: [
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Variable(
+                                                            "path",
+                                                        ),
+                                                        Literal(
+                                                            "/left",
+                                                        ),
+                                                    ],
+                                                },
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "eq",
+                                                            args: [
+                                                                GetField {
+                                                                    obj: Variable(
+                                                                        "state",
+                                                                    ),
+                                                                    field: "dir",
+                                                                },
+                                                                Integer(
+                                                                    3,
+                                                                ),
+                                                            ],
+                                                        },
+                                                        Integer(
+                                                            0,
+                                                        ),
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                        then_block: [
+                                            SetField {
+                                                obj_name: "state",
+                                                field: "dir",
+                                                value: Integer(
+                                                    2,
+                                                ),
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    If {
+                                        condition: Call {
+                                            function_hash: "and",
+                                            args: [
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Variable(
+                                                            "path",
+                                                        ),
+                                                        Literal(
+                                                            "/right",
+                                                        ),
+                                                    ],
+                                                },
+                                                Call {
+                                                    function_hash: "eq",
+                                                    args: [
+                                                        Call {
+                                                            function_hash: "eq",
+                                                            args: [
+                                                                GetField {
+                                                                    obj: Variable(
+                                                                        "state",
+                                                                    ),
+                                                                    field: "dir",
+                                                                },
+                                                                Integer(
+                                                                    2,
+                                                                ),
+                                                            ],
+                                                        },
+                                                        Integer(
+                                                            0,
+                                                        ),
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                        then_block: [
+                                            SetField {
+                                                obj_name: "state",
+                                                field: "dir",
+                                                value: Integer(
+                                                    3,
+                                                ),
+                                            },
+                                        ],
+                                        else_block: None,
+                                    },
+                                    Return(
+                                        Literal(
+                                            "OK",
+                                        ),
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Expression(
+                Call {
+                    function_hash: "print",
+                    args: [
+                        Literal(
+                            "Starting Ark Snake Server...",
+                        ),
+                    ],
+                },
+            ),
+            Expression(
+                Call {
+                    function_hash: "print",
+                    args: [
+                        Literal(
+                            "Port: 8000",
+                        ),
+                    ],
+                },
+            ),
+            Expression(
+                Call {
+                    function_hash: "print",
+                    args: [
+                        Literal(
+                            "Access: http://localhost:8000",
+                        ),
+                    ],
+                },
+            ),
+            Expression(
+                Call {
+                    function_hash: "serve",
+                    args: [
+                        GetField {
+                            obj: GetField {
+                                obj: Variable(
+                                    "sys",
+                                ),
+                                field: "net",
+                            },
+                            field: "http",
+                        },
+                        Integer(
+                            8000,
+                        ),
+                        Variable(
+                            "handler",
+                        ),
+                    ],
+                },
+            ),
+            While {
+                condition: Integer(
+                    1,
+                ),
+                body: [
+                    Expression(
+                        Call {
+                            function_hash: "update_game",
+                            args: [],
+                        },
+                    ),
+                    Expression(
+                        Call {
+                            function_hash: "sleep_ms",
+                            args: [
+                                Integer(
+                                    100,
+                                ),
+                            ],
+                        },
+                    ),
+                ],
+            },
+        ],
+    ),
+)

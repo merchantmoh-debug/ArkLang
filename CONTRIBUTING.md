@@ -18,8 +18,8 @@ To build and contribute to Ark, you need the following tools installed:
 
 ```bash
 # Clone the repository
-git clone https://github.com/merchantmoh-debug/ark-compiler.git
-cd ark-compiler
+git clone https://github.com/merchantmoh-debug/ArkLang.git
+cd ArkLang
 
 # Build the Rust Core
 cd core

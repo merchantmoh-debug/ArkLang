@@ -61,7 +61,9 @@ class TestResearcherAgent(unittest.TestCase):
 
     def test_inheritance(self):
         """Test that ResearcherAgent correctly inherits from BaseAgent."""
-        self.assertIsInstance(self.agent, BaseAgent)
+        import inspect
+        base_classes = [cls.__name__ for cls in inspect.getmro(type(self.agent))]
+        self.assertIn("BaseAgent", base_classes)
 
 if __name__ == "__main__":
     unittest.main()

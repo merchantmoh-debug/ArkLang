@@ -171,5 +171,8 @@ math := {
     dot: dot,
     add: add,
     sub: sub,
-    mul_scalar: mul_scalar
+    mul_scalar: mul_scalar,
+    ln: intrinsic_math_ln,
+    exp: intrinsic_math_exp,
+    abs: intrinsic_math_abs
 }

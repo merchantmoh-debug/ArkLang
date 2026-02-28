@@ -1,0 +1,120 @@
+---
+source: core/src/snapshot_tests.rs
+expression: ast
+---
+Statement(
+    Block(
+        [
+            Function(
+                FunctionDef {
+                    name: "handler",
+                    inputs: [
+                        (
+                            "path",
+                            Any,
+                        ),
+                    ],
+                    output: Any,
+                    body: MastNode {
+                        hash: "c5d19a960844e0056e542c3074e968856574ac400a2cba643c8f22478f90a773",
+                        content: Statement(
+                            Block(
+                                [
+                                    Expression(
+                                        Call {
+                                            function_hash: "print",
+                                            args: [
+                                                Call {
+                                                    function_hash: "add",
+                                                    args: [
+                                                        Literal(
+                                                            "Received request for: ",
+                                                        ),
+                                                        Variable(
+                                                            "path",
+                                                        ),
+                                                    ],
+                                                },
+                                            ],
+                                        },
+                                    ),
+                                    Return(
+                                        Call {
+                                            function_hash: "add",
+                                            args: [
+                                                Literal(
+                                                    "Hello from Ark Bridge! You requested: ",
+                                                ),
+                                                Variable(
+                                                    "path",
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Function(
+                FunctionDef {
+                    name: "main",
+                    inputs: [],
+                    output: Any,
+                    body: MastNode {
+                        hash: "eb9a3d560e71a53b23a58aa930c5a23ebfbe90365fd8ddfb47a04dcd9cf4d365",
+                        content: Statement(
+                            Block(
+                                [
+                                    Expression(
+                                        Call {
+                                            function_hash: "print",
+                                            args: [
+                                                Literal(
+                                                    "Starting Ark HTTP Server on port 8087...",
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                    Expression(
+                                        Call {
+                                            function_hash: "serve",
+                                            args: [
+                                                GetField {
+                                                    obj: GetField {
+                                                        obj: Variable(
+                                                            "sys",
+                                                        ),
+                                                        field: "net",
+                                                    },
+                                                    field: "http",
+                                                },
+                                                Integer(
+                                                    8087,
+                                                ),
+                                                Variable(
+                                                    "handler",
+                                                ),
+                                            ],
+                                        },
+                                    ),
+                                ],
+                            ),
+                        ),
+                        span: None,
+                    },
+                    attributes: [],
+                },
+            ),
+            Expression(
+                Call {
+                    function_hash: "main",
+                    args: [],
+                },
+            ),
+        ],
+    ),
+)

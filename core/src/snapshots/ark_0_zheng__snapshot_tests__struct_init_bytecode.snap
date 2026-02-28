@@ -1,0 +1,18 @@
+---
+source: core/src/snapshot_tests.rs
+expression: opcodes
+---
+[
+    "Push(Integer(10))",
+    "Push(String(\"x\"))",
+    "Push(Integer(20))",
+    "Push(String(\"y\"))",
+    "Push(String(\"test\"))",
+    "Push(String(\"name\"))",
+    "MakeStruct(3)",
+    "Store(\"state\")",
+    "Load(\"state\")",
+    "GetField(\"x\")",
+    "Print",
+    "Push(Unit)",
+]

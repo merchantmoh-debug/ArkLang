@@ -12,15 +12,15 @@ from lark import Lark
 
 try:
     from meta.ark_types import (
-        ArkValue, UNIT_VALUE, ArkFunction, ArkClass, ArkInstance, Scope,
-        ReturnException, RopeString
+        ArkValue, UNIT_VALUE, CENSORED_VALUE, ArkFunction, ArkClass, ArkInstance, Scope,
+        ReturnException, RopeString, CensoredAccessError
     )
     from meta.ark_intrinsics import INTRINSICS, LINEAR_SPECS, INTRINSICS_WITH_SCOPE
     from meta.ark_security import SandboxViolation
 except ModuleNotFoundError:
     from ark_types import (
-        ArkValue, UNIT_VALUE, ArkFunction, ArkClass, ArkInstance, Scope,
-        ReturnException, RopeString
+        ArkValue, UNIT_VALUE, CENSORED_VALUE, ArkFunction, ArkClass, ArkInstance, Scope,
+        ReturnException, RopeString, CensoredAccessError
     )
     from ark_intrinsics import INTRINSICS, LINEAR_SPECS, INTRINSICS_WITH_SCOPE
     from ark_security import SandboxViolation
@@ -609,6 +609,15 @@ def is_truthy(val):
 
 
 def eval_binop(op, left, right):
+    # GCD Epistemic Firewall: Censored values cannot participate in arithmetic.
+    # They must be explicitly unwrapped via pattern matching (match Finite/Censored).
+    # This is the data-layer analog of Ark's linear types preventing double-spend.
+    if left.type == "Censored" or right.type == "Censored":
+        raise CensoredAccessError(
+            f"Arithmetic on Censored (\u221e_rec) value is prohibited. "
+            f"Operands: {left.type} {op} {right.type}. "
+            f"Use pattern matching to unwrap: match gcd.evaluate_return() {{ Finite(v) => ... | Censored => ... }}"
+        )
     l = left.val
     r = right.val
     if op == "add":

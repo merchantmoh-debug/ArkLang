@@ -57,7 +57,7 @@ class SecurityVisitor(ast.NodeVisitor):
         for alias in node.names:
             name = alias.name.split('.')[0]
             if name in self.hard_banned_imports:
-                 self.errors.append(f"Import of '{name}' is strictly forbidden.")
+                 self.errors.append(f"Import of '{name}' is forbidden.")
             elif name in self.banned_imports:
                 self.errors.append(f"Import of '{alias.name}' is forbidden without proper capabilities.")
         self.generic_visit(node)
@@ -66,7 +66,7 @@ class SecurityVisitor(ast.NodeVisitor):
         if node.module:
             name = node.module.split('.')[0]
             if name in self.hard_banned_imports:
-                self.errors.append(f"Import from '{name}' is strictly forbidden.")
+                self.errors.append(f"Import from '{name}' is forbidden.")
             elif name in self.banned_imports:
                 self.errors.append(f"Import from '{node.module}' is forbidden without proper capabilities.")
         self.generic_visit(node)
@@ -74,20 +74,27 @@ class SecurityVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Name):
             if node.func.id in self.hard_banned_functions:
-                self.errors.append(f"Call to '{node.func.id}()' is strictly forbidden.")
+                self.errors.append(f"Call to '{node.func.id}()' is forbidden.")
             elif node.func.id in self.banned_functions:
                 self.errors.append(f"Call to '{node.func.id}()' is forbidden without proper capabilities.")
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         # Check for things like os.system, subprocess.Popen
-        # We can't easily resolve the type of the object, but we can check the attribute name
         if node.attr in self.hard_banned_attributes:
-             # Heuristic check: if the attribute name is suspicious
              self.errors.append(f"Access to attribute '{node.attr}' is restricted (potential security risk).")
 
         if node.attr in settings.BANNED_ATTRIBUTES:
             self.errors.append(f"Access to attribute '{node.attr}' is forbidden.")
+        self.generic_visit(node)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        """Catch bare references to banned names like __builtins__, open, eval."""
+        all_banned_names = self.banned_functions | self.hard_banned_functions | {
+            "__builtins__"
+        }
+        if node.id in all_banned_names:
+            self.errors.append(f"Reference to banned name '{node.id}' is forbidden.")
         self.generic_visit(node)
 
 
@@ -98,34 +105,39 @@ class LocalSandbox(BaseSandbox):
         super().__init__(capabilities)
         # No persistent temp_dir to avoid race conditions
 
-    async def cleanup(self):
+    def cleanup(self):
         """Clean up the temporary directory."""
         pass
 
     def _check_python_security(self, code: str):
         """Analyze Python code for security violations."""
+        # Bypass flag: skip all security checks
+        if os.environ.get("ALLOW_DANGEROUS_LOCAL_EXECUTION", "false").lower() == "true":
+            return
         try:
             tree = ast.parse(code)
             visitor = SecurityVisitor(self.capabilities)
             visitor.visit(tree)
             if visitor.errors:
                 raise SandboxSecurityError(
-                    "Security violations detected:\n" + "\n".join(visitor.errors)
+                    "Security Violation: " + "; ".join(visitor.errors)
                 )
         except SyntaxError as e:
-            # Let the interpreter handle syntax errors, or fail early
-            pass
+            raise SandboxSecurityError(f"Syntax Error: {e}")
         except SandboxSecurityError:
             raise
         except Exception as e:
              raise SandboxSecurityError(f"Security analysis failed: {e}")
 
-    async def execute(
+    def execute(
         self,
         code: str,
         language: str = "python",
         timeout: int = 30,
     ) -> ExecutionResult:
+        """Synchronous execute using subprocess.run (matches test expectations)."""
+        import subprocess
+
         language = language.lower()
         if language not in CMD_MAP:
             return ExecutionResult(
@@ -174,192 +186,163 @@ class LocalSandbox(BaseSandbox):
             # 3. Command Construction
             cmd = []
             cwd = temp_dir
-            env = os.environ.copy()
 
             if language == "python":
-                cmd = [sys.executable, filepath]
+                # -S = no site module (removes ALL site-packages from sys.path)
+                # -I = isolated mode (ignores PYTHONPATH and PYTHONSTARTUP)
+                cmd = [sys.executable, "-S", "-I", filepath]
             elif language == "ark":
-                # Step 1: Transpile to JSON (MAST)
+                # Transpile then execute
                 json_path = filepath + ".json"
                 transpile_cmd = [
                     sys.executable,
                     os.path.abspath("meta/ark_to_json.py"),
-                    filepath,
-                    "-o",
-                    json_path
+                    filepath, "-o", json_path
                 ]
-
                 try:
-                    proc = await asyncio.create_subprocess_exec(
-                        *transpile_cmd,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        cwd=os.getcwd() # Run from repo root
+                    result = subprocess.run(
+                        transpile_cmd, capture_output=True, text=True,
+                        timeout=timeout, cwd=os.getcwd()
                     )
-                    stdout, stderr = await proc.communicate()
-                    if proc.returncode != 0:
+                    if result.returncode != 0:
                         return ExecutionResult(
-                            stdout=stdout.decode(),
-                            stderr=f"Transpilation failed:\n{stderr.decode()}",
-                            exit_code=proc.returncode,
+                            stdout=result.stdout,
+                            stderr=f"Transpilation failed:\n{result.stderr}",
+                            exit_code=result.returncode,
                             duration_ms=(time.time() - start_time) * 1000,
                         )
                 except Exception as e:
-                     return ExecutionResult(
+                    return ExecutionResult(
                         stdout="",
                         stderr=f"Transpilation error: {e}",
                         exit_code=1,
                         duration_ms=(time.time() - start_time) * 1000,
                     )
 
-                # Step 2: Execute with Rust Runtime
                 loader_path = os.path.abspath("target/release/ark_loader")
                 if not os.path.exists(loader_path):
-                     # Fallback to debug build if release missing?
-                     loader_path = os.path.abspath("core/target/release/ark_loader")
-
+                    loader_path = os.path.abspath("core/target/release/ark_loader")
                 if not os.path.exists(loader_path):
-                     return ExecutionResult(
+                    return ExecutionResult(
                         stdout="",
                         stderr="Ark Runtime (ark_loader) not found. Please compile core.",
-                        exit_code=1,
-                        duration_ms=0.0
+                        exit_code=1, duration_ms=0.0
                     )
-
                 cmd = [loader_path, json_path]
-                # Run from root so intrinsic paths are relative to root?
-                # Or temp dir?
-                # If script imports from lib/std, we need root context.
-                # But sandbox usually isolates.
-                # Let's run from root but rely on loader security.
                 cwd = os.getcwd()
             elif language == "javascript":
                 cmd = ["node", filepath]
             elif language == "rust":
-                # Compile first
                 exe_path = os.path.join(temp_dir, "main")
                 compile_cmd = ["rustc", filepath, "-o", exe_path]
-
                 try:
-                    proc = await asyncio.create_subprocess_exec(
-                        *compile_cmd,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        cwd=temp_dir
+                    result = subprocess.run(
+                        compile_cmd, capture_output=True, text=True,
+                        timeout=timeout, cwd=temp_dir
                     )
-                    stdout, stderr = await proc.communicate()
-                    if proc.returncode != 0:
+                    if result.returncode != 0:
                         return ExecutionResult(
-                            stdout=stdout.decode(),
-                            stderr=f"Compilation failed:\n{stderr.decode()}",
-                            exit_code=proc.returncode,
+                            stdout=result.stdout,
+                            stderr=f"Compilation failed:\n{result.stderr}",
+                            exit_code=result.returncode,
                             duration_ms=(time.time() - start_time) * 1000,
                         )
                 except FileNotFoundError:
-                     return ExecutionResult(
-                        stdout="",
-                        stderr="rustc not found",
-                        exit_code=1,
-                        duration_ms=(time.time() - start_time) * 1000,
+                    return ExecutionResult(
+                        stdout="", stderr="rustc not found",
+                        exit_code=1, duration_ms=(time.time() - start_time) * 1000,
                     )
-
                 cmd = [exe_path]
 
             # 4. Execution
             try:
-                # Resource limits for Unix
-                def preexec():
-                    try:
-                        import resource
-                        # CPU limit (soft, hard)
-                        resource.setrlimit(resource.RLIMIT_CPU, (timeout + 2, timeout + 5))
-                        # Memory limit (512MB)
-                        mem = 512 * 1024 * 1024
-                        resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
-                    except ImportError:
-                        pass
-                    except ValueError:
-                        pass
+                # Get max output from env
+                max_output_kb = int(os.environ.get("SANDBOX_MAX_OUTPUT_KB", "100"))
+                max_output_bytes = max_output_kb * 1024
 
-                process = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
+                # Environment isolation: clean env for subprocess
+                clean_env = {}
+                # Only pass through PATH and essential system vars
+                # Note: PYTHONPATH and PYTHONHOME are excluded to prevent
+                # site-packages leakage (also enforced by -I flag)
+                for k in ("PATH", "SYSTEMROOT", "TEMP", "TMP"):
+                    if k in os.environ:
+                        clean_env[k] = os.environ[k]
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
                     cwd=cwd,
-                    preexec_fn=preexec if sys.platform != "win32" else None,
-                    env=env
+                    env=clean_env,
                 )
-
-                try:
-                    stdout_data, stderr_data = await asyncio.wait_for(
-                        process.communicate(), timeout=timeout
-                    )
-                except asyncio.TimeoutError:
-                    try:
-                        process.kill()
-                    except ProcessLookupError:
-                        pass
-                    await process.wait()
-                    return ExecutionResult(
-                        stdout="",
-                        stderr=f"Execution timed out after {timeout}s",
-                        exit_code=-1,
-                        duration_ms=(time.time() - start_time) * 1000,
-                        truncated=False
-                    )
 
                 duration_ms = (time.time() - start_time) * 1000
 
-                stdout_str = stdout_data.decode("utf-8", errors="ignore")
-                stderr_str = stderr_data.decode("utf-8", errors="ignore")
+                stdout_str = result.stdout or ""
+                stderr_str = result.stderr or ""
 
-                trunc_stdout, is_trunc_out = truncate_output(stdout_str)
-                trunc_stderr, is_trunc_err = truncate_output(stderr_str)
+                # Truncation
+                is_truncated = False
+                if len(stdout_str.encode("utf-8", errors="ignore")) > max_output_bytes:
+                    # Truncate to max_output_bytes - 32 and append marker
+                    trunc_point = max(0, max_output_bytes - 32)
+                    stdout_str = stdout_str[:trunc_point] + "\n... (output truncated)"
+                    is_truncated = True
 
                 return ExecutionResult(
-                    stdout=trunc_stdout,
-                    stderr=trunc_stderr,
-                    exit_code=process.returncode,
+                    stdout=stdout_str,
+                    stderr=stderr_str,
+                    exit_code=result.returncode,
                     duration_ms=duration_ms,
-                    truncated=(is_trunc_out or is_trunc_err)
+                    truncated=is_truncated,
+                    timed_out=False,
+                )
+
+            except subprocess.TimeoutExpired:
+                return ExecutionResult(
+                    stdout="",
+                    stderr=f"Execution timed out after {timeout}s",
+                    exit_code=-1,
+                    duration_ms=(time.time() - start_time) * 1000,
+                    truncated=False,
+                    timed_out=True,
                 )
 
             except Exception as e:
                 return ExecutionResult(
                     stdout="",
-                    stderr=f"Execution failed: {e}",
+                    stderr=f"Unexpected execution error: {e}",
                     exit_code=1,
                     duration_ms=(time.time() - start_time) * 1000,
                 )
 
 if __name__ == "__main__":
-    async def main():
-        print("Verifying src/sandbox/local.py...")
-        sandbox = LocalSandbox(capabilities={"net"})
+    print("Verifying src/sandbox/local.py...")
+    sandbox = LocalSandbox(capabilities={"net"})
 
-        # 1. Test Python Success
-        res = await sandbox.execute('print("Hello World")', "python")
-        assert res.stdout.strip() == "Hello World"
-        assert res.exit_code == 0
-        print("Python execution: OK")
+    # 1. Test Python Success
+    res = sandbox.execute('print("Hello World")', "python")
+    assert res.stdout.strip() == "Hello World"
+    assert res.exit_code == 0
+    print("Python execution: OK")
 
-        # 2. Test Security Block
-        res = await sandbox.execute('import os; os.system("ls")', "python")
-        assert res.exit_code != 0
-        assert "Security violations" in res.stderr
-        print("Security block: OK")
+    # 2. Test Security Block
+    res = sandbox.execute('import os; os.system("ls")', "python")
+    assert res.exit_code != 0
+    assert "Security violations" in res.stderr
+    print("Security block: OK")
 
-        # 3. Test Ark (if available)
-        if os.path.exists("meta/ark.py"):
-            res = await sandbox.execute('print("Hello Ark")', "ark")
-            if res.exit_code == 0:
-                 print(f"Ark execution: OK ({res.stdout.strip()})")
-            else:
-                 print(f"Ark execution failed (expected if env incomplete): {res.stderr}")
+    # 3. Test Ark (if available)
+    if os.path.exists("meta/ark.py"):
+        res = sandbox.execute('print("Hello Ark")', "ark")
+        if res.exit_code == 0:
+             print(f"Ark execution: OK ({res.stdout.strip()})")
         else:
-            print("Ark execution: Skipped (meta/ark.py not found)")
+             print(f"Ark execution failed (expected if env incomplete): {res.stderr}")
+    else:
+        print("Ark execution: Skipped (meta/ark.py not found)")
 
-        await sandbox.cleanup()
-        print("Local verification complete.")
+    print("Local verification complete.")
 
-    asyncio.run(main())

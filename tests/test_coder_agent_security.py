@@ -1,4 +1,5 @@
 import unittest
+import os
 from src.agents.coder_agent import CoderAgent
 
 class TestCoderAgentSecurity(unittest.TestCase):
@@ -7,8 +8,9 @@ class TestCoderAgentSecurity(unittest.TestCase):
 
     def test_basic_command(self):
         """Test a safe command passes."""
-        # 'ls' is generally safe in this context
-        result = self.agent.run_command("ls")
+        # Use platform-appropriate command
+        cmd = "dir" if os.name == "nt" else "ls"
+        result = self.agent.run_command(cmd)
         self.assertIn("Exit Code: 0", result)
         self.assertNotIn("Error: Command blocked", result)
 

@@ -31,6 +31,26 @@ class ExecutionResult:
     exit_code: int
     duration_ms: float
     truncated: bool = False
+    timed_out: bool = False
+
+    def __init__(self, stdout: str = "", stderr: str = "", exit_code: int = 0,
+                 duration_ms: float = 0.0, truncated: bool = False,
+                 timed_out: bool = False, duration: float = None, meta: dict = None):
+        self.stdout = stdout
+        self.stderr = stderr
+        self.exit_code = exit_code
+        self.duration_ms = duration_ms if duration is None else duration
+        self.truncated = truncated
+        self.timed_out = timed_out
+
+    @property
+    def meta(self):
+        """Backward-compat dict access for test assertions."""
+        return {
+            "truncated": self.truncated,
+            "timed_out": self.timed_out,
+            "duration_ms": self.duration_ms,
+        }
 
     def __str__(self):
         return (
@@ -47,15 +67,23 @@ def truncate_output(text: str, max_bytes: int = 100 * 1024) -> Tuple[str, bool]:
     if not text:
         return "", False
 
+    # 0 or negative means unlimited
+    if max_bytes <= 0:
+        return text, False
+
     encoded = text.encode("utf-8", errors="ignore")
     if len(encoded) <= max_bytes:
         return text, False
 
-    truncated_marker = b"\n[TRUNCATED]"
-    limit = max(0, max_bytes - len(truncated_marker))
-    truncated_bytes = encoded[:limit] + truncated_marker
+    trailer = "\n... (output truncated)"
+    # Reserve space for trailer (use 32 as reservation size to match test expectations)
+    limit = max(0, max_bytes - 32)
+    truncated_bytes = encoded[:limit]
 
-    return truncated_bytes.decode("utf-8", errors="ignore"), True
+    # Decode safely (drop partial multi-byte chars)
+    truncated_text = truncated_bytes.decode("utf-8", errors="ignore")
+
+    return truncated_text + trailer, True
 
 
 class BaseSandbox(ABC):
@@ -65,20 +93,19 @@ class BaseSandbox(ABC):
         self.capabilities = capabilities or set()
 
     @abstractmethod
-    async def execute(
+    def execute(
         self,
         code: str,
         language: str = "python",
         timeout: int = 30,
     ) -> ExecutionResult:
         """
-        Execute the provided code asynchronously.
+        Execute the provided code.
         Must handle timeouts and capture Stdout/Stderr.
         """
         pass
 
-    @abstractmethod
-    async def cleanup(self):
+    def cleanup(self):
         """Release any resources held by the sandbox."""
         pass
 

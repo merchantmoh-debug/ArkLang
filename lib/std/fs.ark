@@ -59,6 +59,123 @@ func fs_size(path) {
     return sys.len(content)
 }
 
+// list_dir(path: String) -> List[String]
+// Lists all files and directories in the given path.
+// Requires: fs_read capability.
+func fs_list_dir(path) {
+    return sys.fs.list_dir(path)
+}
+
+// --- Fuzzy File Matching ---
+// Pattern stolen from ElevenLabs MCP utils.py (find_similar_filenames).
+// Reimplemented natively in Ark using Levenshtein distance.
+//
+// Usage:
+//   matches := fs.find_similar("mth.ark", "/project/lib/")
+//   // returns: [{ name: "math.ark", score: 85 }, { name: "net.ark", score: 42 }]
+
+// _levenshtein(a: String, b: String) -> Int
+// Computes the edit distance between two strings.
+// Uses the iterative matrix approach for O(n*m) complexity.
+func _levenshtein(a, b) {
+    la := len(a)
+    lb := len(b)
+    if la == 0 { return lb }
+    if lb == 0 { return la }
+
+    // Build row-by-row (space-optimized)
+    prev := []
+    i := 0
+    while i <= lb {
+        sys.list.append(prev, i)
+        i := i + 1
+    }
+
+    i := 1
+    while i <= la {
+        curr := [i]
+        j := 1
+        while j <= lb {
+            // Cost: 0 if chars match, 1 if different
+            cost := 1
+            if sys.str.char_at(a, i - 1) == sys.str.char_at(b, j - 1) {
+                cost := 0
+            }
+            // min(insert, delete, substitute)
+            insert_cost := curr[j - 1] + 1
+            delete_cost := prev[j] + 1
+            sub_cost := prev[j - 1] + cost
+
+            min_val := insert_cost
+            if delete_cost < min_val { min_val := delete_cost }
+            if sub_cost < min_val { min_val := sub_cost }
+
+            sys.list.append(curr, min_val)
+            j := j + 1
+        }
+        prev := curr
+        i := i + 1
+    }
+    return prev[lb]
+}
+
+// _similarity_score(a: String, b: String) -> Int
+// Returns a similarity score from 0-100 (100 = identical).
+func _similarity_score(a, b) {
+    distance := _levenshtein(a, b)
+    max_len := len(a)
+    if len(b) > max_len { max_len := len(b) }
+    if max_len == 0 { return 100 }
+    score := ((max_len - distance) * 100) / max_len
+    return score
+}
+
+// find_similar(target: String, directory: String, threshold: Int = 60) -> List[Struct]
+// Finds files with names similar to the target using Levenshtein distance.
+// Returns a list of { name: String, score: Int } sorted by score descending.
+// Only files with score >= threshold are returned.
+//
+// Example: fs.find_similar("mth.ark", "/lib/std/", 50)
+//   -> [{ name: "math.ark", score: 86 }, { name: "io.ark", score: 50 }]
+func fs_find_similar(target, directory) {
+    threshold := 60
+    files := sys.fs.list_dir(directory)
+    matches := []
+    i := 0
+    while i < len(files) {
+        fname := files[i]
+        score := _similarity_score(target, fname)
+        if score >= threshold {
+            match := { name: fname, score: score, path: directory + "/" + fname }
+            sys.list.append(matches, match)
+        }
+        i := i + 1
+    }
+    // Simple insertion sort by score (descending)
+    i := 1
+    while i < len(matches) {
+        j := i
+        while j > 0 {
+            if matches[j].score > matches[j - 1].score {
+                // Swap
+                tmp := matches[j]
+                matches[j] := matches[j - 1]
+                matches[j - 1] := tmp
+            }
+            j := j - 1
+        }
+        i := i + 1
+    }
+    return matches
+}
+
+// search(directory: String, pattern: String) -> List[String]
+// Searches recursively for files matching a glob-like pattern.
+// Requires: fs_read capability.
+func fs_search(directory, pattern) {
+    return sys.fs.search(directory, pattern)
+}
+
 fs := {
     read: fs_read,
     write: fs_write,
@@ -66,5 +183,8 @@ fs := {
     read_bytes: fs_read_bytes,
     write_bytes: fs_write_bytes,
     exists: fs_exists,
-    size: fs_size
+    size: fs_size,
+    list_dir: fs_list_dir,
+    find_similar: fs_find_similar,
+    search: fs_search
 }

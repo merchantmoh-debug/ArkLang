@@ -26,8 +26,10 @@ class ResearcherAgent(BaseAgent):
     
     def __init__(self, name: str = "Researcher", **kwargs):
         system_prompt = (
-            "You are the Researcher Agent. Your job is to find information, analyze data, and summarize findings.\n"
+            "You are the Researcher Agent with expertise in information gathering and analysis.\n"
+            "Your job is to find information, analyze data, and summarize findings.\n"
             "You have access to web search and page reading tools.\n"
+            "Best Practices: Cross-reference sources, verify claims, cite evidence.\n"
             "Output format: JSON with keys 'findings' (list), 'sources' (list), 'confidence' (0.0-1.0)."
         )
         super().__init__(name=name, system_prompt=system_prompt, **kwargs)

@@ -1,0 +1,31 @@
+---
+source: core/src/snapshot_tests.rs
+expression: ast
+---
+{
+  "Statement": {
+    "Block": [
+      {
+        "Let": {
+          "name": "x",
+          "ty": null,
+          "value": {
+            "Integer": 42
+          }
+        }
+      },
+      {
+        "Expression": {
+          "Call": {
+            "function_hash": "print",
+            "args": [
+              {
+                "Variable": "x"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
