@@ -15,8 +15,7 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![License: Commercial](https://img.shields.io/badge/License-Commercial-blue.svg)](LICENSE_COMMERCIAL)
-![CI](https://img.shields.io/badge/CI-10/10_PASSING-brightgreen?style=for-the-badge)
-![Tests](https://img.shields.io/badge/Tests-744_Passing-brightgreen?style=for-the-badge)
+[![CI](https://github.com/merchantmoh-debug/ArkLang/actions/workflows/ci.yml/badge.svg)](https://github.com/merchantmoh-debug/ArkLang/actions/workflows/ci.yml)
 ![Core](https://img.shields.io/badge/Core-RUST-red?style=for-the-badge)
 ![Parity](https://img.shields.io/badge/Intrinsic_Parity-100%25-green?style=for-the-badge)
 
@@ -48,36 +47,28 @@
 | Standard library modules | 16 |
 | Core Rust modules | 58 (compiler, VM, WASM, security, LLM, agent substrate, memory) |
 | Agent substrate modules | 26 (taint, capability, metering, triggers, semantic memory, A2A, lifecycle hooks, etc.) |
-| Unit tests (all passing) | 744 |
-| CI jobs (all green) | 10/10 |
+| Unit + integration tests | 1,039 (Rust 763, Python 272, verify scripts 4) |
+| CI jobs | 10 (Rust x3 OS, Python x3 OS, WASM browser, Docker, Security, Release) |
 | Compilation backends | 3 (Bytecode VM, Native WASM, Tree-walker) |
 | User manual | 1,500+ lines |
 | Leviathan Portal | Live in-browser CSG via manifold-3d WASM |
 
 ---
 
-## Leviathan: Parametric Manufacturing Compiler
+## Leviathan: Parametric Manufacturing Demo
 
-Ark includes a parametric manufacturing compiler that outputs printer-ready geometry from constraint specifications.
+Ark includes an experimental parametric geometry compiler that outputs printer-ready meshes from code.
 
-The [**Leviathan Portal**](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) is a zero-installation browser demo of Ark's parametric manufacturing compiler. Click one button and watch Ark:
+The [**Leviathan Portal**](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) is a browser demo. Click one button and watch it:
 
-1. **Z3-verify** 11 thermodynamic constraints -- wall thickness, porosity, thermal conductivity, structural integrity -- rejecting any design that violates physics *before* a single vertex is generated.
-2. **CSG-compile** a titanium metamaterial heat sink via `manifold-3d` WASM -- real constructive solid geometry: a 100mm cube minus up to 972 intersecting cylindrical channels, computed as boolean algebra.
-3. **Export a printer-ready GLB** -- a watertight, 2-manifold mesh that loads directly into SLS titanium slicer software. Not a mockup. Not a render. An actual manufacturing specification.
-4. **Seal it with a cryptographic proof-of-matter receipt** -- SHA-256 hash of the mesh topology, proving the geometry was produced by a verified compilation.
+1. **Validate** design parameters -- wall thickness, porosity bounds, structural limits -- rejecting invalid inputs before geometry generation.
+2. **CSG-compile** a metamaterial heat sink via `manifold-3d` WASM -- constructive solid geometry: a 100mm cube minus up to 972 intersecting cylindrical channels, computed as boolean algebra.
+3. **Export a GLB** -- a watertight, 2-manifold mesh suitable for 3D printing pipelines.
+4. **Seal it with a proof-of-matter receipt** -- SHA-256 hash of the mesh topology.
 
 Runtime: ~12ms in a browser tab, zero installation required.
 
-### What This Replaces
-
-The traditional workflow for producing the same output:
-- **SolidWorks/Fusion 360** ($5k–$50k/seat/year) -- engineer manually models geometry
-- **ANSYS/Abaqus** ($50k–$200k/year) -- run thermal FEA to validate constraints
-- **Iterate** 5–15 times over days to weeks when constraints fail
-- Export STL, send to print bureau, hope it works
-
-Ark collapses this entire pipeline into a single compilation step. The constraint specification IS the design. The compiler proves correctness and outputs the only geometry that satisfies it -- in one pass, in milliseconds.
+> **Note:** This is a CSG geometry compiler, not a replacement for FEA simulation tools. The constraint checks are parameter validation, not physics simulation.
 
 **→ [Try it now](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | **[Read the source](apps/leviathan_compiler.ark)** (210 lines of Ark)
 
