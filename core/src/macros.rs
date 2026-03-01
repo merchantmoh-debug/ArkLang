@@ -503,7 +503,7 @@ mod tests {
         );
         assert!(result.is_ok());
         // Should produce an If statement
-        let node = result.unwrap();
+        let node = result.expect("operation failed");
         if let ArkNode::Statement(Statement::If { .. }) = node {
             // Good — expanded to if
         } else {
@@ -550,7 +550,7 @@ mod tests {
             vec![ArkNode::Expression(Expression::Literal("5".to_string()))],
         );
         assert!(result.is_ok());
-        let node = result.unwrap();
+        let node = result.expect("operation failed");
         if let ArkNode::Expression(Expression::Call {
             function_hash,
             args,
@@ -567,7 +567,7 @@ mod tests {
     fn test_expand_all_no_macros() {
         let mut registry = MacroRegistry::new();
         let node = ArkNode::Expression(Expression::Literal("42".to_string()));
-        let result = expand_all(&node, &mut registry).unwrap();
+        let result = expand_all(&node, &mut registry).expect("operation failed");
         assert_eq!(result, node);
     }
 }

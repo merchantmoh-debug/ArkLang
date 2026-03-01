@@ -27,7 +27,7 @@ impl Block {
     pub fn new(index: u64, data: Vec<Transaction>, previous_hash: String) -> Self {
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .expect("unexpected failure")
             .as_secs();
 
         Block {
@@ -49,7 +49,7 @@ pub fn merkle_root(transactions: &[Transaction]) -> String {
     let mut hashes: Vec<String> = transactions
         .iter()
         .map(|tx| {
-            let json = serde_json::to_string(tx).unwrap();
+            let json = serde_json::to_string(tx).expect("operation failed");
             format!("{:x}", Sha256::digest(json.as_bytes()))
         })
         .collect();
@@ -109,7 +109,7 @@ impl Blockchain {
             index: 0,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .expect("unexpected failure")
                 .as_secs(),
             data: vec![],
             previous_hash: "0".to_string(),
@@ -135,7 +135,7 @@ impl Blockchain {
     }
 
     pub fn mine_block(&mut self) -> Block {
-        let previous_block = self.chain.last().unwrap();
+        let previous_block = self.chain.last().expect("operation failed");
         let index = previous_block.index + 1;
         let previous_hash = previous_block.hash.clone();
         let data = self.pending_tx.clone();
@@ -194,7 +194,7 @@ pub fn get_chain() -> &'static Mutex<Blockchain> {
 // Legacy/VM Support Functions
 
 pub fn verify_code_hash(hash: &str) -> bool {
-    let chain = get_chain().lock().unwrap();
+    let chain = get_chain().lock().expect("mutex poisoned");
     for block in &chain.chain {
         for tx in &block.data {
             let code_hash = format!("{:x}", Sha256::digest(tx.data.as_bytes()));
@@ -217,7 +217,7 @@ pub fn submit_code(code: &str) -> String {
 
     let hash = format!("{:x}", Sha256::digest(code.as_bytes()));
 
-    let mut chain = get_chain().lock().unwrap();
+    let mut chain = get_chain().lock().expect("mutex poisoned");
     chain.add_transaction(tx);
     chain.mine_block();
 
@@ -320,7 +320,7 @@ mod tests {
         };
         let root = merkle_root(&[tx.clone()]);
 
-        let json = serde_json::to_string(&tx).unwrap();
+        let json = serde_json::to_string(&tx).expect("operation failed");
         let expected = format!("{:x}", Sha256::digest(json.as_bytes()));
         assert_eq!(root, expected);
     }
@@ -346,11 +346,11 @@ mod tests {
 
         let h1 = format!(
             "{:x}",
-            Sha256::digest(serde_json::to_string(&tx1).unwrap().as_bytes())
+            Sha256::digest(serde_json::to_string(&tx1).expect("unexpected failure").as_bytes())
         );
         let h2 = format!(
             "{:x}",
-            Sha256::digest(serde_json::to_string(&tx2).unwrap().as_bytes())
+            Sha256::digest(serde_json::to_string(&tx2).expect("unexpected failure").as_bytes())
         );
         let expected = format!("{:x}", Sha256::digest(format!("{}{}", h1, h2).as_bytes()));
 

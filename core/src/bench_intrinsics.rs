@@ -17,7 +17,7 @@ mod tests {
             let b = Value::String(append_str.clone());
             let args = vec![a, b];
             // intrinsic_add returns Result<Value, RuntimeError>
-            let _res = intrinsic_add(args).unwrap();
+            let _res = intrinsic_add(args).expect("operation failed");
         }
 
         let total_duration = start.elapsed();

@@ -595,8 +595,8 @@ mod tests {
             scope: "episodic".to_string(),
             deleted: false,
         };
-        let json = serde_json::to_string(&frag).unwrap();
-        let back: MemoryFragment = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&frag).expect("operation failed");
+        let back: MemoryFragment = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.content, "Test memory");
         assert_eq!(back.confidence, 0.95);
     }
@@ -648,24 +648,24 @@ mod tests {
     #[test]
     fn test_memory_source_serde() {
         let src = MemorySource::Observation;
-        let json = serde_json::to_string(&src).unwrap();
+        let json = serde_json::to_string(&src).expect("operation failed");
         assert_eq!(json, "\"observation\"");
-        let back: MemorySource = serde_json::from_str(&json).unwrap();
+        let back: MemorySource = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back, MemorySource::Observation);
     }
 
     #[test]
     fn test_entity_type_serde() {
         let et = EntityType::Custom("workflow".to_string());
-        let json = serde_json::to_string(&et).unwrap();
-        let back: EntityType = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&et).expect("operation failed");
+        let back: EntityType = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back, EntityType::Custom("workflow".to_string()));
     }
 
     #[test]
     fn test_relation_type_serde() {
         let rt = RelationType::DependsOn;
-        let json = serde_json::to_string(&rt).unwrap();
+        let json = serde_json::to_string(&rt).expect("operation failed");
         assert_eq!(json, "\"depends_on\"");
     }
 
@@ -781,7 +781,7 @@ mod tests {
 
         // Manually set accessed_at to old
         {
-            let mut frags = store.fragments.lock().unwrap();
+            let mut frags = store.fragments.lock().expect("operation failed");
             frags[0].accessed_at = 0; // Very old
         }
 
@@ -804,8 +804,8 @@ mod tests {
             memories_decayed: 10,
             duration_ms: 42,
         };
-        let json = serde_json::to_string(&report).unwrap();
-        let back: ConsolidationReport = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&report).expect("operation failed");
+        let back: ConsolidationReport = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.memories_decayed, 10);
     }
 
@@ -819,8 +819,8 @@ mod tests {
     #[test]
     fn test_export_format_serde() {
         let fmt = ExportFormat::Json;
-        let json = serde_json::to_string(&fmt).unwrap();
-        let back: ExportFormat = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&fmt).expect("operation failed");
+        let back: ExportFormat = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back, ExportFormat::Json);
     }
 }

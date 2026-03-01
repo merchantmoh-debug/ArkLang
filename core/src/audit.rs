@@ -264,7 +264,7 @@ mod tests {
 
         // Tamper with an entry
         {
-            let mut entries = log.entries.lock().unwrap();
+            let mut entries = log.entries.lock().expect("operation failed");
             entries[1].detail = "echo hello".to_string();
         }
 

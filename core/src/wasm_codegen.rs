@@ -2354,7 +2354,7 @@ impl WasmCodegen {
                         }
                         // Allocate 64 bytes for output
                         ctx.emit(Instruction::I64Const(64));
-                        let alloc_idx = *func_map.get("__alloc").unwrap();
+                        let alloc_idx = *func_map.get("__alloc").expect("operation failed");
                         ctx.emit(Instruction::Call(alloc_idx));
                         // out_ptr is on stack as i64; save to local
                         let out_local = ctx.scope.get_or_alloc("__host_out_sha512");
@@ -2383,7 +2383,7 @@ impl WasmCodegen {
                         }
                         // Allocate output buffer (4KB)
                         ctx.emit(Instruction::I64Const(4096));
-                        let alloc_idx = *func_map.get("__alloc").unwrap();
+                        let alloc_idx = *func_map.get("__alloc").expect("operation failed");
                         ctx.emit(Instruction::Call(alloc_idx));
                         let out_local = ctx.scope.get_or_alloc("__host_out_sha512");
                         ctx.emit(Instruction::LocalSet(out_local));
@@ -2408,7 +2408,7 @@ impl WasmCodegen {
                             });
                         }
                         ctx.emit(Instruction::I64Const(4096));
-                        let alloc_idx = *func_map.get("__alloc").unwrap();
+                        let alloc_idx = *func_map.get("__alloc").expect("operation failed");
                         ctx.emit(Instruction::Call(alloc_idx));
                         let out_local = ctx.scope.get_or_alloc("__host_out_sha512");
                         ctx.emit(Instruction::LocalSet(out_local));
@@ -2435,7 +2435,7 @@ impl WasmCodegen {
                         }
                         // Allocate 4KB output buffer
                         ctx.emit(Instruction::I64Const(4096));
-                        let alloc_idx = *func_map.get("__alloc").unwrap();
+                        let alloc_idx = *func_map.get("__alloc").expect("operation failed");
                         ctx.emit(Instruction::Call(alloc_idx));
                         let out_local = ctx.scope.get_or_alloc("__host_out_sha512");
                         ctx.emit(Instruction::LocalSet(out_local));
@@ -3427,7 +3427,7 @@ mod tests {
 
         let result = WasmCodegen::compile_to_bytes(&program);
         assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
-        let wasm = result.unwrap();
+        let wasm = result.expect("operation failed");
         // Valid WASM starts with magic number \0asm
         assert_eq!(&wasm[0..4], b"\0asm", "Invalid WASM magic number");
         // Version 1
@@ -3456,7 +3456,7 @@ mod tests {
 
         let result = WasmCodegen::compile_to_bytes(&program);
         assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
-        let wasm = result.unwrap();
+        let wasm = result.expect("operation failed");
         assert_eq!(&wasm[0..4], b"\0asm");
     }
 
@@ -3579,7 +3579,7 @@ mod tests {
 
         let result = WasmCodegen::compile_to_bytes(&program);
         assert!(result.is_ok(), "Compilation failed: {:?}", result.err());
-        let wasm = result.unwrap();
+        let wasm = result.expect("operation failed");
         assert_eq!(&wasm[0..4], b"\0asm");
         assert!(
             wasm.len() > 8,
@@ -3641,7 +3641,7 @@ mod tests {
         let program = ArkNode::Statement(Statement::Block(vec![]));
         let result = WasmCodegen::compile_to_bytes(&program);
         assert!(result.is_ok());
-        let wasm = result.unwrap();
+        let wasm = result.expect("operation failed");
         assert!(wasm.len() >= 8);
         // Magic: \0asm
         assert_eq!(wasm[0], 0x00);
@@ -3671,7 +3671,7 @@ mod tests {
             "String print compilation failed: {:?}",
             result.err()
         );
-        let wasm = result.unwrap();
+        let wasm = result.expect("operation failed");
         assert_eq!(&wasm[0..4], b"\0asm");
         // String data should be embedded in the binary
         assert!(
@@ -4044,7 +4044,7 @@ mod tests {
         );
 
         // Verify the module can be loaded and run via wasmtime with WASI stubs
-        let bytes = result.unwrap();
+        let bytes = result.expect("operation failed");
         let run_result = crate::wasm_runner::run_wasm(&bytes);
         assert!(
             run_result.is_ok(),
@@ -4167,7 +4167,7 @@ mod tests {
 
         let result = WasmCodegen::compile_to_bytes(&program);
         assert!(result.is_ok(), "string_len failed: {:?}", result.err());
-        let bytes = result.unwrap();
+        let bytes = result.expect("operation failed");
         let valid = wasmparser::Validator::new().validate_all(&bytes);
         assert!(
             valid.is_ok(),
@@ -4191,7 +4191,7 @@ mod tests {
 
         let result = WasmCodegen::compile_to_bytes(&program);
         assert!(result.is_ok(), "string_concat failed: {:?}", result.err());
-        let bytes = result.unwrap();
+        let bytes = result.expect("operation failed");
         let valid = wasmparser::Validator::new().validate_all(&bytes);
         assert!(
             valid.is_ok(),
@@ -4215,7 +4215,7 @@ mod tests {
 
         let result = WasmCodegen::compile_to_bytes(&program);
         assert!(result.is_ok(), "string_eq failed: {:?}", result.err());
-        let bytes = result.unwrap();
+        let bytes = result.expect("operation failed");
         let valid = wasmparser::Validator::new().validate_all(&bytes);
         assert!(
             valid.is_ok(),
@@ -4240,7 +4240,7 @@ mod tests {
 
         let result = WasmCodegen::compile_to_bytes(&program);
         assert!(result.is_ok(), "string_slice failed: {:?}", result.err());
-        let bytes = result.unwrap();
+        let bytes = result.expect("operation failed");
         let valid = wasmparser::Validator::new().validate_all(&bytes);
         assert!(
             valid.is_ok(),
@@ -4289,7 +4289,7 @@ mod tests {
             "Lambda compilation failed: {:?}",
             result.err()
         );
-        let bytes = result.unwrap();
+        let bytes = result.expect("operation failed");
         let valid = wasmparser::Validator::new().validate_all(&bytes);
         assert!(
             valid.is_ok(),

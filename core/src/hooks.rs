@@ -322,9 +322,9 @@ mod tests {
     #[test]
     fn test_hook_event_serde() {
         let event = HookEvent::BeforePromptBuild;
-        let json = serde_json::to_string(&event).unwrap();
+        let json = serde_json::to_string(&event).expect("operation failed");
         assert_eq!(json, "\"before_prompt_build\"");
-        let back: HookEvent = serde_json::from_str(&json).unwrap();
+        let back: HookEvent = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back, HookEvent::BeforePromptBuild);
     }
 }

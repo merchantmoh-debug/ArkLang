@@ -302,8 +302,8 @@ mod tests {
     #[test]
     fn test_budget_serde_roundtrip() {
         let budget = ContextBudget::new(128_000);
-        let json = serde_json::to_string(&budget).unwrap();
-        let back: ContextBudget = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&budget).expect("operation failed");
+        let back: ContextBudget = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.context_window_tokens, 128_000);
     }
 }

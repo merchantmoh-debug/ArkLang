@@ -328,7 +328,10 @@ fn cmd_run(args: &[String]) {
     for line in raw_source.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("import ") {
-            let module_path = trimmed.strip_prefix("import ").unwrap().trim();
+            let module_path = trimmed
+                .strip_prefix("import ")
+                .expect("import prefix verified")
+                .trim();
             // Convert dotted path to file path: lib.std.string -> lib/std/string.ark
             let file_path = format!("{}.ark", module_path.replace('.', "/"));
             if let Ok(module_source) = fs::read_to_string(&file_path) {
@@ -1046,7 +1049,7 @@ fn cmd_debug(args: &[String]) {
                 loop {
                     use std::io::{self, Write};
                     print!("\x1b[1;36m(ark-dbg)\x1b[0m ");
-                    io::stdout().flush().unwrap();
+                    io::stdout().flush().expect("stdout flush failed");
 
                     let mut input = String::new();
                     if io::stdin().read_line(&mut input).is_err() {

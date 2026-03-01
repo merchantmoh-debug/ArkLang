@@ -370,7 +370,7 @@ mod tests {
 
         let program = ArkNode::Statement(Statement::Block(vec![Statement::Function(func)]));
 
-        let iface = WitInterface::from_ast(&program, "ark:test").unwrap();
+        let iface = WitInterface::from_ast(&program, "ark:test").expect("operation failed");
         assert_eq!(iface.functions.len(), 1);
         assert_eq!(iface.functions[0].name, "add-numbers");
         assert_eq!(iface.functions[0].params.len(), 2);
@@ -430,7 +430,7 @@ mod tests {
         let program =
             ArkNode::Statement(Statement::Block(vec![Statement::StructDecl(struct_decl)]));
 
-        let iface = WitInterface::from_ast(&program, "ark:math").unwrap();
+        let iface = WitInterface::from_ast(&program, "ark:math").expect("operation failed");
         assert_eq!(iface.records.len(), 1);
         assert_eq!(iface.records[0].name, "vector3");
         assert_eq!(iface.records[0].fields.len(), 3);
@@ -452,7 +452,7 @@ mod tests {
             Expression::Integer(42),
         )]));
 
-        let wasm_bytes = WasmCodegen::compile_to_bytes(&program).unwrap();
+        let wasm_bytes = WasmCodegen::compile_to_bytes(&program).expect("operation failed");
         let result = validate_wasm(&wasm_bytes);
         assert!(result.is_ok(), "Validation failed: {:?}", result.err());
     }
@@ -469,7 +469,7 @@ mod tests {
 
         let program = ArkNode::Statement(Statement::Block(vec![Statement::Function(func)]));
 
-        let wit = generate_wit(&program, "ark:math").unwrap();
+        let wit = generate_wit(&program, "ark:math").expect("operation failed");
         assert!(wit.contains("factorial: func(n: s64) -> s64;"));
         assert!(wit.contains("package ark:math;"));
     }
@@ -501,7 +501,7 @@ mod tests {
             Statement::Function(internal_func),
         ]));
 
-        let iface = WitInterface::from_ast(&program, "ark:api").unwrap();
+        let iface = WitInterface::from_ast(&program, "ark:api").expect("operation failed");
         assert_eq!(
             iface.functions.len(),
             1,
@@ -533,7 +533,7 @@ mod tests {
             Statement::Function(func_b),
         ]));
 
-        let iface = WitInterface::from_ast(&program, "ark:legacy").unwrap();
+        let iface = WitInterface::from_ast(&program, "ark:legacy").expect("operation failed");
         assert_eq!(
             iface.functions.len(),
             2,

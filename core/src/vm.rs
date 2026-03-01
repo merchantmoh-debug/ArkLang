@@ -204,7 +204,7 @@ impl<'a> VM<'a> {
             // Debug hook — fire before execution
             if self.debug_hook.is_some() {
                 // We need to temporarily take the hook to avoid borrow issues
-                let mut hook = self.debug_hook.take().unwrap();
+                let mut hook = self.debug_hook.take().expect("operation failed");
                 let action = hook(&self.stack, &self.scopes, self.ip, &self.chunk);
                 self.debug_hook = Some(hook);
                 match action {
@@ -227,7 +227,7 @@ impl<'a> VM<'a> {
                     self.stack.len(),
                     self.frames.len()
                 );
-                std::io::stdout().flush().unwrap();
+                std::io::stdout().flush().expect("stdout flush failed");
             }
             self.ip += 1;
 
@@ -802,7 +802,7 @@ mod tests {
         chunk.write(OpCode::Ret); // Just return unit
         let vm_res = VM::new(chunk, "HASH", 0);
         assert!(vm_res.is_ok());
-        let mut vm = vm_res.unwrap();
+        let mut vm = vm_res.expect("operation failed");
 
         // Manually simulate a call frame allocation
         let frame = CallFrame {
@@ -812,7 +812,7 @@ mod tests {
         let idx = vm.heap.alloc(GraphData::Frame(frame));
 
         // Check ref count
-        let node = vm.heap.get(idx).unwrap();
+        let node = vm.heap.get(idx).expect("operation failed");
         assert_eq!(node.ref_count, 1);
 
         // Decref
@@ -854,7 +854,7 @@ mod tests {
 
         chunk.write(OpCode::Ret);
 
-        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+        let mut vm = VM::new(chunk, "HASH", 0).expect("operation failed");
         let result = vm.run();
         assert_eq!(result.unwrap(), Value::Integer(130));
     }
@@ -880,7 +880,7 @@ mod tests {
         chunk.write(OpCode::Call(1));
         // Result should be 42
 
-        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+        let mut vm = VM::new(chunk, "HASH", 0).expect("operation failed");
         let result = vm.run();
         assert_eq!(result.unwrap(), Value::Integer(42));
     }
@@ -901,14 +901,14 @@ mod tests {
         chunk.write(OpCode::Store("add_one".to_string()));
         chunk.write(OpCode::Ret); // Main finishes
 
-        let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+        let mut vm = VM::new(chunk, "HASH", 0).expect("operation failed");
         // Run main to define the function
-        let _ = vm.run().unwrap();
+        let _ = vm.run().expect("operation failed");
 
         // Now call the function externally
         let result = vm
             .call_public_function("add_one", vec![Value::Integer(99)])
-            .unwrap();
+            .expect("operation failed");
         assert_eq!(result, Value::Integer(100));
     }
 
@@ -927,7 +927,7 @@ mod tests {
             }
             chunk.write(OpCode::Ret);
 
-            let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+            let mut vm = VM::new(chunk, "HASH", 0).expect("operation failed");
             let result = vm.run();
 
             assert!(matches!(result, Err(ArkError::StackOverflow)));
@@ -939,7 +939,7 @@ mod tests {
             chunk.write(OpCode::Add); // Stack empty
             chunk.write(OpCode::Ret);
 
-            let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+            let mut vm = VM::new(chunk, "HASH", 0).expect("operation failed");
             let result = vm.run();
 
             match result {
@@ -956,7 +956,7 @@ mod tests {
             chunk.write(OpCode::Div);
             chunk.write(OpCode::Ret);
 
-            let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+            let mut vm = VM::new(chunk, "HASH", 0).expect("operation failed");
             let result = vm.run();
 
             assert!(matches!(result, Err(ArkError::DivisionByZero)));
@@ -968,7 +968,7 @@ mod tests {
             // Infinite loop: Jmp(0)
             chunk.write(OpCode::Jmp(0));
 
-            let mut vm = VM::new(chunk, "HASH", 0).unwrap();
+            let mut vm = VM::new(chunk, "HASH", 0).expect("operation failed");
             let result = vm.run();
 
             assert!(matches!(result, Err(ArkError::ExecutionTimeout)));

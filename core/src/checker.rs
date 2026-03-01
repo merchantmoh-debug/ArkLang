@@ -1237,7 +1237,7 @@ mod tests {
         };
         let mut checker = LinearChecker::new();
         checker.enter_scope();
-        checker.check_statement(&stmt).unwrap();
+        checker.check_statement(&stmt).expect("operation failed");
 
         let ty = checker.get_var_type("x");
         assert_eq!(ty, Some(ArkType::Shared("Integer".to_string())));
@@ -1252,7 +1252,7 @@ mod tests {
         };
         let mut checker = LinearChecker::new();
         checker.enter_scope();
-        checker.check_statement(&stmt).unwrap();
+        checker.check_statement(&stmt).expect("operation failed");
 
         let ty = checker.get_var_type("s");
         assert_eq!(ty, Some(ArkType::Shared("String".to_string())));
@@ -1267,7 +1267,7 @@ mod tests {
         };
         let mut checker = LinearChecker::new();
         checker.enter_scope();
-        checker.check_statement(&stmt).unwrap();
+        checker.check_statement(&stmt).expect("operation failed");
 
         let ty = checker.get_var_type("lst");
         assert_eq!(ty, Some(ArkType::Shared("List<Integer>".to_string())));
@@ -1293,7 +1293,7 @@ mod tests {
             attributes: vec![],
         };
         let mut checker = LinearChecker::new();
-        checker.check_function(&func).unwrap();
+        checker.check_function(&func).expect("operation failed");
 
         assert!(checker
             .warnings
@@ -1317,7 +1317,7 @@ mod tests {
             attributes: vec![],
         };
         let mut checker = LinearChecker::new();
-        checker.check_function(&func).unwrap();
+        checker.check_function(&func).expect("operation failed");
 
         assert!(checker
             .warnings
@@ -1334,7 +1334,7 @@ mod tests {
         };
         let mut checker = LinearChecker::new();
         checker.enter_scope();
-        checker.check_statement(&stmt).unwrap();
+        checker.check_statement(&stmt).expect("operation failed");
 
         assert!(checker.warnings.iter().any(|w| w.contains("Type mismatch")));
     }
@@ -1349,7 +1349,7 @@ mod tests {
             ],
         };
         let mut checker = LinearChecker::new();
-        checker.check_expression(&expr).unwrap();
+        checker.check_expression(&expr).expect("operation failed");
 
         assert!(checker
             .warnings
@@ -1386,7 +1386,7 @@ mod tests {
             variant: "Red".to_string(),
             args: vec![],
         };
-        checker.check_expression(&expr).unwrap();
+        checker.check_expression(&expr).expect("operation failed");
         assert!(
             checker.type_errors.is_empty(),
             "Expected no type errors for valid enum init"
@@ -1411,7 +1411,7 @@ mod tests {
             variant: "Purple".to_string(),
             args: vec![],
         };
-        checker.check_expression(&expr).unwrap();
+        checker.check_expression(&expr).expect("operation failed");
         assert_eq!(checker.type_errors.len(), 1);
         assert!(matches!(
             &checker.type_errors[0],
@@ -1437,7 +1437,7 @@ mod tests {
             variant: "Circle".to_string(),
             args: vec![],
         };
-        checker.check_expression(&expr).unwrap();
+        checker.check_expression(&expr).expect("operation failed");
         assert_eq!(checker.type_errors.len(), 1);
         assert!(matches!(
             &checker.type_errors[0],
@@ -1472,7 +1472,7 @@ mod tests {
                 args: vec![],
             }),
         ]));
-        let errors = LinearChecker::check_with_types(&block).unwrap();
+        let errors = LinearChecker::check_with_types(&block).expect("operation failed");
         assert!(
             errors.is_empty(),
             "Expected no type errors for valid enum usage"
@@ -1486,7 +1486,7 @@ mod tests {
             variant: "Foo".to_string(),
             args: vec![],
         }));
-        let errors = LinearChecker::check_with_types(&block).unwrap();
+        let errors = LinearChecker::check_with_types(&block).expect("operation failed");
         assert_eq!(errors.len(), 1);
         assert!(matches!(&errors[0], TypeError::UnknownEnum(name) if name == "Nonexistent"));
     }
@@ -1521,7 +1521,7 @@ mod tests {
             ty: Some(ArkType::Shared("Integer".to_string())),
             value: Expression::Literal("\"hello\"".to_string()),
         };
-        checker.check_statement(&stmt).unwrap();
+        checker.check_statement(&stmt).expect("operation failed");
 
         assert!(
             !checker.type_errors.is_empty(),

@@ -173,7 +173,7 @@ pub fn intrinsic_wasm_load(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     // Register the module
     let handle = {
-        let mut next = NEXT_HANDLE.lock().unwrap();
+        let mut next = NEXT_HANDLE.lock().expect("mutex poisoned");
         let id = *next;
         *next += 1;
         id
@@ -185,7 +185,7 @@ pub fn intrinsic_wasm_load(args: Vec<Value>) -> Result<Value, RuntimeError> {
         bytes: Arc::new(bytes),
     };
 
-    WASM_REGISTRY.lock().unwrap().insert(handle, module);
+    WASM_REGISTRY.lock().expect("mutex poisoned").insert(handle, module);
 
     Ok(Value::Integer(handle))
 }
@@ -208,7 +208,7 @@ pub fn intrinsic_wasm_exports(args: Vec<Value>) -> Result<Value, RuntimeError> {
         }
     };
 
-    let registry = WASM_REGISTRY.lock().unwrap();
+    let registry = WASM_REGISTRY.lock().expect("mutex poisoned");
     match registry.get(&handle) {
         Some(module) => {
             let names: Vec<Value> = module
@@ -276,7 +276,7 @@ pub fn intrinsic_wasm_call(args: Vec<Value>) -> Result<Value, RuntimeError> {
 
     // Get the module bytes from the registry
     let wasm_bytes = {
-        let registry = WASM_REGISTRY.lock().unwrap();
+        let registry = WASM_REGISTRY.lock().expect("mutex poisoned");
         match registry.get(&handle) {
             Some(module) => {
                 // Verify the function exists in exports
@@ -327,7 +327,7 @@ pub fn intrinsic_wasm_drop(args: Vec<Value>) -> Result<Value, RuntimeError> {
         }
     };
 
-    let mut registry = WASM_REGISTRY.lock().unwrap();
+    let mut registry = WASM_REGISTRY.lock().expect("mutex poisoned");
     Ok(Value::Boolean(registry.remove(&handle).is_some()))
 }
 
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn test_leb128_simple() {
         // Single byte: 0x05 = 5
-        let (val, consumed) = read_leb128_u32(&[0x05]).unwrap();
+        let (val, consumed) = read_leb128_u32(&[0x05]).expect("operation failed");
         assert_eq!(val, 5);
         assert_eq!(consumed, 1);
     }
@@ -350,7 +350,7 @@ mod tests {
     #[test]
     fn test_leb128_multibyte() {
         // Two bytes: 0x80 0x01 = 128
-        let (val, consumed) = read_leb128_u32(&[0x80, 0x01]).unwrap();
+        let (val, consumed) = read_leb128_u32(&[0x80, 0x01]).expect("operation failed");
         assert_eq!(val, 128);
         assert_eq!(consumed, 2);
     }
@@ -374,7 +374,7 @@ mod tests {
             0x00, 0x61, 0x73, 0x6D, // magic: \0asm
             0x01, 0x00, 0x00, 0x00, // version: 1
         ];
-        let exports = parse_wasm_exports(&wasm).unwrap();
+        let exports = parse_wasm_exports(&wasm).expect("operation failed");
         assert!(exports.is_empty());
     }
 
@@ -395,7 +395,7 @@ mod tests {
     #[test]
     fn test_wasm_drop_nonexistent() {
         let args = vec![Value::Integer(888888)];
-        let result = intrinsic_wasm_drop(args).unwrap();
+        let result = intrinsic_wasm_drop(args).expect("operation failed");
         assert_eq!(result, Value::Boolean(false));
     }
 
@@ -439,7 +439,7 @@ mod tests {
         assert_eq!(call_result, Value::Integer(30), "add(10, 20) should be 30");
 
         // Clean up
-        intrinsic_wasm_drop(vec![Value::Integer(handle)]).unwrap();
+        intrinsic_wasm_drop(vec![Value::Integer(handle)]).expect("operation failed");
         let _ = std::fs::remove_file(&tmp_path);
     }
 
@@ -468,7 +468,7 @@ mod tests {
         ]);
         assert!(result.is_err(), "calling nonexistent export should fail");
 
-        intrinsic_wasm_drop(vec![Value::Integer(handle)]).unwrap();
+        intrinsic_wasm_drop(vec![Value::Integer(handle)]).expect("operation failed");
         let _ = std::fs::remove_file(&tmp_path);
     }
 

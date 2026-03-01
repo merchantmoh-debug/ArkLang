@@ -376,7 +376,7 @@ mod tests {
             model: "text-embedding-3-small",
             input: &texts,
         };
-        let json = serde_json::to_string(&req).unwrap();
+        let json = serde_json::to_string(&req).expect("operation failed");
         assert!(json.contains("text-embedding-3-small"));
         assert!(json.contains("hello"));
     }

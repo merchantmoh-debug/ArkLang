@@ -866,7 +866,7 @@ mod tests {
             Decision::Accept,
         );
         assert!(result.is_ok());
-        let trace = result.unwrap();
+        let trace = result.expect("operation failed");
         assert!(trace.gates_failed.contains(&"MCC".to_string()));
     }
 

@@ -149,7 +149,7 @@ impl MeteringEngine {
 
     /// Record a usage event.
     pub fn record(&self, record: UsageRecord) {
-        self.records.lock().unwrap().push(record);
+        self.records.lock().expect("mutex poisoned").push(record);
     }
 
     /// Query total cost for an agent in the last hour.
@@ -157,7 +157,7 @@ impl MeteringEngine {
         let cutoff = now_epoch().saturating_sub(SECS_PER_HOUR);
         self.records
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .iter()
             .filter(|r| r.agent_id == agent_id && r.timestamp >= cutoff)
             .map(|r| r.cost_usd)
@@ -169,7 +169,7 @@ impl MeteringEngine {
         let cutoff = now_epoch().saturating_sub(SECS_PER_DAY);
         self.records
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .iter()
             .filter(|r| r.agent_id == agent_id && r.timestamp >= cutoff)
             .map(|r| r.cost_usd)
@@ -181,7 +181,7 @@ impl MeteringEngine {
         let cutoff = now_epoch().saturating_sub(SECS_PER_MONTH);
         self.records
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .iter()
             .filter(|r| r.agent_id == agent_id && r.timestamp >= cutoff)
             .map(|r| r.cost_usd)
@@ -193,7 +193,7 @@ impl MeteringEngine {
         let cutoff = now_epoch().saturating_sub(SECS_PER_HOUR);
         self.records
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .iter()
             .filter(|r| r.timestamp >= cutoff)
             .map(|r| r.cost_usd)
@@ -205,7 +205,7 @@ impl MeteringEngine {
         let cutoff = now_epoch().saturating_sub(SECS_PER_DAY);
         self.records
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .iter()
             .filter(|r| r.timestamp >= cutoff)
             .map(|r| r.cost_usd)
@@ -217,7 +217,7 @@ impl MeteringEngine {
         let cutoff = now_epoch().saturating_sub(SECS_PER_MONTH);
         self.records
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .iter()
             .filter(|r| r.timestamp >= cutoff)
             .map(|r| r.cost_usd)
@@ -323,7 +323,7 @@ impl MeteringEngine {
 
     /// Get a usage summary, optionally filtered by agent.
     pub fn get_summary(&self, agent_id: Option<&str>) -> UsageSummary {
-        let records = self.records.lock().unwrap();
+        let records = self.records.lock().expect("mutex poisoned");
         let iter: Box<dyn Iterator<Item = &UsageRecord> + '_> = match agent_id {
             Some(id) => Box::new(records.iter().filter(move |r| r.agent_id == id)),
             None => Box::new(records.iter()),
@@ -342,7 +342,7 @@ impl MeteringEngine {
 
     /// Get usage grouped by model.
     pub fn get_by_model(&self) -> Vec<ModelUsage> {
-        let records = self.records.lock().unwrap();
+        let records = self.records.lock().expect("mutex poisoned");
         let mut map: std::collections::HashMap<String, ModelUsage> =
             std::collections::HashMap::new();
 
@@ -366,7 +366,7 @@ impl MeteringEngine {
     /// Remove records older than `max_age_secs`.
     pub fn cleanup_older_than(&self, max_age_secs: u64) -> usize {
         let cutoff = now_epoch().saturating_sub(max_age_secs);
-        let mut records = self.records.lock().unwrap();
+        let mut records = self.records.lock().expect("mutex poisoned");
         let before = records.len();
         records.retain(|r| r.timestamp >= cutoff);
         before - records.len()
@@ -374,7 +374,7 @@ impl MeteringEngine {
 
     /// Total number of records stored.
     pub fn record_count(&self) -> usize {
-        self.records.lock().unwrap().len()
+        self.records.lock().expect("mutex poisoned").len()
     }
 }
 

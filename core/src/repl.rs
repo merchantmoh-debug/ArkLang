@@ -29,7 +29,7 @@ pub fn start() {
 
     loop {
         print!("> ");
-        io::stdout().flush().unwrap();
+        io::stdout().flush().expect("stdout flush failed");
 
         let mut input = String::new();
         if io::stdin().read_line(&mut input).is_err() {

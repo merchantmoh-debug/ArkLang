@@ -3099,7 +3099,7 @@ mod tests {
     #[test]
     fn test_find_model_by_id() {
         let catalog = ModelCatalog::new();
-        let entry = catalog.find_model("claude-sonnet-4-20250514").unwrap();
+        let entry = catalog.find_model("claude-sonnet-4-20250514").expect("operation failed");
         assert_eq!(entry.display_name, "Claude Sonnet 4");
         assert_eq!(entry.provider, "anthropic");
         assert_eq!(entry.tier, ModelTier::Smart);
@@ -3108,7 +3108,7 @@ mod tests {
     #[test]
     fn test_find_model_by_alias() {
         let catalog = ModelCatalog::new();
-        let entry = catalog.find_model("sonnet").unwrap();
+        let entry = catalog.find_model("sonnet").expect("operation failed");
         assert_eq!(entry.id, "claude-sonnet-4-6");
     }
 
@@ -3155,7 +3155,7 @@ mod tests {
     #[test]
     fn test_pricing_lookup() {
         let catalog = ModelCatalog::new();
-        let (input, output) = catalog.pricing("claude-sonnet-4-20250514").unwrap();
+        let (input, output) = catalog.pricing("claude-sonnet-4-20250514").expect("operation failed");
         assert!((input - 3.0).abs() < 0.001);
         assert!((output - 15.0).abs() < 0.001);
     }
@@ -3163,7 +3163,7 @@ mod tests {
     #[test]
     fn test_pricing_via_alias() {
         let catalog = ModelCatalog::new();
-        let (input, output) = catalog.pricing("sonnet").unwrap();
+        let (input, output) = catalog.pricing("sonnet").expect("operation failed");
         assert!((input - 3.0).abs() < 0.001);
         assert!((output - 15.0).abs() < 0.001);
     }
@@ -3179,9 +3179,9 @@ mod tests {
         let mut catalog = ModelCatalog::new();
         catalog.detect_auth();
         // Local providers should be NotRequired
-        let ollama = catalog.get_provider("ollama").unwrap();
+        let ollama = catalog.get_provider("ollama").expect("operation failed");
         assert_eq!(ollama.auth_status, AuthStatus::NotRequired);
-        let vllm = catalog.get_provider("vllm").unwrap();
+        let vllm = catalog.get_provider("vllm").expect("operation failed");
         assert_eq!(vllm.auth_status, AuthStatus::NotRequired);
     }
 
@@ -3197,9 +3197,9 @@ mod tests {
     #[test]
     fn test_provider_model_counts() {
         let catalog = ModelCatalog::new();
-        let anthropic = catalog.get_provider("anthropic").unwrap();
+        let anthropic = catalog.get_provider("anthropic").expect("operation failed");
         assert_eq!(anthropic.model_count, 7);
-        let groq = catalog.get_provider("groq").unwrap();
+        let groq = catalog.get_provider("groq").expect("operation failed");
         assert_eq!(groq.model_count, 10);
     }
 
@@ -3217,7 +3217,7 @@ mod tests {
     #[test]
     fn test_find_grok_by_alias() {
         let catalog = ModelCatalog::new();
-        let entry = catalog.find_model("grok").unwrap();
+        let entry = catalog.find_model("grok").expect("operation failed");
         assert_eq!(entry.id, "grok-4");
         assert_eq!(entry.provider, "xai");
     }
@@ -3280,7 +3280,7 @@ mod tests {
         let after = catalog.models_by_provider("ollama").len();
         assert_eq!(after, before + 2);
         // Verify the new models are Local tier with zero cost
-        let qwen = catalog.find_model("qwen2:7b").unwrap();
+        let qwen = catalog.find_model("qwen2:7b").expect("operation failed");
         assert_eq!(qwen.tier, ModelTier::Local);
         assert!((qwen.input_cost_per_m).abs() < f64::EPSILON);
     }
@@ -3325,12 +3325,12 @@ mod tests {
         assert!(catalog.find_model("ernie").is_some());
         assert!(catalog.find_model("minimax").is_some());
         // MiniMax M2.5 — by exact ID, alias, and case-insensitive
-        let m25 = catalog.find_model("MiniMax-M2.5").unwrap();
+        let m25 = catalog.find_model("MiniMax-M2.5").expect("operation failed");
         assert_eq!(m25.provider, "minimax");
         assert_eq!(m25.tier, ModelTier::Frontier);
         assert!(catalog.find_model("minimax-m2.5").is_some());
         // Default "minimax" alias now points to M2.5
-        let default = catalog.find_model("minimax").unwrap();
+        let default = catalog.find_model("minimax").expect("operation failed");
         assert_eq!(default.id, "MiniMax-M2.5");
     }
 
@@ -3390,7 +3390,7 @@ mod tests {
     #[test]
     fn test_codex_provider() {
         let catalog = ModelCatalog::new();
-        let codex = catalog.get_provider("codex").unwrap();
+        let codex = catalog.get_provider("codex").expect("operation failed");
         assert_eq!(codex.display_name, "OpenAI Codex");
         assert_eq!(codex.api_key_env, "OPENAI_API_KEY");
         assert!(codex.key_required);
@@ -3408,14 +3408,14 @@ mod tests {
     #[test]
     fn test_codex_aliases() {
         let catalog = ModelCatalog::new();
-        let entry = catalog.find_model("codex").unwrap();
+        let entry = catalog.find_model("codex").expect("operation failed");
         assert_eq!(entry.id, "codex/gpt-4.1");
     }
 
     #[test]
     fn test_claude_code_provider() {
         let catalog = ModelCatalog::new();
-        let cc = catalog.get_provider("claude-code").unwrap();
+        let cc = catalog.get_provider("claude-code").expect("operation failed");
         assert_eq!(cc.display_name, "Claude Code");
         assert!(!cc.key_required);
     }
@@ -3433,7 +3433,7 @@ mod tests {
     #[test]
     fn test_claude_code_aliases() {
         let catalog = ModelCatalog::new();
-        let entry = catalog.find_model("claude-code").unwrap();
+        let entry = catalog.find_model("claude-code").expect("operation failed");
         assert_eq!(entry.id, "claude-code/sonnet");
     }
 }

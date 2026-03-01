@@ -2328,7 +2328,7 @@ mod tests {
     fn test_user_defined_gate_from_spec() {
         let gate = UserDefinedGate::from_spec("name:fast,key:elapsed_ms,op:lt,val:1000,sev:error");
         assert!(gate.is_some());
-        let gate = gate.unwrap();
+        let gate = gate.expect("operation failed");
         assert_eq!(gate.gate_name, "fast");
         assert_eq!(gate.metadata_key, "elapsed_ms");
         assert_eq!(gate.threshold, 1000.0);
@@ -2388,7 +2388,7 @@ mod tests {
         let line = entry.to_json_line();
         let parsed = HistoryEntry::from_json_line(&line);
         assert!(parsed.is_some());
-        let parsed = parsed.unwrap();
+        let parsed = parsed.expect("operation failed");
         assert_eq!(parsed.timestamp_ms, 1700000000000);
         assert_eq!(parsed.source_hash, "abc123def456");
         assert_eq!(parsed.all_passed, true);
@@ -2770,8 +2770,8 @@ mod tests {
         assert!(badge.contains("</text>"), "missing closing text");
 
         // Must have reasonable structure (opening before closing)
-        let svg_open = badge.find("<svg").unwrap();
-        let svg_close = badge.find("</svg>").unwrap();
+        let svg_open = badge.find("<svg").expect("operation failed");
+        let svg_close = badge.find("</svg>").expect("operation failed");
         assert!(svg_open < svg_close, "svg open must precede close");
     }
 
@@ -2956,7 +2956,7 @@ mod tests {
 
         // Check if SARIF file was created
         if sarif_path.exists() {
-            let content = std::fs::read_to_string(&sarif_path).unwrap();
+            let content = std::fs::read_to_string(&sarif_path).expect("operation failed");
             assert!(
                 content.contains("2.1.0"),
                 "SARIF file must contain version 2.1.0"
@@ -2996,7 +2996,7 @@ mod tests {
         let stderr = String::from_utf8_lossy(&output.stderr);
 
         if badge_path.exists() {
-            let content = std::fs::read_to_string(&badge_path).unwrap();
+            let content = std::fs::read_to_string(&badge_path).expect("operation failed");
             assert!(content.contains("<svg"), "badge file must be valid SVG");
             let _ = std::fs::remove_file(&badge_path);
         } else {

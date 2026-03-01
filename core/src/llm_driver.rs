@@ -460,8 +460,8 @@ mod tests {
             input_tokens: 42,
             output_tokens: 13,
         };
-        let json = serde_json::to_string(&usage).unwrap();
-        let back: TokenUsage = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&usage).expect("operation failed");
+        let back: TokenUsage = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.input_tokens, 42);
         assert_eq!(back.output_tokens, 13);
     }
@@ -469,9 +469,9 @@ mod tests {
     #[test]
     fn test_stop_reason_serde() {
         let reason = StopReason::ToolUse;
-        let json = serde_json::to_string(&reason).unwrap();
+        let json = serde_json::to_string(&reason).expect("operation failed");
         assert_eq!(json, "\"tool_use\"");
-        let back: StopReason = serde_json::from_str(&json).unwrap();
+        let back: StopReason = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back, StopReason::ToolUse);
     }
 
@@ -481,8 +481,8 @@ mod tests {
             role: MessageRole::User,
             content: "Hello".to_string(),
         };
-        let json = serde_json::to_string(&msg).unwrap();
-        let back: Message = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&msg).expect("operation failed");
+        let back: Message = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.role, MessageRole::User);
         assert_eq!(back.content, "Hello");
     }
@@ -494,8 +494,8 @@ mod tests {
             description: "Search the web".to_string(),
             input_schema: serde_json::json!({"type": "object"}),
         };
-        let json = serde_json::to_string(&tool).unwrap();
-        let back: ToolDefinition = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&tool).expect("operation failed");
+        let back: ToolDefinition = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.name, "web_search");
     }
 
@@ -506,8 +506,8 @@ mod tests {
             api_key: Some("key".to_string()),
             base_url: None,
         };
-        let json = serde_json::to_string(&config).unwrap();
-        let back: DriverConfig = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&config).expect("operation failed");
+        let back: DriverConfig = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.provider, "openai");
         assert_eq!(back.api_key, Some("key".to_string()));
     }

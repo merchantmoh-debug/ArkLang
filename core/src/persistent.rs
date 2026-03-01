@@ -311,7 +311,7 @@ impl PVec {
         if self.is_empty() {
             return None;
         }
-        let last = self.get(self.len - 1).unwrap().clone();
+        let last = self.get(self.len - 1).expect("unexpected failure").clone();
 
         if self.tail.len() > 1 {
             // Just shrink the tail
@@ -449,7 +449,7 @@ impl PVec {
         if start > end || end > self.len {
             return None;
         }
-        let new_data: Vec<Value> = (start..end).map(|i| self.get(i).unwrap().clone()).collect();
+        let new_data: Vec<Value> = (start..end).map(|i| self.get(i).expect("unexpected failure").clone()).collect();
         Some(Self::from_vec(new_data))
     }
 }
@@ -748,7 +748,7 @@ mod tests {
             Value::Integer(2),
             Value::Integer(3),
         ]);
-        let v2 = v1.assoc(1, Value::Integer(99)).unwrap();
+        let v2 = v1.assoc(1, Value::Integer(99)).expect("operation failed");
 
         // Original unchanged
         assert_eq!(v1.get(1), Some(&Value::Integer(2)));
@@ -759,7 +759,7 @@ mod tests {
     #[test]
     fn test_pvec_pop() {
         let v1 = PVec::from_vec(vec![Value::Integer(1), Value::Integer(2)]);
-        let (v2, last) = v1.pop().unwrap();
+        let (v2, last) = v1.pop().expect("operation failed");
 
         assert_eq!(last, Value::Integer(2));
         assert_eq!(v2.len(), 1);
@@ -786,7 +786,7 @@ mod tests {
             Value::Integer(3),
             Value::Integer(4),
         ]);
-        let sub = v1.subvec(1, 4).unwrap();
+        let sub = v1.subvec(1, 4).expect("operation failed");
         assert_eq!(sub.len(), 3);
         assert_eq!(sub.get(0), Some(&Value::Integer(1)));
         assert_eq!(sub.get(2), Some(&Value::Integer(3)));

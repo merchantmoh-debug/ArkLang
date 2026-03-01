@@ -329,17 +329,17 @@ mod tests {
             RiskLevel::High,
             RiskLevel::Critical,
         ] {
-            let json = serde_json::to_string(&level).unwrap();
-            let back: RiskLevel = serde_json::from_str(&json).unwrap();
+            let json = serde_json::to_string(&level).expect("operation failed");
+            let back: RiskLevel = serde_json::from_str(&json).expect("operation failed");
             assert_eq!(level, back);
         }
     }
 
     #[test]
     fn risk_level_rename_all() {
-        let json = serde_json::to_string(&RiskLevel::Critical).unwrap();
+        let json = serde_json::to_string(&RiskLevel::Critical).expect("operation failed");
         assert_eq!(json, "\"critical\"");
-        let json = serde_json::to_string(&RiskLevel::Low).unwrap();
+        let json = serde_json::to_string(&RiskLevel::Low).expect("operation failed");
         assert_eq!(json, "\"low\"");
     }
 
@@ -350,15 +350,15 @@ mod tests {
             ApprovalDecision::Denied,
             ApprovalDecision::TimedOut,
         ] {
-            let json = serde_json::to_string(&decision).unwrap();
-            let back: ApprovalDecision = serde_json::from_str(&json).unwrap();
+            let json = serde_json::to_string(&decision).expect("operation failed");
+            let back: ApprovalDecision = serde_json::from_str(&json).expect("operation failed");
             assert_eq!(decision, back);
         }
     }
 
     #[test]
     fn decision_rename_all() {
-        let json = serde_json::to_string(&ApprovalDecision::TimedOut).unwrap();
+        let json = serde_json::to_string(&ApprovalDecision::TimedOut).expect("operation failed");
         assert_eq!(json, "\"timed_out\"");
     }
 
@@ -454,8 +454,8 @@ mod tests {
             decided_at: chrono::Utc::now().to_rfc3339(),
             decided_by: Some("admin@example.com".into()),
         };
-        let json = serde_json::to_string(&resp).unwrap();
-        let back: ApprovalResponse = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&resp).expect("operation failed");
+        let back: ApprovalResponse = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.request_id, resp.request_id);
         assert_eq!(back.decision, ApprovalDecision::Approved);
         assert_eq!(back.decided_by, Some("admin@example.com".into()));
@@ -469,8 +469,8 @@ mod tests {
             decided_at: chrono::Utc::now().to_rfc3339(),
             decided_by: None,
         };
-        let json = serde_json::to_string(&resp).unwrap();
-        let back: ApprovalResponse = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&resp).expect("operation failed");
+        let back: ApprovalResponse = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.decided_by, None);
         assert_eq!(back.decision, ApprovalDecision::TimedOut);
     }
@@ -487,7 +487,7 @@ mod tests {
 
     #[test]
     fn policy_serde_default() {
-        let policy: ApprovalPolicy = serde_json::from_str("{}").unwrap();
+        let policy: ApprovalPolicy = serde_json::from_str("{}").expect("operation failed");
         assert_eq!(policy.timeout_secs, 60);
         assert_eq!(policy.require_approval, vec!["shell_exec".to_string()]);
     }
@@ -495,13 +495,13 @@ mod tests {
     #[test]
     fn policy_require_approval_bool_false() {
         let policy: ApprovalPolicy =
-            serde_json::from_str(r#"{"require_approval": false}"#).unwrap();
+            serde_json::from_str(r#"{"require_approval": false}"#).expect("operation failed");
         assert!(policy.require_approval.is_empty());
     }
 
     #[test]
     fn policy_require_approval_bool_true() {
-        let policy: ApprovalPolicy = serde_json::from_str(r#"{"require_approval": true}"#).unwrap();
+        let policy: ApprovalPolicy = serde_json::from_str(r#"{"require_approval": true}"#).expect("operation failed");
         assert_eq!(policy.require_approval, vec!["shell_exec"]);
     }
 
@@ -576,8 +576,8 @@ mod tests {
     #[test]
     fn request_serde_roundtrip() {
         let req = valid_request();
-        let json = serde_json::to_string_pretty(&req).unwrap();
-        let back: ApprovalRequest = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string_pretty(&req).expect("operation failed");
+        let back: ApprovalRequest = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.id, req.id);
         assert_eq!(back.agent_id, req.agent_id);
         assert_eq!(back.tool_name, req.tool_name);
@@ -592,8 +592,8 @@ mod tests {
             auto_approve_autonomous: true,
             auto_approve: false,
         };
-        let json = serde_json::to_string(&policy).unwrap();
-        let back: ApprovalPolicy = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&policy).expect("operation failed");
+        let back: ApprovalPolicy = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.require_approval, policy.require_approval);
         assert_eq!(back.timeout_secs, 120);
         assert!(back.auto_approve_autonomous);

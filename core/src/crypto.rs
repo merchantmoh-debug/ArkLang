@@ -199,7 +199,7 @@ pub fn sign_transaction(data: &[u8], private_key: &[u8]) -> SignedTransaction {
         panic!("Invalid private key length: expected 32");
     }
 
-    let key_bytes: [u8; 32] = private_key.try_into().unwrap();
+    let key_bytes: [u8; 32] = private_key.try_into().expect("operation failed");
     let signing_key = SigningKey::from_bytes(&key_bytes);
     let signature = signing_key.sign(data);
     let verifying_key = signing_key.verifying_key();
@@ -229,7 +229,7 @@ pub fn verify_signature(msg: &[u8], sig_bytes: &[u8], pubkey_bytes: &[u8]) -> Re
         ));
     }
 
-    let signature = Signature::from_bytes(sig_bytes.try_into().unwrap());
+    let signature = Signature::from_bytes(sig_bytes.try_into().expect("byte array conversion"));
 
     // VerifyingKey::from_bytes checks for weak keys or invalid points
     let verifying_key = VerifyingKey::from_bytes(
@@ -276,7 +276,7 @@ pub fn secure_random_hex(count: usize) -> String {
 
 pub fn generate_nonce() -> [u8; 32] {
     let bytes = secure_random_bytes(32);
-    bytes.try_into().unwrap()
+    bytes.try_into().expect("unexpected failure")
 }
 
 // ============================================================================

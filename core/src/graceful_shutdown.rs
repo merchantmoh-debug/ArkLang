@@ -196,7 +196,7 @@ impl ShutdownCoordinator {
         let elapsed = self
             .started_at
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .map(|s| s.elapsed().as_millis() as u64)
             .unwrap_or(0);
 
@@ -219,7 +219,7 @@ impl ShutdownCoordinator {
         let elapsed = self
             .started_at
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .map(|s| s.elapsed().as_secs_f64())
             .unwrap_or(0.0);
 
@@ -240,7 +240,7 @@ impl ShutdownCoordinator {
     pub fn is_timeout_exceeded(&self) -> bool {
         self.started_at
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .map(|s| s.elapsed() > self.config.total_timeout)
             .unwrap_or(false)
     }

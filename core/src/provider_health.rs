@@ -301,8 +301,8 @@ mod tests {
     #[test]
     fn test_probe_result_serde() {
         let result = ProbeResult::success(55, vec!["model-a".to_string()]);
-        let json = serde_json::to_string(&result).unwrap();
-        let back: ProbeResult = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&result).expect("operation failed");
+        let back: ProbeResult = serde_json::from_str(&json).expect("operation failed");
         assert!(back.reachable);
         assert_eq!(back.latency_ms, 55);
         assert_eq!(back.discovered_models.len(), 1);

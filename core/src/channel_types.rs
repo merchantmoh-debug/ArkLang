@@ -324,8 +324,8 @@ mod tests {
             thread_id: None,
             metadata: HashMap::new(),
         };
-        let json = serde_json::to_string(&msg).unwrap();
-        let deserialized: ChannelMessage = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&msg).expect("operation failed");
+        let deserialized: ChannelMessage = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(deserialized.channel, ChannelType::Telegram);
     }
 
@@ -351,8 +351,8 @@ mod tests {
             ChannelType::Wire,
             ChannelType::Gcd,
         ] {
-            let json = serde_json::to_string(&ct).unwrap();
-            let back: ChannelType = serde_json::from_str(&json).unwrap();
+            let json = serde_json::to_string(&ct).expect("operation failed");
+            let back: ChannelType = serde_json::from_str(&json).expect("operation failed");
             assert_eq!(back, ct);
         }
     }
@@ -376,9 +376,9 @@ mod tests {
             lat: 40.7128,
             lon: -74.0060,
         };
-        serde_json::to_string(&text).unwrap();
-        serde_json::to_string(&cmd).unwrap();
-        serde_json::to_string(&loc).unwrap();
+        serde_json::to_string(&text).expect("operation failed");
+        serde_json::to_string(&cmd).expect("operation failed");
+        serde_json::to_string(&loc).expect("operation failed");
     }
 
     #[test]
@@ -392,8 +392,8 @@ mod tests {
             AgentPhase::Error,
         ];
         for phase in &phases {
-            let json = serde_json::to_string(phase).unwrap();
-            let back: AgentPhase = serde_json::from_str(&json).unwrap();
+            let json = serde_json::to_string(phase).expect("operation failed");
+            let back: AgentPhase = serde_json::from_str(&json).expect("operation failed");
             assert_eq!(*phase, back);
         }
     }
@@ -434,8 +434,8 @@ mod tests {
             DeliveryStatus::Failed,
             DeliveryStatus::BestEffort,
         ] {
-            let json = serde_json::to_string(&status).unwrap();
-            let back: DeliveryStatus = serde_json::from_str(&json).unwrap();
+            let json = serde_json::to_string(&status).expect("operation failed");
+            let back: DeliveryStatus = serde_json::from_str(&json).expect("operation failed");
             assert_eq!(status, back);
         }
     }
@@ -450,8 +450,8 @@ mod tests {
             timestamp: Utc::now(),
             error: None,
         };
-        let json = serde_json::to_string(&receipt).unwrap();
-        let back: DeliveryReceipt = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&receipt).expect("operation failed");
+        let back: DeliveryReceipt = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.message_id, "msg-123");
         assert_eq!(back.status, DeliveryStatus::Sent);
     }
@@ -464,8 +464,8 @@ mod tests {
             OutputFormat::SlackMrkdwn,
             OutputFormat::PlainText,
         ] {
-            let json = serde_json::to_string(&fmt).unwrap();
-            let back: OutputFormat = serde_json::from_str(&json).unwrap();
+            let json = serde_json::to_string(&fmt).expect("operation failed");
+            let back: OutputFormat = serde_json::from_str(&json).expect("operation failed");
             assert_eq!(fmt, back);
         }
     }

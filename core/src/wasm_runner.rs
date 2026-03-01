@@ -224,10 +224,10 @@ fn link_wasi_fd_write(linker: &mut Linker<HostState>) -> Result<(), WasmRunError
                     }
 
                     let buf_ptr =
-                        u32::from_le_bytes(data[iov_offset..iov_offset + 4].try_into().unwrap())
+                        u32::from_le_bytes(data[iov_offset..iov_offset + 4].try_into().expect("byte array conversion"))
                             as usize;
                     let buf_len = u32::from_le_bytes(
-                        data[iov_offset + 4..iov_offset + 8].try_into().unwrap(),
+                        data[iov_offset + 4..iov_offset + 8].try_into().expect("byte array conversion"),
                     ) as usize;
 
                     if buf_ptr + buf_len > data.len() {

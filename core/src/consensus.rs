@@ -14,7 +14,7 @@ pub fn proof_of_work(block: &mut Block, difficulty: u32) {
 }
 
 pub fn calculate_hash(block: &Block) -> String {
-    let data_json = serde_json::to_string(&block.data).unwrap();
+    let data_json = serde_json::to_string(&block.data).expect("operation failed");
     let input = format!(
         "{}{}{}{}{}",
         block.index, block.timestamp, data_json, block.previous_hash, block.nonce

@@ -320,8 +320,8 @@ mod tests {
     #[test]
     fn test_context_entry_serde() {
         let entry = ContextEntry::tool_result("abc", "hello world");
-        let json = serde_json::to_string(&entry).unwrap();
-        let back: ContextEntry = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&entry).expect("operation failed");
+        let back: ContextEntry = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.role, ContextRole::Tool);
         assert!(back.is_tool_result);
         assert_eq!(back.tool_use_id.as_deref(), Some("abc"));

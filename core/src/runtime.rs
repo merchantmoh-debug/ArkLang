@@ -53,13 +53,13 @@ impl ResourceTracker {
     where
         F: FnOnce() + Send + 'static,
     {
-        let mut map = self.resources.lock().unwrap();
+        let mut map = self.resources.lock().expect("mutex poisoned");
         map.insert(id, (resource_type.to_string(), Box::new(cleanup)));
     }
 
     pub fn release(&self, id: usize) {
         let callback = {
-            let mut map = self.resources.lock().unwrap();
+            let mut map = self.resources.lock().expect("mutex poisoned");
             map.remove(&id)
         };
         if let Some((_, cleanup)) = callback {
@@ -71,7 +71,7 @@ impl ResourceTracker {
         // Fix: Drain while holding lock, but run callbacks AFTER lock is released.
         // This prevents deadlock if callback tries to access RESOURCE_TRACKER.
         let resources_to_clean: Vec<(usize, ResourceEntry)> = {
-            let mut map = self.resources.lock().unwrap();
+            let mut map = self.resources.lock().expect("mutex poisoned");
             map.drain().collect()
         };
 
@@ -439,13 +439,13 @@ mod tests {
         let flag_clone = flag.clone();
 
         tracker.register(1, "test_resource", move || {
-            let mut f = flag_clone.lock().unwrap();
+            let mut f = flag_clone.lock().expect("mutex poisoned");
             *f = true;
         });
 
         // Release manually
         tracker.release(1);
-        assert!(*flag.lock().unwrap());
+        assert!(*flag.lock().expect("mutex poisoned"));
     }
 
     #[test]
@@ -455,13 +455,13 @@ mod tests {
         let flag_clone = flag.clone();
 
         tracker.register(2, "test_resource_2", move || {
-            let mut f = flag_clone.lock().unwrap();
+            let mut f = flag_clone.lock().expect("mutex poisoned");
             *f = true;
         });
 
         // Cleanup all (simulating shutdown)
         tracker.cleanup_all();
-        assert!(*flag.lock().unwrap());
+        assert!(*flag.lock().expect("mutex poisoned"));
     }
 
     #[test]
@@ -534,10 +534,10 @@ mod tests {
         // Reset
         RUNTIME_STATS.total_allocations.store(0, Ordering::Relaxed);
 
-        MemoryManager::track_alloc(100).unwrap();
+        MemoryManager::track_alloc(100).expect("operation failed");
         assert_eq!(RUNTIME_STATS.total_allocations.load(Ordering::Relaxed), 1);
 
-        MemoryManager::track_alloc(100).unwrap();
+        MemoryManager::track_alloc(100).expect("operation failed");
         assert_eq!(RUNTIME_STATS.total_allocations.load(Ordering::Relaxed), 2);
 
         let stats = RUNTIME_STATS.stats();

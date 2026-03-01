@@ -519,7 +519,7 @@ mod tests {
     fn test_ark_eval_simple() {
         // Create a minimal valid ArkNode
         let content = ArkNode::Expression(Expression::Literal("3".to_string()));
-        let source = serde_json::to_string(&content).unwrap();
+        let source = serde_json::to_string(&content).expect("operation failed");
 
         let result_json = ark_eval(&source);
         assert_eq!(result_json, "\"3\"");
@@ -529,7 +529,7 @@ mod tests {
     fn test_ark_parse_error() {
         let source = "!!!";
         let result_json = ark_parse(source);
-        let result: serde_json::Value = serde_json::from_str(&result_json).unwrap();
+        let result: serde_json::Value = serde_json::from_str(&result_json).expect("operation failed");
         assert!(result.get("error").is_some());
         assert!(result.get("line").is_some());
         assert!(result.get("column").is_some());
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn test_ark_check_valid() {
         let content = ArkNode::Expression(Expression::Literal("3".to_string()));
-        let source = serde_json::to_string(&content).unwrap();
+        let source = serde_json::to_string(&content).expect("operation failed");
 
         let result = ark_check(&source);
         assert_eq!(result, "[]");

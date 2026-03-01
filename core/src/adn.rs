@@ -471,7 +471,7 @@ mod tests {
         let v = Value::Integer(42);
         let adn = to_adn(&v);
         assert_eq!(adn, "42");
-        let parsed = from_adn(&adn).unwrap();
+        let parsed = from_adn(&adn).expect("operation failed");
         assert_eq!(parsed, v);
     }
 
@@ -480,7 +480,7 @@ mod tests {
         let v = Value::String("hello world".to_string());
         let adn = to_adn(&v);
         assert_eq!(adn, "\"hello world\"");
-        let parsed = from_adn(&adn).unwrap();
+        let parsed = from_adn(&adn).expect("operation failed");
         assert_eq!(parsed, v);
     }
 
@@ -504,7 +504,7 @@ mod tests {
         ]);
         let adn = to_adn(&v);
         assert_eq!(adn, "[1 2 3]");
-        let parsed = from_adn(&adn).unwrap();
+        let parsed = from_adn(&adn).expect("operation failed");
         assert_eq!(parsed, v);
     }
 
@@ -513,7 +513,7 @@ mod tests {
         let v = Value::PVec(PVec::from_vec(vec![Value::Integer(10), Value::Integer(20)]));
         let adn = to_adn(&v);
         assert!(adn.starts_with("#pvec["));
-        let parsed = from_adn(&adn).unwrap();
+        let parsed = from_adn(&adn).expect("operation failed");
         assert_eq!(parsed, v);
     }
 
@@ -525,13 +525,13 @@ mod tests {
         )]));
         let adn = to_adn(&v);
         assert!(adn.contains("#pmap{"));
-        let parsed = from_adn(&adn).unwrap();
+        let parsed = from_adn(&adn).expect("operation failed");
         assert_eq!(parsed, v);
     }
 
     #[test]
     fn test_parse_struct() {
-        let result = from_adn("{:a 1, :b 2}").unwrap();
+        let result = from_adn("{:a 1, :b 2}").expect("operation failed");
         if let Value::Struct(m) = result {
             assert_eq!(m.get("a"), Some(&Value::Integer(1)));
             assert_eq!(m.get("b"), Some(&Value::Integer(2)));
@@ -543,7 +543,7 @@ mod tests {
     #[test]
     fn test_nested_structures() {
         let adn = "[1 [2 3] [4 5]]";
-        let parsed = from_adn(adn).unwrap();
+        let parsed = from_adn(adn).expect("operation failed");
         if let Value::List(l) = &parsed {
             assert_eq!(l.len(), 3);
             assert_eq!(l[0], Value::Integer(1));
@@ -569,7 +569,7 @@ mod tests {
 
     #[test]
     fn test_comments_ignored() {
-        let result = from_adn("; this is a comment\n42").unwrap();
+        let result = from_adn("; this is a comment\n42").expect("operation failed");
         assert_eq!(result, Value::Integer(42));
     }
 

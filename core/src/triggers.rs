@@ -275,11 +275,11 @@ impl TriggerEngine {
 
         self.triggers
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .insert(id_str.clone(), trigger);
         self.agent_triggers
             .lock()
-            .unwrap()
+            .expect("unexpected failure")
             .entry(agent_id.clone())
             .or_default()
             .push(id_str);
@@ -290,9 +290,9 @@ impl TriggerEngine {
 
     /// Remove a trigger. Returns true if found.
     pub fn remove(&self, trigger_id: &TriggerId) -> bool {
-        let mut triggers = self.triggers.lock().unwrap();
+        let mut triggers = self.triggers.lock().expect("mutex poisoned");
         if let Some(trigger) = triggers.remove(&trigger_id.0) {
-            let mut at = self.agent_triggers.lock().unwrap();
+            let mut at = self.agent_triggers.lock().expect("mutex poisoned");
             if let Some(list) = at.get_mut(&trigger.agent_id) {
                 list.retain(|id| *id != trigger_id.0);
             }
@@ -304,9 +304,9 @@ impl TriggerEngine {
 
     /// Remove all triggers for an agent.
     pub fn remove_agent_triggers(&self, agent_id: &str) {
-        let mut at = self.agent_triggers.lock().unwrap();
+        let mut at = self.agent_triggers.lock().expect("mutex poisoned");
         if let Some(trigger_ids) = at.remove(agent_id) {
-            let mut triggers = self.triggers.lock().unwrap();
+            let mut triggers = self.triggers.lock().expect("mutex poisoned");
             for id in trigger_ids {
                 triggers.remove(&id);
             }
@@ -315,7 +315,7 @@ impl TriggerEngine {
 
     /// Enable or disable a trigger. Returns true if found.
     pub fn set_enabled(&self, trigger_id: &TriggerId, enabled: bool) -> bool {
-        let mut triggers = self.triggers.lock().unwrap();
+        let mut triggers = self.triggers.lock().expect("mutex poisoned");
         if let Some(t) = triggers.get_mut(&trigger_id.0) {
             t.enabled = enabled;
             true
@@ -326,8 +326,8 @@ impl TriggerEngine {
 
     /// List all triggers for an agent.
     pub fn list_agent_triggers(&self, agent_id: &str) -> Vec<Trigger> {
-        let at = self.agent_triggers.lock().unwrap();
-        let triggers = self.triggers.lock().unwrap();
+        let at = self.agent_triggers.lock().expect("mutex poisoned");
+        let triggers = self.triggers.lock().expect("mutex poisoned");
         at.get(agent_id)
             .map(|ids| {
                 ids.iter()
@@ -339,7 +339,7 @@ impl TriggerEngine {
 
     /// List all registered triggers.
     pub fn list_all(&self) -> Vec<Trigger> {
-        self.triggers.lock().unwrap().values().cloned().collect()
+        self.triggers.lock().expect("mutex poisoned").values().cloned().collect()
     }
 
     /// Evaluate an event against all triggers. Returns a list of
@@ -347,7 +347,7 @@ impl TriggerEngine {
     pub fn evaluate(&self, event: &Event) -> Vec<(AgentId, String)> {
         let event_description = describe_event(event);
         let mut matches = Vec::new();
-        let mut triggers = self.triggers.lock().unwrap();
+        let mut triggers = self.triggers.lock().expect("mutex poisoned");
 
         for trigger in triggers.values_mut() {
             if !trigger.enabled {
@@ -371,12 +371,12 @@ impl TriggerEngine {
 
     /// Get a trigger by ID.
     pub fn get(&self, trigger_id: &TriggerId) -> Option<Trigger> {
-        self.triggers.lock().unwrap().get(&trigger_id.0).cloned()
+        self.triggers.lock().expect("mutex poisoned").get(&trigger_id.0).cloned()
     }
 
     /// Total number of registered triggers.
     pub fn count(&self) -> usize {
-        self.triggers.lock().unwrap().len()
+        self.triggers.lock().expect("mutex poisoned").len()
     }
 }
 

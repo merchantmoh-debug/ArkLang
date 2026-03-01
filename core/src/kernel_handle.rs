@@ -382,13 +382,13 @@ mod tests {
         }
 
         fn memory_store(&self, key: &str, value: serde_json::Value) -> Result<(), String> {
-            let mut mem = self.memory.lock().unwrap();
+            let mut mem = self.memory.lock().expect("operation failed");
             mem.insert(key.to_string(), value);
             Ok(())
         }
 
         fn memory_recall(&self, key: &str) -> Result<Option<serde_json::Value>, String> {
-            let mem = self.memory.lock().unwrap();
+            let mem = self.memory.lock().expect("operation failed");
             Ok(mem.get(key).cloned())
         }
 
@@ -407,7 +407,7 @@ mod tests {
         let kernel = MockKernel::new();
         let result = kernel.spawn_agent("[agent]\nname = \"child\"", None);
         assert!(result.is_ok());
-        let (id, name) = result.unwrap();
+        let (id, name) = result.expect("operation failed");
         assert_eq!(id, "new-agent-id");
         assert_eq!(name, "NewAgent");
     }
@@ -440,11 +440,11 @@ mod tests {
         let kernel = MockKernel::new();
         kernel
             .memory_store("key1", serde_json::json!("value1"))
-            .unwrap();
-        let value = kernel.memory_recall("key1").unwrap();
+            .expect("operation failed");
+        let value = kernel.memory_recall("key1").expect("operation failed");
         assert_eq!(value, Some(serde_json::json!("value1")));
 
-        let missing = kernel.memory_recall("nonexistent").unwrap();
+        let missing = kernel.memory_recall("nonexistent").expect("operation failed");
         assert!(missing.is_none());
     }
 
@@ -507,8 +507,8 @@ mod tests {
             tags: vec!["test".to_string()],
             tools: vec!["web_search".to_string()],
         };
-        let json = serde_json::to_string(&info).unwrap();
-        let back: AgentInfo = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&info).expect("operation failed");
+        let back: AgentInfo = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.name, "Test");
         assert_eq!(back.tags.len(), 1);
     }
@@ -520,8 +520,8 @@ mod tests {
             entity_type: "language".to_string(),
             properties: HashMap::from([("year".to_string(), serde_json::json!(2010))]),
         };
-        let json = serde_json::to_string(&entity).unwrap();
-        let back: Entity = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&entity).expect("operation failed");
+        let back: Entity = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.name, "Rust");
     }
 
@@ -533,8 +533,8 @@ mod tests {
             to: "Rust".to_string(),
             properties: HashMap::new(),
         };
-        let json = serde_json::to_string(&rel).unwrap();
-        let back: Relation = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&rel).expect("operation failed");
+        let back: Relation = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.relation_type, "written_in");
     }
 

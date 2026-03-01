@@ -31,7 +31,7 @@ fn safe_cstring(s: String) -> *mut c_char {
             // Return a safe error message if the string contains a null byte.
             // This is safe because the error message is guaranteed not to contain null bytes.
             CString::new("Error: String contained null byte")
-                .unwrap()
+                .expect("unexpected failure")
                 .into_raw()
         }
     }
@@ -97,13 +97,13 @@ mod tests {
     #[test]
     fn test_ark_eval_string() {
         let json = r#"{"Statement": {"Expression": {"Literal": "Hello FFI"}}}"#;
-        let c_json = CString::new(json).unwrap();
+        let c_json = CString::new(json).expect("operation failed");
 
         let result_ptr = unsafe { ark_eval_string(c_json.as_ptr()) };
         assert!(!result_ptr.is_null());
 
         let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
-        let result_str = result_cstr.to_str().unwrap();
+        let result_str = result_cstr.to_str().expect("operation failed");
 
         assert_eq!(result_str, "String(\"Hello FFI\")");
 
@@ -113,13 +113,13 @@ mod tests {
     #[test]
     fn test_ark_eval_expression() {
         let json = r#"{"Statement": {"Expression": {"Call": {"function_hash": "add", "args": [{"Integer": 10}, {"Integer": 20}]}}}}"#;
-        let c_json = CString::new(json).unwrap();
+        let c_json = CString::new(json).expect("operation failed");
 
         let result_ptr = unsafe { ark_eval_string(c_json.as_ptr()) };
         assert!(!result_ptr.is_null());
 
         let result_cstr = unsafe { CStr::from_ptr(result_ptr) };
-        let result_str = result_cstr.to_str().unwrap();
+        let result_str = result_cstr.to_str().expect("operation failed");
 
         assert_eq!(result_str, "Integer(30)");
 
@@ -132,7 +132,7 @@ mod tests {
         let ptr = safe_cstring(s);
 
         let c_str = unsafe { CStr::from_ptr(ptr) };
-        let str_slice = c_str.to_str().unwrap();
+        let str_slice = c_str.to_str().expect("operation failed");
 
         assert_eq!(str_slice, "Error: String contained null byte");
 

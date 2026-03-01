@@ -441,8 +441,8 @@ mod tests {
             default_input_modes: vec!["text".to_string()],
             default_output_modes: vec!["text".to_string()],
         };
-        let json = serde_json::to_string(&card).unwrap();
-        let back: AgentCard = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&card).expect("operation failed");
+        let back: AgentCard = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.name, "test");
         assert!(json.contains("defaultInputModes")); // camelCase
     }
@@ -498,8 +498,8 @@ mod tests {
             ],
         };
 
-        let json = serde_json::to_string(&msg).unwrap();
-        let back: A2aMessage = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&msg).expect("operation failed");
+        let back: A2aMessage = serde_json::from_str(&json).expect("operation failed");
         assert_eq!(back.role, "user");
         assert_eq!(back.parts.len(), 2);
 
@@ -522,7 +522,7 @@ mod tests {
         store.insert(task);
         assert_eq!(store.len(), 1);
 
-        let got = store.get("t-1").unwrap();
+        let got = store.get("t-1").expect("operation failed");
         assert_eq!(got.status, A2aTaskStatus::Working);
     }
 
@@ -549,7 +549,7 @@ mod tests {
             vec![],
         );
 
-        let completed = store.get("t-2").unwrap();
+        let completed = store.get("t-2").expect("operation failed");
         assert_eq!(completed.status, A2aTaskStatus::Completed);
         assert_eq!(completed.messages.len(), 1);
     }
@@ -607,8 +607,8 @@ mod tests {
             }],
         };
 
-        let json = serde_json::to_string(&config).unwrap();
-        let back: A2aConfig = serde_json::from_str(&json).unwrap();
+        let json = serde_json::to_string(&config).expect("operation failed");
+        let back: A2aConfig = serde_json::from_str(&json).expect("operation failed");
         assert!(back.enabled);
         assert_eq!(back.listen_path, "/a2a");
         assert_eq!(back.external_agents.len(), 1);
@@ -648,7 +648,7 @@ mod tests {
                 "artifacts": []
             }
         });
-        let task = parse_task_response(&body).unwrap();
+        let task = parse_task_response(&body).expect("operation failed");
         assert_eq!(task.id, "t-1");
         assert_eq!(task.status, A2aTaskStatus::Completed);
     }
@@ -690,7 +690,7 @@ mod tests {
                 }],
             },
         );
-        let failed = store.get("t-fail").unwrap();
+        let failed = store.get("t-fail").expect("operation failed");
         assert_eq!(failed.status, A2aTaskStatus::Failed);
         assert_eq!(failed.messages.len(), 1);
     }

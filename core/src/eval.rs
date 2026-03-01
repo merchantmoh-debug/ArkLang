@@ -556,7 +556,7 @@ mod tests {
             ],
         };
 
-        let result = interpreter.eval_expression(&expr, &mut scope).unwrap();
+        let result = interpreter.eval_expression(&expr, &mut scope).expect("operation failed");
         assert_eq!(result, Value::Integer(8));
     }
 
@@ -630,8 +630,8 @@ mod tests {
         assert!(matches!(result, Ok(Value::Unit)));
 
         // Verify variables are set
-        let a = scope.get_or_move(&"a".to_string()).unwrap();
-        let b = scope.get_or_move(&"b".to_string()).unwrap();
+        let a = scope.get_or_move(&"a".to_string()).expect("operation failed");
+        let b = scope.get_or_move(&"b".to_string()).expect("operation failed");
         assert_eq!(a, Value::Integer(1));
         assert_eq!(b, Value::Integer(2));
     }
@@ -656,7 +656,7 @@ mod tests {
             ],
         };
 
-        let result = interpreter.eval_expression(&expr, &mut scope).unwrap();
+        let result = interpreter.eval_expression(&expr, &mut scope).expect("operation failed");
         assert_eq!(result, Value::Integer(1));
     }
 
@@ -677,7 +677,7 @@ mod tests {
             ],
         };
 
-        let result = interpreter.eval_expression(&expr, &mut scope).unwrap();
+        let result = interpreter.eval_expression(&expr, &mut scope).expect("operation failed");
         assert_eq!(result, Value::Integer(2));
     }
 
@@ -695,7 +695,7 @@ mod tests {
             )],
         };
 
-        let result = interpreter.eval_expression(&expr, &mut scope).unwrap();
+        let result = interpreter.eval_expression(&expr, &mut scope).expect("operation failed");
         assert_eq!(result, Value::Integer(99));
 
         // Verify x is NOT in scope (scope isolation)
@@ -730,8 +730,8 @@ mod tests {
             }],
         };
 
-        interpreter.eval_statement(&stmt, &mut scope).unwrap();
-        let sum = scope.get("sum").unwrap();
+        interpreter.eval_statement(&stmt, &mut scope).expect("operation failed");
+        let sum = scope.get("sum").expect("operation failed");
         assert_eq!(sum, Value::Integer(3));
     }
 
@@ -775,8 +775,8 @@ mod tests {
                 },
             ],
         };
-        interpreter.eval_statement(&stmt, &mut scope).unwrap();
-        let sum = scope.get("sum").unwrap();
+        interpreter.eval_statement(&stmt, &mut scope).expect("operation failed");
+        let sum = scope.get("sum").expect("operation failed");
         assert_eq!(sum, Value::Integer(1));
     }
 
@@ -787,7 +787,7 @@ mod tests {
         scope.set("name".to_string(), Value::String("Ark".to_string()));
 
         let expr = Expression::Literal("Hello {name}!".to_string());
-        let result = interpreter.eval_expression(&expr, &mut scope).unwrap();
+        let result = interpreter.eval_expression(&expr, &mut scope).expect("operation failed");
         assert_eq!(result, Value::String("Hello Ark!".to_string()));
     }
 

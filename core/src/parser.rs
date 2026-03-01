@@ -1908,7 +1908,7 @@ mod tests {
     #[test]
     fn test_lex_hello_world() {
         let mut lexer = Lexer::new(r#"func main() { print("Hello") }"#);
-        let tokens = lexer.tokenize().unwrap();
+        let tokens = lexer.tokenize().expect("operation failed");
         assert!(matches!(tokens[0].kind, TokenKind::Func));
         assert!(matches!(&tokens[1].kind, TokenKind::Identifier(n) if n == "main"));
         assert!(matches!(tokens[2].kind, TokenKind::LParen));
@@ -1919,7 +1919,7 @@ mod tests {
     #[test]
     fn test_lex_numbers() {
         let mut lexer = Lexer::new("42 3.14");
-        let tokens = lexer.tokenize().unwrap();
+        let tokens = lexer.tokenize().expect("operation failed");
         assert!(matches!(tokens[0].kind, TokenKind::Integer(42)));
         assert!(matches!(tokens[1].kind, TokenKind::Float(f) if (f - 3.14).abs() < 0.001));
     }
@@ -1927,7 +1927,7 @@ mod tests {
     #[test]
     fn test_lex_operators() {
         let mut lexer = Lexer::new(":= == != <= >= |> .. ..=");
-        let tokens = lexer.tokenize().unwrap();
+        let tokens = lexer.tokenize().expect("operation failed");
         assert!(matches!(tokens[0].kind, TokenKind::Assign));
         assert!(matches!(tokens[1].kind, TokenKind::Eq));
         assert!(matches!(tokens[2].kind, TokenKind::Neq));
@@ -1941,7 +1941,7 @@ mod tests {
     #[test]
     fn test_lex_string_escapes() {
         let mut lexer = Lexer::new(r#""hello\nworld""#);
-        let tokens = lexer.tokenize().unwrap();
+        let tokens = lexer.tokenize().expect("operation failed");
         if let TokenKind::StringLit(s) = &tokens[0].kind {
             assert_eq!(s, "hello\nworld");
         } else {
@@ -1951,7 +1951,7 @@ mod tests {
 
     #[test]
     fn test_parse_let_stmt() {
-        let ast = parse_source("x := 42", "test.ark").unwrap();
+        let ast = parse_source("x := 42", "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             assert_eq!(stmts.len(), 1);
             if let Statement::Let { name, value, .. } = &stmts[0] {
@@ -1967,7 +1967,7 @@ mod tests {
 
     #[test]
     fn test_parse_function_def() {
-        let ast = parse_source("func add(a, b) { return a + b }", "test.ark").unwrap();
+        let ast = parse_source("func add(a, b) { return a + b }", "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             assert_eq!(stmts.len(), 1);
             if let Statement::Function(f) = &stmts[0] {
@@ -1983,7 +1983,7 @@ mod tests {
 
     #[test]
     fn test_parse_arithmetic() {
-        let ast = parse_source("x := 1 + 2 * 3", "test.ark").unwrap();
+        let ast = parse_source("x := 1 + 2 * 3", "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             if let Statement::Let { name, value, .. } = &stmts[0] {
                 assert_eq!(name, "x");
@@ -2016,7 +2016,7 @@ mod tests {
                 print("non-positive")
             }
         "#;
-        let ast = parse_source(source, "test.ark").unwrap();
+        let ast = parse_source(source, "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             assert_eq!(stmts.len(), 1);
             if let Statement::If {
@@ -2039,7 +2039,7 @@ mod tests {
                 i := i + 1
             }
         "#;
-        let ast = parse_source(source, "test.ark").unwrap();
+        let ast = parse_source(source, "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             assert_eq!(stmts.len(), 1);
             assert!(matches!(&stmts[0], Statement::While { .. }));
@@ -2048,7 +2048,7 @@ mod tests {
 
     #[test]
     fn test_parse_method_call() {
-        let ast = parse_source(r#"sys.ai.ask("prompt")"#, "test.ark").unwrap();
+        let ast = parse_source(r#"sys.ai.ask("prompt")"#, "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             if let Statement::Expression(Expression::Call {
                 function_hash,
@@ -2065,7 +2065,7 @@ mod tests {
 
     #[test]
     fn test_parse_list_literal() {
-        let ast = parse_source("xs := [1, 2, 3]", "test.ark").unwrap();
+        let ast = parse_source("xs := [1, 2, 3]", "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             if let Statement::Let { value, .. } = &stmts[0] {
                 if let Expression::List(items) = value {
@@ -2077,7 +2077,7 @@ mod tests {
 
     #[test]
     fn test_parse_struct_init() {
-        let ast = parse_source(r#"p := { x: 1, y: 2 }"#, "test.ark").unwrap();
+        let ast = parse_source(r#"p := { x: 1, y: 2 }"#, "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             if let Statement::Let { value, .. } = &stmts[0] {
                 if let Expression::StructInit { fields } = value {
@@ -2091,7 +2091,7 @@ mod tests {
 
     #[test]
     fn test_parse_import() {
-        let ast = parse_source("import std.crypto", "test.ark").unwrap();
+        let ast = parse_source("import std.crypto", "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             if let Statement::Import(imp) = &stmts[0] {
                 assert_eq!(imp.path, "std.crypto");
@@ -2101,7 +2101,7 @@ mod tests {
 
     #[test]
     fn test_parse_destructure() {
-        let ast = parse_source("let (a, b) := get_pair()", "test.ark").unwrap();
+        let ast = parse_source("let (a, b) := get_pair()", "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             if let Statement::LetDestructure { names, value } = &stmts[0] {
                 assert_eq!(names, &["a", "b"]);
@@ -2118,7 +2118,7 @@ mod tests {
                comment */
             y := 10
         "#;
-        let ast = parse_source(source, "test.ark").unwrap();
+        let ast = parse_source(source, "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             assert_eq!(stmts.len(), 2);
         }
@@ -2135,7 +2135,7 @@ mod tests {
                 return a
             }
         "#;
-        let ast = parse_source(source, "test.ark").unwrap();
+        let ast = parse_source(source, "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             assert_eq!(stmts.len(), 1);
             if let Statement::Function(ref func_def) = stmts[0] {
@@ -2158,7 +2158,7 @@ mod tests {
                 return req
             }
         "#;
-        let ast = parse_source(source, "test.ark").unwrap();
+        let ast = parse_source(source, "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             assert_eq!(stmts.len(), 1);
             if let Statement::Function(ref func_def) = stmts[0] {
@@ -2181,7 +2181,7 @@ mod tests {
                 return x
             }
         "#;
-        let ast = parse_source(source, "test.ark").unwrap();
+        let ast = parse_source(source, "test.ark").expect("operation failed");
         if let ArkNode::Statement(Statement::Block(stmts)) = ast {
             assert_eq!(stmts.len(), 1);
             if let Statement::Function(ref func_def) = stmts[0] {
