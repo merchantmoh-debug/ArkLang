@@ -30,9 +30,9 @@
 
 **Use it for:** Financial systems, cryptographic protocols, AI-native applications, smart contracts, compliance-audited systems, and anywhere resource correctness is non-negotiable.
 
-> **[Manifesto](docs/MANIFESTO.md)** — Why Ark exists.
-> **[User Manual](docs/USER_MANUAL.md)** — Complete language guide.
-> **[Leviathan Portal](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** — Z3-verify and CSG-compile a titanium metamaterial heat sink in your browser.
+> **[Manifesto](docs/MANIFESTO.md)** -- Why Ark exists.
+> **[User Manual](docs/USER_MANUAL.md)** -- Complete language guide.
+> **[Leviathan Portal](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** -- Z3-verify and CSG-compile a titanium metamaterial heat sink in your browser.
 
 ---
 
@@ -62,22 +62,22 @@ Ark includes a parametric manufacturing compiler that outputs printer-ready geom
 
 The [**Leviathan Portal**](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) is a zero-installation browser demo of Ark's parametric manufacturing compiler. Click one button and watch Ark:
 
-1. **Z3-verify** 11 thermodynamic constraints — wall thickness, porosity, thermal conductivity, structural integrity — rejecting any design that violates physics *before* a single vertex is generated.
-2. **CSG-compile** a titanium metamaterial heat sink via `manifold-3d` WASM — real constructive solid geometry: a 100mm cube minus up to 972 intersecting cylindrical channels, computed as boolean algebra.
-3. **Export a printer-ready GLB** — a watertight, 2-manifold mesh that loads directly into SLS titanium slicer software. Not a mockup. Not a render. An actual manufacturing specification.
-4. **Seal it with a cryptographic proof-of-matter receipt** — SHA-256 hash of the mesh topology, proving the geometry was produced by a verified compilation.
+1. **Z3-verify** 11 thermodynamic constraints -- wall thickness, porosity, thermal conductivity, structural integrity -- rejecting any design that violates physics *before* a single vertex is generated.
+2. **CSG-compile** a titanium metamaterial heat sink via `manifold-3d` WASM -- real constructive solid geometry: a 100mm cube minus up to 972 intersecting cylindrical channels, computed as boolean algebra.
+3. **Export a printer-ready GLB** -- a watertight, 2-manifold mesh that loads directly into SLS titanium slicer software. Not a mockup. Not a render. An actual manufacturing specification.
+4. **Seal it with a cryptographic proof-of-matter receipt** -- SHA-256 hash of the mesh topology, proving the geometry was produced by a verified compilation.
 
 Runtime: ~12ms in a browser tab, zero installation required.
 
 ### What This Replaces
 
 The traditional workflow for producing the same output:
-- **SolidWorks/Fusion 360** ($5k–$50k/seat/year) — engineer manually models geometry
-- **ANSYS/Abaqus** ($50k–$200k/year) — run thermal FEA to validate constraints
+- **SolidWorks/Fusion 360** ($5k–$50k/seat/year) -- engineer manually models geometry
+- **ANSYS/Abaqus** ($50k–$200k/year) -- run thermal FEA to validate constraints
 - **Iterate** 5–15 times over days to weeks when constraints fail
 - Export STL, send to print bureau, hope it works
 
-Ark collapses this entire pipeline into a single compilation step. The constraint specification IS the design. The compiler proves correctness and outputs the only geometry that satisfies it — in one pass, in milliseconds.
+Ark collapses this entire pipeline into a single compilation step. The constraint specification IS the design. The compiler proves correctness and outputs the only geometry that satisfies it -- in one pass, in milliseconds.
 
 **→ [Try it now](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | **[Read the source](apps/leviathan_compiler.ark)** (210 lines of Ark)
 
@@ -167,10 +167,10 @@ p.x := 3.0
 
 ### Linear Type System
 
-Resources that behave like **physical matter** — they cannot be copied, cannot be leaked, and must be consumed exactly once:
+Resources that behave like **physical matter** -- they cannot be copied, cannot be leaked, and must be consumed exactly once:
 
 ```ark
-// 'coin' is a Linear resource — the compiler enforces Conservation of Value
+// 'coin' is a Linear resource -- the compiler enforces Conservation of Value
 func transfer(coin: Linear<Coin>, recipient: Address) {
     // 'coin' is MOVED here. The caller can NEVER touch it again.
     // Double-spend? COMPILE ERROR.
@@ -193,7 +193,7 @@ Ark has **three backends**, all fully functional:
 | **Browser Bridge** | `wasm.rs` | 358 | `wasm_bindgen` API for in-browser execution |
 | **Tree-walker** | `eval.rs` | 733 | Interpreter (deprecated, test-only) |
 
-### CLI — 10 Commands
+### CLI -- 10 Commands
 
 ```bash
 ark run <file.ark>         # Run source or MAST JSON
@@ -317,7 +317,7 @@ Task → RouterAgent → [CoderAgent | ResearcherAgent | ReviewerAgent] → Revi
 | **LLM Backends** | Gemini → OpenAI → Ollama (auto-fallback) |
 
 ```ark
-// AI is a first-class intrinsic — no SDK, no import
+// AI is a first-class intrinsic -- no SDK, no import
 answer := sys.ai.ask("Explain linear types in 3 sentences.")
 print(answer)
 
@@ -331,7 +331,7 @@ results := swarm.run("Build a key-value store")
 
 ### Agent Substrate (26 Modules, ~13,350 LOC)
 
-The Python-level agent framework is backed by a Rust-native substrate — 26 modules providing security, routing, memory, and lifecycle primitives:
+The Python-level agent framework is backed by a Rust-native substrate -- 26 modules providing security, routing, memory, and lifecycle primitives:
 
 | Layer | Modules | What It Provides |
 |---|---|---|
@@ -371,7 +371,7 @@ The Python-level agent framework is backed by a Rust-native substrate — 26 mod
 
 | Subsystem | LOC | What It Does |
 |---|---|---|
-| **Agent Substrate** | 13,350+ | 24-module Rust-native agent runtime (security, LLM, lifecycle, memory) — see above |
+| **Agent Substrate** | 13,350+ | 24-module Rust-native agent runtime (security, LLM, lifecycle, memory) -- see above |
 | **Diagnostic Proof Suite** | 780+ | Cryptographic compilation verification (Merkle + HMAC) |
 | **Hygienic Macros** | 522 | `gensym`-based macro expansion |
 | **Interactive Debugger** | 248 | Breakpoints, step-in/out, variable inspection |
@@ -382,10 +382,10 @@ The Python-level agent framework is backed by a Rust-native substrate — 26 mod
 | **ADN (Ark Data Notation)** | 526 | Bidirectional serialization (like Clojure's EDN) |
 | **FFI** | 120 | C ABI: `extern "C" fn ark_eval_string()` |
 | **WASM Interop** | 428 | Load/call/inspect external `.wasm` modules |
-| **VSCode Extension** | — | TextMate grammar, language config (v1.3.0) |
-| **Browser Playground** | — | `site/wasm/index.html` test harness |
+| **VSCode Extension** | -- | TextMate grammar, language config (v1.3.0) |
+| **Browser Playground** | -- | `site/wasm/index.html` test harness |
 | **Leviathan WASM Portal** | 1,086 | Live CSG compilation via manifold-3d WASM + Z3 verification + GLB export |
-| **GitHub CI** | — | 10 jobs across 3 OS + Docker + WASM + Audit |
+| **GitHub CI** | -- | 10 jobs across 3 OS + Docker + WASM + Audit |
 
 ---
 
@@ -424,17 +424,17 @@ python meta/ark.py run hello.ark
 ### Try the Examples
 
 ```bash
-# Wallet CLI — Secp256k1 + BIP39 in pure Ark
+# Wallet CLI -- Secp256k1 + BIP39 in pure Ark
 python3 meta/ark.py run apps/wallet.ark create "mypassword"
 
-# Market Maker — Linear types enforcing no double-counting
+# Market Maker -- Linear types enforcing no double-counting
 python3 meta/ark.py run apps/market_maker.ark
 
-# Snake Game — playable in the browser
+# Snake Game -- playable in the browser
 python3 meta/ark.py run examples/snake.ark
 # Open http://localhost:8000
 
-# Leviathan Portal — Z3 + CSG compilation in the browser
+# Leviathan Portal -- Z3 + CSG compilation in the browser
 # Visit: https://merchantmoh-debug.github.io/ArkLang/site/leviathan/
 ```
 
@@ -444,14 +444,14 @@ python3 meta/ark.py run examples/snake.ark
 
 | Document | Description |
 |---|---|
-| **[User Manual](docs/USER_MANUAL.md)** | Complete language guide — enums, traits, functions, imports, crypto, blockchain, AI |
+| **[User Manual](docs/USER_MANUAL.md)** | Complete language guide -- enums, traits, functions, imports, crypto, blockchain, AI |
 | **[Quick Start](docs/QUICK_START.md)** | 5-minute setup |
 | **[API Reference](docs/API_REFERENCE.md)** | All 109 intrinsics with signatures and examples |
 | **[Stdlib Reference](docs/STDLIB_REFERENCE.md)** | All 16 standard library modules |
-| **[Language Spec](docs/ARK_LANGUAGE_SPEC.md)** | Formal specification — types, grammar, runtime semantics |
-| **[Manifesto](docs/MANIFESTO.md)** | The philosophy — why Ark exists |
+| **[Language Spec](docs/ARK_LANGUAGE_SPEC.md)** | Formal specification -- types, grammar, runtime semantics |
+| **[Manifesto](docs/MANIFESTO.md)** | The philosophy -- why Ark exists |
 | **[Roadmap](docs/ROADMAP.md)** | What's next |
-| **[Leviathan Portal](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | Live demo — Z3 + CSG compilation in the browser |
+| **[Leviathan Portal](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | Live demo -- Z3 + CSG compilation in the browser |
 
 ---
 
@@ -459,14 +459,14 @@ python3 meta/ark.py run examples/snake.ark
 
 | Feature | Details |
 |---|---|
-| **Default** | Air-gapped — no network, no filesystem writes, no shell |
+| **Default** | Air-gapped -- no network, no filesystem writes, no shell |
 | **Capability Tokens** | `ARK_CAPABILITIES="net,fs_read,fs_write,ai"` |
 | **Static Analysis** | Security scanner catches injection, path traversal, hardcoded secrets |
 | **Import Security** | Path traversal → `RuntimeError::UntrustedCode` |
 | **Circular Import Protection** | `imported_files` HashSet |
 | **Agent Sandbox** | AST analysis + Docker isolation for untrusted workloads |
-| **Epistemic Firewall** | `Censored` (∞_rec) sentinel blocks arithmetic on missing data — compiler-enforced |
-| **Data Integrity (GCD)** | AM-GM bound detects weak channels hidden by averages — `audit_dataset()` halts on fraud |
+| **Epistemic Firewall** | `Censored` (∞_rec) sentinel blocks arithmetic on missing data -- compiler-enforced |
+| **Data Integrity (GCD)** | AM-GM bound detects weak channels hidden by averages -- `audit_dataset()` halts on fraud |
 
 ---
 
@@ -474,7 +474,7 @@ python3 meta/ark.py run examples/snake.ark
 
 The `gcd` standard library module provides contract-frozen measurement discipline that detects fraudulent data at runtime.
 
-The `gcd` standard library module implements the **Tier-1 Kernel** from Clement Paulus's [Generative Collapse Dynamics](https://doi.org/10.5281/zenodo.18819238) (GCD/UMCP v2.1.3) framework. It provides a contract-frozen measurement discipline that uses the **AM-GM inequality** — one of the most fundamental bounds in mathematics — to detect weak data channels hidden by healthy-looking averages.
+The `gcd` standard library module implements the **Tier-1 Kernel** from Clement Paulus's [Generative Collapse Dynamics](https://doi.org/10.5281/zenodo.18819238) (GCD/UMCP v2.1.3) framework. It provides a contract-frozen measurement discipline that uses the **AM-GM inequality** -- one of the most fundamental bounds in mathematics -- to detect weak data channels hidden by healthy-looking averages.
 
 ```ark
 import lib.std.gcd
@@ -485,7 +485,7 @@ ledger := gcd.evaluate(trace, weights)
 // ledger.IC = geometric mean (what actually survives)
 // ledger.delta = F - IC (the gap = hidden fragility)
 
-// Or use the kill switch — halt if the gap is too big
+// Or use the kill switch -- halt if the gap is too big
 gcd.audit_dataset(trace, weights, 2000)  // VETO if Δ > 0.20
 ```
 
@@ -497,7 +497,7 @@ gcd.audit_dataset(trace, weights, 2000)  // VETO if Δ > 0.20
 | `gcd.create_contract(adapter, epsilon, weights, metric, tolerance)` | Freeze measurement params into SHA-256 RunID |
 | `gcd.normalize(trace, epsilon)` | Clip raw values to `[ε, 1-ε]` |
 
-The `Censored` type (`∞_rec`) is enforced at the interpreter level — any arithmetic on a Censored value raises `CensoredAccessError`. Missing data cannot be silently averaged away. It must be explicitly handled.
+The `Censored` type (`∞_rec`) is enforced at the interpreter level -- any arithmetic on a Censored value raises `CensoredAccessError`. Missing data cannot be silently averaged away. It must be explicitly handled.
 
 > **Credit:** GCD/UMCP theory by [Clement Paulus](https://orcid.org/0009-0000-6069-8234) (CC BY 4.0). Ark implementation adapts the Tier-1 kernel to fixed-point integer arithmetic with contract-freezing and runtime veto.
 

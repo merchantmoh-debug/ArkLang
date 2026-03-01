@@ -18,7 +18,7 @@ Ark source files use UTF-8 encoding. The canonical file extension is `.ark`.
 ```ark
 // Line comment (ignored by parser)
 /// Doc comment (attached to next declaration)
-/* Block comment — may be nested */
+/* Block comment -- may be nested */
 ```
 
 Doc comments (`///`) are preserved in the AST and can be queried by tooling such as the LSP.
@@ -148,8 +148,8 @@ x /= 2          // Compound: div-assign
 |------|-------------|
 | `Any` | Accepts any type (dynamic typing fallback) |
 | `Unknown` | Not yet inferred (internal to type checker) |
-| `Linear(name)` | Linear resource — must be consumed exactly once |
-| `Affine(name)` | Affine resource — consumed at most once |
+| `Linear(name)` | Linear resource -- must be consumed exactly once |
+| `Affine(name)` | Affine resource -- consumed at most once |
 | `Shared(name)` | Freely copyable reference |
 
 ### 2.4 Linear Type System
@@ -165,10 +165,10 @@ Ark enforces **linear type discipline** for resource safety. A linear value must
 
 **Example:**
 ```ark
-// Linear resource — file handle
+// Linear resource -- file handle
 handle := open_file("data.txt")    // handle is linear
 content := read(handle)             // handle consumed here
-// handle cannot be used again — enforced at compile time
+// handle cannot be used again -- enforced at compile time
 ```
 
 **Linearity at runtime:** `Value::is_linear()` returns `true` for `List`, `LinearObject`, `Buffer`, and `Struct`. Integers, Booleans, Strings, Functions, and Unit are **shared** (freely copyable).
@@ -250,7 +250,7 @@ while condition {
 
 ```ark
 for item in collection {
-    // body — item bound per iteration
+    // body -- item bound per iteration
 }
 ```
 
@@ -384,7 +384,7 @@ See `docs/API_REFERENCE.md` for the complete intrinsic catalog.
 point := { x: 10, y: 20 }
 ```
 
-Structs are anonymous records — key-value maps created with brace syntax.
+Structs are anonymous records -- key-value maps created with brace syntax.
 
 ### 6.2 Class Definition
 
@@ -531,15 +531,15 @@ ARK_SECURITY_LEVEL=1 ark run program.ark
 
 ### 9.2 Content-Addressed Code (MAST)
 
-Every compiled function body is wrapped in a `MastNode` — a Merkle-Authenticated Syntax Tree node. The `MastNode` contains:
+Every compiled function body is wrapped in a `MastNode` -- a Merkle-Authenticated Syntax Tree node. The `MastNode` contains:
 
 - `content`: The `ArkNode` (AST)
 - `hash`: SHA-256 hash of the serialized content
 
 This enables:
-- **Integrity verification** — detect tampering
-- **Trust chains** — only execute code with known hashes
-- **Deterministic compilation** — same source always produces the same hash
+- **Integrity verification** -- detect tampering
+- **Trust chains** -- only execute code with known hashes
+- **Deterministic compilation** -- same source always produces the same hash
 
 ### 9.3 Resource Limits
 
@@ -630,10 +630,10 @@ On `SIGINT` (Ctrl+C):
                                                  (Chunk)
 ```
 
-1. **Lexer** — Tokenizes source into `Token` stream (keywords, operators, literals, identifiers)
-2. **Parser** — Recursive descent parser produces `ArkNode` AST
-3. **Compiler** — Traverses AST, performs constant folding and dead code elimination, emits `OpCode` bytecodes into a `Chunk`
-4. **VM** — Stack-based virtual machine executes `Chunk` with scope chain, call frames, and intrinsic dispatch
+1. **Lexer** -- Tokenizes source into `Token` stream (keywords, operators, literals, identifiers)
+2. **Parser** -- Recursive descent parser produces `ArkNode` AST
+3. **Compiler** -- Traverses AST, performs constant folding and dead code elimination, emits `OpCode` bytecodes into a `Chunk`
+4. **VM** -- Stack-based virtual machine executes `Chunk` with scope chain, call frames, and intrinsic dispatch
 
 ### 11.1 Bytecode Instructions
 
@@ -702,7 +702,7 @@ assign_destructure = "let" "(" IDENTIFIER ("," IDENTIFIER)* ")" ":=" expression 
 assign_attr    = atom "." IDENTIFIER ":=" expression ;
 assign_op      = atom ASSIGN_OP expression ;
 
-(* Expressions — ordered by precedence, lowest first *)
+(* Expressions -- ordered by precedence, lowest first *)
 expression     = pipe_expr ;
 pipe_expr      = logical_or ("|>" logical_or)* ;
 logical_or     = logical_and ("||" logical_and)* ;

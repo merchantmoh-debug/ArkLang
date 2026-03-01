@@ -1,4 +1,4 @@
-# The Ark Language — User Manual
+# The Ark Language -- User Manual
 
 **Version:** Phase 112 | **Updated:** 2026-02-19
 **License:** AGPL-3.0 | **Author:** Mohamad Al-Zawahreh (Sovereign Systems)
@@ -54,9 +54,9 @@
 
 ### Prerequisites
 
-- **Rust 1.80+** — For the Rust VM core. [Install Rust](https://rustup.rs/)
-- **Python 3.8+** — For the bootstrap compiler and tooling (3.10+ recommended).
-- **Git** — To clone the repo.
+- **Rust 1.80+** -- For the Rust VM core. [Install Rust](https://rustup.rs/)
+- **Python 3.8+** -- For the bootstrap compiler and tooling (3.10+ recommended).
+- **Git** -- To clone the repo.
 
 ### From Source
 
@@ -69,7 +69,7 @@ cd ArkLang
 cd core && cargo build --release && cd ..
 
 # Install Python deps (pick one)
-uv sync                         # ⚡ Recommended — fast, deterministic
+uv sync                         # ⚡ Recommended -- fast, deterministic
 pip install -r requirements.txt  # Also works
 
 # Verify
@@ -148,10 +148,10 @@ Ark has a 14-variant type system:
 | Struct | `{x: 1, y: 2}` | Named fields |
 | Function | `func(x) { x + 1 }` | First-class values |
 | Optional | `some(42)`, `none` | Nullable wrapper |
-| Unit | — | Void return type |
-| Any | — | Unconstrained type variable |
+| Unit | -- | Void return type |
+| Any | -- | Unconstrained type variable |
 | Enum | `Shape.Circle(5.0)` | Algebraic data type |
-| Trait | — | Interface/protocol type |
+| Trait | -- | Interface/protocol type |
 
 ---
 
@@ -347,7 +347,7 @@ sum := list.reduce(numbers, |acc, x| { acc + x }, 0)
 // 15
 ```
 
-Lambdas are fully compiled to WASM with lambda-lifting — they are not interpreted.
+Lambdas are fully compiled to WASM with lambda-lifting -- they are not interpreted.
 
 ---
 
@@ -393,7 +393,7 @@ print(p.x)  // 5.0
 
 ## 10. Enums
 
-Enums define algebraic data types — types with a fixed set of named variants, each of which can carry data.
+Enums define algebraic data types -- types with a fixed set of named variants, each of which can carry data.
 
 ### Defining Enums
 
@@ -537,7 +537,7 @@ impl Vector {
 
 ## 13. Linear Types
 
-Ark's **linear type system** enforces resource safety at compile time. Resources annotated as `Linear` must be consumed exactly once — they cannot be copied, and they cannot be silently dropped.
+Ark's **linear type system** enforces resource safety at compile time. Resources annotated as `Linear` must be consumed exactly once -- they cannot be copied, and they cannot be silently dropped.
 
 ### Type Annotations
 
@@ -760,13 +760,13 @@ Ark ships with **16 standard library modules**. Import them with `import lib.std
 
 ## 18.5. GCD / Data Integrity
 
-The `gcd` module implements the [Generative Collapse Dynamics](https://doi.org/10.5281/zenodo.18819238) (GCD/UMCP v2.1.3) Tier-1 kernel. It detects hidden structural failures in multi-channel data using the **AM-GM inequality** — the arithmetic mean hides dying channels, the geometric mean does not.
+The `gcd` module implements the [Generative Collapse Dynamics](https://doi.org/10.5281/zenodo.18819238) (GCD/UMCP v2.1.3) Tier-1 kernel. It detects hidden structural failures in multi-channel data using the **AM-GM inequality** -- the arithmetic mean hides dying channels, the geometric mean does not.
 
 ```ark
 import lib.std.gcd
 ```
 
-> **Convention:** All values use Ark's fixed-point integer convention — multiply by 10000. So `0.50` = `5000`, `1.0` = `10000`. Weights must sum to `10000`.
+> **Convention:** All values use Ark's fixed-point integer convention -- multiply by 10000. So `0.50` = `5000`, `1.0` = `10000`. Weights must sum to `10000`.
 
 ### Function Reference
 
@@ -835,7 +835,7 @@ result := gcd.decorrelate(trace, weights, 9000)  // threshold = 0.90 correlation
 
 ### The `Censored` Sentinel
 
-When data is *missing* (not zero — missing), Ark represents it as a `Censored` value (`∞_rec`). Any arithmetic operation on a `Censored` value raises `CensoredAccessError` at runtime. This prevents the common fraud of silently imputing missing data with zeros or averages.
+When data is *missing* (not zero -- missing), Ark represents it as a `Censored` value (`∞_rec`). Any arithmetic operation on a `Censored` value raises `CensoredAccessError` at runtime. This prevents the common fraud of silently imputing missing data with zeros or averages.
 
 You must explicitly handle missing data via pattern matching or guard checks before performing arithmetic.
 
@@ -845,7 +845,7 @@ You must explicitly handle missing data via pattern matching or guard checks bef
 
 ## 19. Intrinsics (Built-ins)
 
-Intrinsics are functions compiled directly into the runtime — no imports needed.
+Intrinsics are functions compiled directly into the runtime -- no imports needed.
 
 ### Core Intrinsics (Always Available)
 
@@ -917,7 +917,7 @@ result := net.http.post("https://api.example.com/submit", "{\"key\": \"value\"}"
 
 ## 22. Cryptography
 
-Ark has 14 built-in cryptographic intrinsics — no external dependencies needed.
+Ark has 14 built-in cryptographic intrinsics -- no external dependencies needed.
 
 ```ark
 // Hashing
@@ -1046,11 +1046,11 @@ Ark ships with a **built-in multi-agent AI framework** (`src/`). Programs can re
 
 ### Overview
 
-* **Task Orchestration** — Route tasks to specialist AI agents automatically
-* **Multi-Agent Swarm** — Coordinate agents with router, broadcast, consensus, and pipeline strategies
-* **MCP Protocol** — Connect to any Model Context Protocol server for tool access
-* **Sandboxed Execution** — Run generated code in secure, isolated environments
-* **Encrypted Memory** — Persistent agent memory with Fernet encryption and vector search
+* **Task Orchestration** -- Route tasks to specialist AI agents automatically
+* **Multi-Agent Swarm** -- Coordinate agents with router, broadcast, consensus, and pipeline strategies
+* **MCP Protocol** -- Connect to any Model Context Protocol server for tool access
+* **Sandboxed Execution** -- Run generated code in secure, isolated environments
+* **Encrypted Memory** -- Persistent agent memory with Fernet encryption and vector search
 
 ### Rust-Native Agent Substrate
 
@@ -1079,7 +1079,7 @@ python -m src.agent "Analyze the security of apps/server.ark"
 | Agent | Role | When It's Called |
 | --- | --- | --- |
 | `RouterAgent` | Classifies the task and picks the right specialist | Always (first step) |
-| `CoderAgent` | Writes, modifies, and refactors code — **Ark-aware** with full language reference, `execute_ark()` and `compile_check()` tools | Code generation tasks |
+| `CoderAgent` | Writes, modifies, and refactors code -- **Ark-aware** with full language reference, `execute_ark()` and `compile_check()` tools | Code generation tasks |
 | `ResearcherAgent` | Analyzes codebases, gathers context | Research/analysis tasks |
 | `ReviewerAgent` | Audits code for bugs, security, and style | Post-execution review |
 
@@ -1218,7 +1218,7 @@ results = vmem.search_similar("sandbox setup", top_k=3)
 
 ## 26. Persistent Data Structures
 
-Ark includes **persistent immutable data structures** — collections that preserve all previous versions when modified (structural sharing).
+Ark includes **persistent immutable data structures** -- collections that preserve all previous versions when modified (structural sharing).
 
 ```ark
 import lib.std.persistent
@@ -1312,7 +1312,7 @@ Macros allow you to extend the language's syntax and generate code at compile ti
 
 ## 29. Configuration & Security
 
-Ark uses environment variables for security controls. **By default, the runtime is sandboxed** — no network, no file writes, no shell access.
+Ark uses environment variables for security controls. **By default, the runtime is sandboxed** -- no network, no file writes, no shell access.
 
 ### Environment Variables
 
@@ -1381,7 +1381,7 @@ python meta/ark.py repl
 ```
 
 ```
-Ark REPL v1.0 — Type 'exit' to quit
+Ark REPL v1.0 -- Type 'exit' to quit
 >>> x := 42
 42
 >>> x + 8
@@ -1402,10 +1402,10 @@ python meta/ark.py debug <file.ark>
 
 Features:
 
-- **Breakpoints** — Set on any line
-- **Step In / Step Over / Step Out** — Navigate through execution
-- **Variable Inspection** — See all variables in scope at any point
-- **Call Stack** — View the full function call chain
+- **Breakpoints** -- Set on any line
+- **Step In / Step Over / Step Out** -- Navigate through execution
+- **Variable Inspection** -- See all variables in scope at any point
+- **Call Stack** -- View the full function call chain
 
 ---
 
@@ -1423,11 +1423,11 @@ python meta/ark.py run-wasm <file.wasm>
 
 ### WASM Features
 
-- **WASI-compatible** — runs on any WASI runtime (wasmtime, wasmer, etc.)
-- **Lambda lifting** — closures are compiled to static functions with captured variables
-- **Full type system** — all 14 Ark types are represented in WASM
-- **Browser support** — `wasm_bindgen` API for in-browser execution
-- **WIT generation** — Generate WebAssembly Interface Types from Ark code
+- **WASI-compatible** -- runs on any WASI runtime (wasmtime, wasmer, etc.)
+- **Lambda lifting** -- closures are compiled to static functions with captured variables
+- **Full type system** -- all 14 Ark types are represented in WASM
+- **Browser support** -- `wasm_bindgen` API for in-browser execution
+- **WIT generation** -- Generate WebAssembly Interface Types from Ark code
 
 ```bash
 # Generate WIT interface definition
@@ -1445,13 +1445,13 @@ Ark includes a built-in diagnostic tool that produces **cryptographic evidence**
 The `diagnose` subcommand runs a 5-phase verification pipeline and produces a detailed report:
 
 ```bash
-# Developer tier (recommended default) — detailed human-readable report
+# Developer tier (recommended default) -- detailed human-readable report
 ark diagnose app.ark
 
-# Pro tier — full cryptographic proof with Merkle root and HMAC signature
+# Pro tier -- full cryptographic proof with Merkle root and HMAC signature
 ark diagnose app.ark --tier pro
 
-# JSON output — machine-readable, perfect for CI/CD pipelines
+# JSON output -- machine-readable, perfect for CI/CD pipelines
 ark diagnose app.ark --json
 
 # Custom HMAC signing key
@@ -1584,9 +1584,9 @@ Leviathan collapses this pipeline into a single compilation step: constraints go
 Click **"Compile Digital Matter"** and watch Ark:
 
 1. **Z3-verify** 11 thermodynamic constraints (wall thickness, porosity, thermal conductivity, structural integrity)
-2. **CSG-compile** a titanium metamaterial heat sink via `manifold-3d` WASM (real boolean algebra — cube minus up to 972 cylinders)
-3. **Export a printer-ready GLB** — a watertight, 2-manifold mesh you can load directly into SLS slicer software
-4. **Seal it with a proof-of-matter receipt** — SHA-256 hash of the mesh topology proving the geometry came from a verified compilation
+2. **CSG-compile** a titanium metamaterial heat sink via `manifold-3d` WASM (real boolean algebra -- cube minus up to 972 cylinders)
+3. **Export a printer-ready GLB** -- a watertight, 2-manifold mesh you can load directly into SLS slicer software
+4. **Seal it with a proof-of-matter receipt** -- SHA-256 hash of the mesh topology proving the geometry came from a verified compilation
 
 All in ~12 milliseconds. In a browser tab. With zero installation.
 
@@ -1595,7 +1595,7 @@ All in ~12 milliseconds. In a browser tab. With zero installation.
 | Control | Range | Effect |
 | --- | --- | --- |
 | Lattice Density slider | 5–18 | Controls channel count (75 to 972 channels) |
-| Compile button | — | Triggers full Z3 → CSG → GLB pipeline |
+| Compile button | -- | Triggers full Z3 → CSG → GLB pipeline |
 
 ### Architecture
 
@@ -1635,7 +1635,7 @@ This gate constructs a list of **SMT-LIB2 constraint strings** and passes them t
 - Wall thickness exceeding pore diameter (prevents structural collapse)
 - Porosity staying within the 10–90% range (ensures the object is neither solid nor empty)
 
-If any constraint fails, Z3 returns `false` and the compiler **halts before generating any geometry**. This is the "Truth-First Axiom" — no matter is forged without mathematical proof of feasibility.
+If any constraint fails, Z3 returns `false` and the compiler **halts before generating any geometry**. This is the "Truth-First Axiom" -- no matter is forged without mathematical proof of feasibility.
 
 #### Gate 2: Forge Titanium Substrate (`forge_titanium_substrate`)
 
@@ -1648,7 +1648,7 @@ matter := {
 }
 ```
 
-This gate creates a **topology DAG** (directed acyclic graph) — a string representation of the CSG operation that will produce the base geometry. The `matter` record tracks the volume and status. This record is treated as a **linear resource**: once consumed by Gate 3, it cannot be reused.
+This gate creates a **topology DAG** (directed acyclic graph) -- a string representation of the CSG operation that will produce the base geometry. The `matter` record tracks the volume and status. This record is treated as a **linear resource**: once consumed by Gate 3, it cannot be reused.
 
 #### Gate 3: Anisotropic Entropy Subtraction (`subtract_entropy`)
 
@@ -1667,7 +1667,7 @@ This is the core of the compiler. It builds a Python script that uses `manifold3
 3. Batch-union all cylinders into a single void volume
 4. Subtract the void from the titanium cube (`base - all_voids`)
 
-With density=18, this produces `18 × 18 × 3 = 972` intersecting cylindrical channels. The subtraction is real CSG boolean algebra — the same math used by industrial CAD kernels like Parasolid.
+With density=18, this produces `18 × 18 × 3 = 972` intersecting cylindrical channels. The subtraction is real CSG boolean algebra -- the same math used by industrial CAD kernels like Parasolid.
 
 The gate also builds the **GLB export** code: computing face normals, vertex normals, and encoding positions/indices into a binary glTF 2.0 file.
 
@@ -1690,15 +1690,15 @@ The final gate writes the Python script to disk, computes a **SHA-256 hash** of 
 
 - The geometry was produced by a verified compilation (not hand-modeled)
 - The Z3 solver confirmed all constraints before any geometry was generated
-- The mesh is guaranteed 2-manifold (watertight — every edge shared by exactly two triangles)
+- The mesh is guaranteed 2-manifold (watertight -- every edge shared by exactly two triangles)
 
 ### The Output: Printer-Ready GLB
 
 The compiled `.glb` file is a binary glTF 2.0 container containing:
 
-- **Vertex positions** — the exact 3D coordinates of every surface point
-- **Vertex normals** — computed from face normals for smooth rendering
-- **Triangle indices** — the connectivity of the mesh
+- **Vertex positions** -- the exact 3D coordinates of every surface point
+- **Vertex normals** -- computed from face normals for smooth rendering
+- **Triangle indices** -- the connectivity of the mesh
 
 This is not a visualization mesh. It is a **manufacturing specification**. The geometry is watertight, all vertices are precisely positioned, and the mesh can be loaded directly into SLS (Selective Laser Sintering) slicer software for titanium powder bed fusion.
 
@@ -1717,9 +1717,9 @@ Leviathan demonstrates several core Ark features working together:
 
 ### Source
 
-The portal source is at `site/leviathan/index.html` — a single self-contained HTML file (1,086 lines) with embedded CSS and JavaScript
+The portal source is at `site/leviathan/index.html` -- a single self-contained HTML file (1,086 lines) with embedded CSS and JavaScript
 
-The Ark compiler source is at `apps/leviathan_compiler.ark` — 210 lines of Ark
+The Ark compiler source is at `apps/leviathan_compiler.ark` -- 210 lines of Ark
 
 ---
 
@@ -1750,7 +1750,7 @@ Three: (1) Bytecode VM (fastest iteration), (2) Native WASM (production deployme
 Yes. Enums with variant fields, traits with method signatures, and `impl Trait for Type` blocks are all implemented across all compiler backends. See [Enums](#10-enums), [Traits](#12-traits--impl-blocks).
 
 **Q: Can I try Ark without installing anything?**
-Yes. The [Leviathan WASM Portal](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) runs entirely in your browser — Z3 verification, CSG compilation, 3D rendering, and cryptographic proof generation, all with zero installation. See [Leviathan WASM Portal](#35-leviathan-wasm-portal).
+Yes. The [Leviathan WASM Portal](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) runs entirely in your browser -- Z3 verification, CSG compilation, 3D rendering, and cryptographic proof generation, all with zero installation. See [Leviathan WASM Portal](#35-leviathan-wasm-portal).
 
 ---
 

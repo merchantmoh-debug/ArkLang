@@ -8,8 +8,8 @@
 
 | Status | Meaning |
 |---|---|
-| ✅ | **PARITY** — Exists in both Python and Rust |
-| 🆕 | **RUST_ONLY** — Exists only in Rust (bonus) |
+| ✅ | **PARITY** -- Exists in both Python and Rust |
+| 🆕 | **RUST_ONLY** -- Exists only in Rust (bonus) |
 
 ---
 
@@ -171,7 +171,7 @@
 | ❌ PYTHON_ONLY | **0** |
 | **Total** | **109** |
 
-**Parity Ratio: 100.0%** ✅ — Target achieved at Phase 78.
+**Parity Ratio: 100.0%** ✅ -- Target achieved at Phase 78.
 
 > **Note:** `sys.z3.verify` is fully wired to the Python Z3 solver via `z3_bridge.verify_contract()`.
 > The Rust side uses a stub; full native Z3 integration requires the `z3` crate.

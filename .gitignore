@@ -110,3 +110,41 @@ vscode/
 
 # Root-level loose files
 /index.html
+
+# Build artifacts and debug logs
+*.log
+*.tmp
+*.bak
+*.rlib
+*.png
+debug_*.py
+debug_*.txt
+output*.json
+compiler*.json
+compiler_trace*.json
+run*.log
+check_*.log
+check_*.txt
+panic.log
+errors.log
+compilation_output.txt
+compile_log.txt
+parser_output.txt
+deepbeepmeep_response.txt
+sovereign_launch.bat
+verification_screenshot.png
+verify_*.py
+test_*.json
+!tests/**
+proof_of_matter.json
+
+# Test WASM binaries
+tests/*.wasm
+
+# Compiled bytecode outputs
+*.arkb
+apps/*.json
+apps/**/*.json
+meta/*.json
+!meta/pkg/index.json
+tests/*.json

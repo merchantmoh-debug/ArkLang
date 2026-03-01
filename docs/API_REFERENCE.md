@@ -330,7 +330,7 @@ h := sys.crypto.sha512("data")
 
 ## Fs
 
-File system operations. Requires `fs_read` and/or `fs_write` capability tokens. All paths are sandboxed — path traversal is blocked at the runtime level.
+File system operations. Requires `fs_read` and/or `fs_write` capability tokens. All paths are sandboxed -- path traversal is blocked at the runtime level.
 
 ### `sys.fs.read`
 Reads the entire contents of a file as a UTF-8 string. Requires `fs_read` capability.

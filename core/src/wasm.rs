@@ -18,7 +18,7 @@
 
 use crate::checker::LinearChecker;
 use crate::compiler::Compiler;
-use crate::loader::{load_ark_program, LoadError};
+use crate::loader::{LoadError, load_ark_program};
 use crate::parser;
 use crate::runtime::Value;
 use crate::vm::VM;
@@ -31,9 +31,167 @@ use std::panic;
 
 use std::cell::RefCell;
 
-// Thread-local buffer to capture print output in WASM
+// Thread-local buffers for WASM
 thread_local! {
     static OUTPUT_BUFFER: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    static MAST_SOURCE: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+// ─── Raw C-style FFI for snake.html ─────────────────────────────────────────
+// These functions are called directly via WebAssembly.instantiate (no wasm-bindgen).
+// The snake game JS bridge uses: ark_alloc, ark_dealloc, ark_init, ark_call.
+
+/// Allocate `len` bytes and return a pointer. Caller owns the memory.
+#[no_mangle]
+pub extern "C" fn ark_alloc(len: usize) -> *mut u8 {
+    let mut buf = Vec::with_capacity(len);
+    let ptr = buf.as_mut_ptr();
+    std::mem::forget(buf);
+    ptr
+}
+
+/// Deallocate `len` bytes starting at `ptr`.
+#[no_mangle]
+pub unsafe extern "C" fn ark_dealloc(ptr: *mut u8, len: usize) {
+    if !ptr.is_null() && len > 0 {
+        let _ = Vec::from_raw_parts(ptr, 0, len);
+    }
+}
+
+/// Write a string result into a length-prefixed buffer: [len: u32 LE][content: bytes]
+fn write_result(s: &str) -> *mut u8 {
+    let bytes = s.as_bytes();
+    let total = 4 + bytes.len();
+    let ptr = ark_alloc(total);
+    unsafe {
+        // Write length as little-endian u32
+        let len_bytes = (bytes.len() as u32).to_le_bytes();
+        std::ptr::copy_nonoverlapping(len_bytes.as_ptr(), ptr, 4);
+        // Write content
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr.add(4), bytes.len());
+    }
+    ptr
+}
+
+/// Initialize the Ark VM with a MAST JSON program.
+/// The JS bridge sends the snake.json content here.
+#[no_mangle]
+pub unsafe extern "C" fn ark_init(input_ptr: *mut u8, input_len: usize) -> *mut u8 {
+    let input_slice = std::slice::from_raw_parts(input_ptr, input_len);
+    let source = match std::str::from_utf8(input_slice) {
+        Ok(s) => s,
+        Err(_) => return write_result("Error: Invalid UTF-8"),
+    };
+
+    // Validate that the JSON is parseable as an Ark program
+    match crate::loader::load_ark_program(source) {
+        Ok(_) => {
+            // Store source for later calls
+            MAST_SOURCE.with(|src| {
+                *src.borrow_mut() = Some(source.to_string());
+            });
+            write_result("OK")
+        }
+        Err(e) => write_result(&format!("Error: {:?}", e)),
+    }
+}
+
+/// Call a named Ark function with JSON arguments.
+/// The JS bridge calls this for "init" and "update" game functions.
+#[no_mangle]
+pub unsafe extern "C" fn ark_call(
+    name_ptr: *mut u8,
+    name_len: usize,
+    args_ptr: *mut u8,
+    args_len: usize,
+) -> *mut u8 {
+    let name_slice = std::slice::from_raw_parts(name_ptr, name_len);
+    let name = match std::str::from_utf8(name_slice) {
+        Ok(s) => s,
+        Err(_) => return write_result(r#"{"error":"Invalid function name"}"#),
+    };
+
+    let args_slice = std::slice::from_raw_parts(args_ptr, args_len);
+    let args_str = match std::str::from_utf8(args_slice) {
+        Ok(s) => s,
+        Err(_) => return write_result(r#"{"error":"Invalid args UTF-8"}"#),
+    };
+
+    // Parse arguments
+    let args: Vec<serde_json::Value> = match serde_json::from_str(args_str) {
+        Ok(v) => v,
+        Err(_) => return write_result(r#"{"error":"Invalid args JSON"}"#),
+    };
+
+    // Get stored source
+    let source = MAST_SOURCE.with(|src| src.borrow().clone());
+    let source = match source {
+        Some(s) => s,
+        None => return write_result(r#"{"error":"VM not initialized. Call ark_init first."}"#),
+    };
+
+    // Load the program
+    let mast = match crate::loader::load_ark_program(&source) {
+        Ok(m) => m,
+        Err(e) => return write_result(&format!(r#"{{"error":"Load: {:?}"}}"#, e)),
+    };
+
+    // Clear output buffer
+    OUTPUT_BUFFER.with(|buf| buf.borrow_mut().clear());
+
+    // Compile the entire program (this registers all function definitions)
+    let compiler = Compiler::new();
+    let chunk = compiler.compile(&mast.content);
+
+    // Create VM and run the program to register function definitions
+    match VM::new(chunk, &mast.hash, 0) {
+        Ok(mut vm) => {
+            // Run the top-level code first (this defines all functions in scope)
+            match vm.run() {
+                Ok(_) => {}
+                Err(e) => {
+                    return write_result(&format!(r#"{{"error":"Init run: {:?}"}}"#, e));
+                }
+            }
+
+            // Convert JSON args to Ark Values
+            let ark_args: Vec<Value> = args.iter().map(json_to_value).collect();
+
+            // Now call the requested function
+            match vm.call_public_function(name, ark_args) {
+                Ok(val) => {
+                    let json = value_to_json(&val);
+                    write_result(&json.to_string())
+                }
+                Err(e) => write_result(&format!(r#"{{"error":"Runtime: {:?}"}}"#, e)),
+            }
+        }
+        Err(e) => write_result(&format!(r#"{{"error":"VM Init: {:?}"}}"#, e)),
+    }
+}
+
+/// Convert a serde_json::Value to an Ark Value
+fn json_to_value(v: &serde_json::Value) -> Value {
+    match v {
+        serde_json::Value::Null => Value::Unit,
+        serde_json::Value::Bool(b) => Value::Boolean(*b),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Value::Integer(i)
+            } else {
+                Value::String(n.to_string())
+            }
+        }
+        serde_json::Value::String(s) => Value::String(s.clone()),
+        serde_json::Value::Array(arr) => Value::List(arr.iter().map(json_to_value).collect()),
+        serde_json::Value::Object(map) => {
+            let fields: Vec<(String, Value)> = map
+                .iter()
+                .map(|(k, v)| (k.clone(), json_to_value(v)))
+                .collect();
+            Value::Struct(fields)
+        }
+    }
 }
 
 /// Append a line to the WASM output buffer (called by VM's print intrinsic).

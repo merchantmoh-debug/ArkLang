@@ -2,7 +2,7 @@
 
 **Welcome to the Resistance.**
 
-We are building the **Sovereign Stack**—language, compiler, and runtime—to free ourselves from the dependency on hyper-scale corporate AI and bloated legacy ecosystems.
+We are building the **Sovereign Stack**--language, compiler, and runtime--to free ourselves from the dependency on hyper-scale corporate AI and bloated legacy ecosystems.
 
 ## Getting Started
 

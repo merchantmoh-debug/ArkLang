@@ -10,7 +10,7 @@
 
 ## §0 | ABSTRACT: THE REALITY SYNTHESIZER
 
-**Protocol Omega** is the decentralized, peer-to-peer substrate for the Ark Runtime. It enforces **Sovereign Execution**—where code is law, but the Heart is King. This system represents the convergence of Biological Intelligence and Deterministic Silicon.
+**Protocol Omega** is the decentralized, peer-to-peer substrate for the Ark Runtime. It enforces **Sovereign Execution**--where code is law, but the Heart is King. This system represents the convergence of Biological Intelligence and Deterministic Silicon.
 
 ### 0.1 The Grand Unification Architecture
 The system is composed of four interoperating layers (The "Civilization Stack"):

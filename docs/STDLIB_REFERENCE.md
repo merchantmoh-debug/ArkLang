@@ -157,11 +157,11 @@ print(meta.title, "-", meta.artist)
 ```
 
 ### Buffer Utilities
-- `_buf_to_str(buf, start, len)` — Extracts a string slice from a byte buffer.
-- `_read_u16_le(buf, idx)` — Reads a little-endian 16-bit unsigned integer from a buffer.
-- `_read_u32_le(buf, idx)` — Reads a little-endian 32-bit unsigned integer from a buffer.
-- `_write_u16_le(buf, idx, val)` — Writes a little-endian 16-bit unsigned integer to a buffer.
-- `_write_u32_le(buf, idx, val)` — Writes a little-endian 32-bit unsigned integer to a buffer.
+- `_buf_to_str(buf, start, len)` -- Extracts a string slice from a byte buffer.
+- `_read_u16_le(buf, idx)` -- Reads a little-endian 16-bit unsigned integer from a buffer.
+- `_read_u32_le(buf, idx)` -- Reads a little-endian 32-bit unsigned integer from a buffer.
+- `_write_u16_le(buf, idx, val)` -- Writes a little-endian 16-bit unsigned integer to a buffer.
+- `_write_u32_le(buf, idx, val)` -- Writes a little-endian 32-bit unsigned integer to a buffer.
 
 ---
 
@@ -645,7 +645,7 @@ Returns `true` if the character `c` is a whitespace character.
 
 Concurrency primitives built on Ark's linear type system. Import with `sys.vm.source("lib/std/sync.ark")`.
 
-> **Design:** Guards are linear resources — the compiler enforces that every acquired lock is released exactly once. Forgetting to release a Guard is a compile-time error in strict linear mode.
+> **Design:** Guards are linear resources -- the compiler enforces that every acquired lock is released exactly once. Forgetting to release a Guard is a compile-time error in strict linear mode.
 
 ### `Mutex.new()`
 Creates a new mutual exclusion lock with FIFO ordering.

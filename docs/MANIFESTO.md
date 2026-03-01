@@ -9,19 +9,19 @@
 
 ---
 
-## ⚡ PREFACE: THE RECEIPTS
+## PREFACE: THE RECEIPTS
 
 Before we philosophize, we prove.
 
 This is not a whitepaper. This is not a pitch deck. This is not a promise.
 
-The Ark Compiler is a **functioning system**. Everything below has been **built, tested, and shipped** — from a standing start — in **11 days**.
+The Ark Compiler is a **functioning system**. Everything below has been **built, tested, and shipped** -- from a standing start -- in **11 days**.
 
 | What Exists Today | Quantity |
 |---|---|
 | Rust source files | 59 |
 | Lines of Rust | 40,000+ |
-| Built-in intrinsics | 109 (100% Python↔Rust parity) |
+| Built-in intrinsics | 109 (100% Python<->Rust parity) |
 | Standard library modules | 16 |
 | Agent substrate modules | 26 (security, LLM, lifecycle, memory) |
 | Unit tests (all passing) | 744 |
@@ -29,36 +29,36 @@ The Ark Compiler is a **functioning system**. Everything below has been **built,
 | Compilation backends | 3 (Bytecode VM, Native WASM, Tree-walker) |
 
 **Language features that exist and work today:**
-- ✅ Enums (algebraic data types) with variant fields
-- ✅ Traits (interfaces) with method signatures
-- ✅ Impl blocks (`impl Trait for Type`)
-- ✅ Pattern matching with enum destructuring
-- ✅ Structs with typed fields
-- ✅ Lambdas with full WASM lambda-lifting
-- ✅ First-class functions, recursion, closures
-- ✅ For loops, while loops, break, continue
-- ✅ Linear/Affine/Shared type annotations
-- ✅ Compile-time linear type checking (1,413 LOC checker)
-- ✅ 14-variant type system (Integer, Float, String, Boolean, List\<T\>, Map\<K,V\>, Struct, Function, Optional, Unit, Any, Unknown, Enum, Trait)
-- ✅ Import system with circular-import protection and path-traversal security
-- ✅ Content-addressed Merkle AST (MAST)
-- ✅ SHA-256/512, HMAC, BIP-32 HD keys, Ed25519, Merkle roots — hand-rolled
-- ✅ Full blockchain with Proof-of-Work, mining, and chain validation
-- ✅ 5-phase governance pipeline with HMAC-signed audit receipts
-- ✅ Multi-agent AI framework (4 agents, swarm orchestration, MCP, sandbox)
-- ✅ **Rust-native Agent Substrate** — 24 modules (13,350 LOC): lattice-based taint tracking, 130+ model catalog, A2A protocol, semantic memory with confidence decay, lifecycle hooks, capability tokens, shell injection detection, and a 26-method kernel handle trait — Ark-native Rust, architecture informed by [OpenFang](https://github.com/ArcadeLabsInc/openfang) (MIT/Apache-2.0), zero new dependencies
-- ✅ Interactive debugger, REPL, 10-command CLI
-- ✅ WIT interface generator for WebAssembly Component Model
-- ✅ ADN (Ark Data Notation) — bidirectional serialization format
-- ✅ Persistent immutable data structures (PVec + PMap with structural sharing)
-- ✅ Hygienic macro system with `gensym`
-- ✅ C FFI (`extern "C" fn ark_eval_string()`)
-- ✅ VSCode extension (v1.3.0)
-- ✅ Browser-based WASM playground
-- ✅ Snake game compiled to WASM and running live at [GitHub Pages](https://merchantmoh-debug.github.io/ArkLang/site/snake.html)
-- ✅ **Leviathan WASM Portal** — [Live in-browser CSG compilation](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) of a Z3-verified titanium metamaterial heat sink using manifold-3d WASM, with GLB export and cryptographic proof-of-matter receipt
-- ✅ **Diagnostic Proof Suite** — cryptographic compilation verification with Merkle-rooted, HMAC-signed proof bundles (780+ LOC)
-- ✅ **GCD/UMCP Epistemic Firewall** — the only language where programs mathematically refuse to run on fraudulent data (Tier-1 kernel with AM-GM integrity bound, contract-freezing, typed censoring). Theory by [Clement Paulus](https://doi.org/10.5281/zenodo.18819238) (CC BY 4.0), engineered into Ark’s type system and runtime.
+- Enums (algebraic data types) with variant fields
+- Traits (interfaces) with method signatures
+- Impl blocks (`impl Trait for Type`)
+- Pattern matching with enum destructuring
+- Structs with typed fields
+- Lambdas with full WASM lambda-lifting
+- First-class functions, recursion, closures
+- For loops, while loops, break, continue
+- Linear/Affine/Shared type annotations
+- Compile-time linear type checking (1,413 LOC checker)
+- 14-variant type system (Integer, Float, String, Boolean, List\<T\>, Map\<K,V\>, Struct, Function, Optional, Unit, Any, Unknown, Enum, Trait)
+- Import system with circular-import protection and path-traversal security
+- Content-addressed Merkle AST (MAST)
+- SHA-256/512, HMAC, BIP-32 HD keys, Ed25519, Merkle roots -- hand-rolled
+- Full blockchain with Proof-of-Work, mining, and chain validation
+- 5-phase governance pipeline with HMAC-signed audit receipts
+- Multi-agent AI framework (4 agents, swarm orchestration, MCP, sandbox)
+- **Rust-native Agent Substrate** -- 24 modules (13,350 LOC): lattice-based taint tracking, 130+ model catalog, A2A protocol, semantic memory with confidence decay, lifecycle hooks, capability tokens, shell injection detection, and a 26-method kernel handle trait -- Ark-native Rust, architecture informed by [OpenFang](https://github.com/ArcadeLabsInc/openfang) (MIT/Apache-2.0), zero new dependencies
+- Interactive debugger, REPL, 10-command CLI
+- WIT interface generator for WebAssembly Component Model
+- ADN (Ark Data Notation) -- bidirectional serialization format
+- Persistent immutable data structures (PVec + PMap with structural sharing)
+- Hygienic macro system with `gensym`
+- C FFI (`extern "C" fn ark_eval_string()`)
+- VSCode extension (v1.3.0)
+- Browser-based WASM playground
+- Snake game compiled to WASM and running live at [GitHub Pages](https://merchantmoh-debug.github.io/ArkLang/site/snake.html)
+- **Leviathan WASM Portal** -- [Live in-browser CSG compilation](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) of a Z3-verified titanium metamaterial heat sink using manifold-3d WASM, with GLB export and cryptographic proof-of-matter receipt
+- **Diagnostic Proof Suite** -- cryptographic compilation verification with Merkle-rooted, HMAC-signed proof bundles (780+ LOC)
+- **GCD/UMCP Epistemic Firewall** -- the only language where programs mathematically refuse to run on fraudulent data (Tier-1 kernel with AM-GM integrity bound, contract-freezing, typed censoring). Theory by [Clement Paulus](https://doi.org/10.5281/zenodo.18819238) (CC BY 4.0), engineered into Ark’s type system and runtime.
 
 **Eleven. Days.**
 
@@ -66,7 +66,7 @@ Now you may read the philosophy.
 
 ---
 
-## 🌪️ PROLOGUE: THE ENTROPY OF 2026
+## PROLOGUE: THE ENTROPY OF 2026
 
 The world of 2026 is defined by a single, terrifying paradox: **We have infinite computation, but zero trust.**
 To understand why Ark exists, you must first understand the three interconnected crises that have destroyed the "Old Web."
@@ -74,7 +74,7 @@ To understand why Ark exists, you must first understand the three interconnected
 ### 1. The Trajectory of Failure (2020-2026)
 How did we get here? It was not an accident. It was a slow-motion car crash fueled by cheap capital and lazy engineering.
 *   **2020:** The "Remote Work" boom pushes everything to the Cloud. AWS becomes the Operating System of the world.
-*   **2023:** The "LLM Boom." ChatGPT and GitHub Copilot democratize code. Suddenly, junior developers can write senior-level code—or so it appeared.
+*   **2023:** The "LLM Boom." ChatGPT and GitHub Copilot democratize code. Suddenly, junior developers can write senior-level code--or so it appeared.
 *   **2025:** The "Slop Saturation." The volume of code grows 100x, but the number of bugs grows 1000x. Teams stop reviewing code because there is too much of it.
 *   **2026:** The Collapse. Critical infrastructure (Banks, Hospitals) starts failing daily. The "Vibe Coding" crisis is acknowledged: **72%** of repositories created in the last 12 months contain critical vulnerabilities (Veracode 2026).
 
@@ -82,7 +82,7 @@ How did we get here? It was not an accident. It was a slow-motion car crash fuel
 **"We replaced Engineers with Prompters, and the Bridge fell down."**
 *   **The Mechanism:** A human "vibes" a request to an AI ("Make me a banking app"). The AI generates the code. The human does not read it.
 *   **The Rot:** An AI (LLM) is a probabilistic engine. It guesses the next word. It does not "know" logic. It does not "know" security. It hallucinates specific versions of libraries that don't exist (Dependency Confusion attacks). It leaves API keys hardcoded. It ignores race conditions.
-*   **The Consequence:** We are building our civilization on a foundation of "Slop"—code that no human understands and no AI can continually maintain because the context window is too small to see the whole architecture.
+*   **The Consequence:** We are building our civilization on a foundation of "Slop"--code that no human understands and no AI can continually maintain because the context window is too small to see the whole architecture.
 
 ### 3. The Dead Internet Theory (The Solipsism Trap)
 **"You are reading this, but are you real?"**
@@ -103,7 +103,7 @@ How did we get here? It was not an accident. It was a slow-motion car crash fuel
 
 ---
 
-## 📐 BOOK I: THE PHYSICS OF INFORMATION (FINANCE)
+## BOOK I: THE PHYSICS OF INFORMATION (FINANCE)
 
 **"The End of Inflation. The Beginning of Digital Matter."**
 
@@ -121,9 +121,9 @@ Imagine a digital object that behaves like a physical gold coin.
 *   **Movement:** It must be moved from hand to hand.
 
 ### 3. Technical Appendix: The Rust Logic
-In Ark's core (`checker.rs` — 1,413 lines of verified logic), a resource is defined like this:
+In Ark's core (`checker.rs` -- 1,413 lines of verified logic), a resource is defined like this:
 ```ark
-// Ark's linear type system — built and working today
+// Ark's linear type system -- built and working today
 func transfer(coin: Linear<Coin>, recipient: Address) {
     // 'coin' is MOVED into this function.
     // The caller NO LONGER HAS 'coin'.
@@ -142,7 +142,7 @@ When you write a Financial App in Ark, you don't need a Bank to verify the trans
 
 ---
 
-## ⚖️ BOOK II: THE AUTOMATED STATE (LAW)
+## BOOK II: THE AUTOMATED STATE (LAW)
 
 **"The End of Corruption. The Beginning of Justice."**
 
@@ -174,7 +174,7 @@ If a Law is verified code, it executes instantly and fairly.
 
 ---
 
-## 🏰 BOOK III: THE TREASURY OF THE VOID (SUPPLY CHAIN)
+## BOOK III: THE TREASURY OF THE VOID (SUPPLY CHAIN)
 
 **"The End of Friction. The Beginning of Consciousness."**
 
@@ -206,7 +206,7 @@ Trace a packet of rice from Thailand to Tesco.
 
 ---
 
-## 🧠 BOOK IV: THE SILICON PARENT (AI SAFETY)
+## BOOK IV: THE SILICON PARENT (AI SAFETY)
 
 **"The Skeleton of God."**
 
@@ -224,7 +224,7 @@ We treat Ark as the **Physical Body** of the AI.
 
 Ark's type system enforces this at the language level:
 ```ark
-// Define what the AI can see and do — at COMPILE TIME
+// Define what the AI can see and do -- at COMPILE TIME
 enum AIAction {
     Read(String),
     Write(String),
@@ -253,26 +253,26 @@ We solve the "Control Problem" not by asking the AI to be nice (RLHF), but by gi
 
 ---
 
-## 🤖 BOOK IV½: THE AUTONOMOUS WORKFORCE (AGENTS)
+## BOOK IV½: THE AUTONOMOUS WORKFORCE (AGENTS)
 
 **"The End of the Prompt. The Beginning of the Colleague."**
 
 ### 1. The Problem: The Human Bottleneck
-We built powerful AI models in 2025 — but they are *deaf, blind, and paralyzed*.
+We built powerful AI models in 2025 -- but they are *deaf, blind, and paralyzed*.
 A GPT can write code, but it cannot run it. It cannot test it. It cannot review it. It cannot remember what it did yesterday.
-*   **The Loop:** Human writes prompt → AI generates code → Human reviews code → Human tests code → Human deploys code.
+*   **The Loop:** Human writes prompt -> AI generates code -> Human reviews code -> Human tests code -> Human deploys code.
 *   **The Bottleneck:** The human is still in the loop for every step. AI did not eliminate the Engineer; it merely gave the Engineer a faster typewriter.
 
 ### 2. The Ark Solution: The Agent Swarm
-Ark ships with **built-in agents** — not as an afterthought, but as a core compiler feature.
-*   **The Orchestrator:** A task enters the system. A `RouterAgent` classifies it. A `CoderAgent` writes the code. A `ReviewerAgent` audits the code for bugs and security holes. The result is returned — no human in the loop.
+Ark ships with **built-in agents** -- not as an afterthought, but as a core compiler feature.
+*   **The Orchestrator:** A task enters the system. A `RouterAgent` classifies it. A `CoderAgent` writes the code. A `ReviewerAgent` audits the code for bugs and security holes. The result is returned -- no human in the loop.
 *   **The Swarm:** Multiple agents coordinate via strategies: **broadcast** (ask everyone), **consensus** (let them vote), **pipeline** (chain them sequentially).
-*   **The Memory:** Agents remember. Encrypted, namespaced, searchable memory — with vector similarity recall for context retrieval.
+*   **The Memory:** Agents remember. Encrypted, namespaced, searchable memory -- with vector similarity recall for context retrieval.
 
 ### 3. The Nervous System: MCP
 The [Model Context Protocol](https://modelcontextprotocol.io/) is the TCP/IP of the AI Age.
 Ark's MCP client speaks JSON-RPC 2.0 over Stdio, HTTP, and Server-Sent Events.
-*   **Significance:** Any tool — file systems, databases, APIs, browsers — becomes a native sense for the Agent. The Agent is no longer trapped in a text box. It can *see*, *touch*, and *act* on the real world.
+*   **Significance:** Any tool -- file systems, databases, APIs, browsers -- becomes a native sense for the Agent. The Agent is no longer trapped in a text box. It can *see*, *touch*, and *act* on the real world.
 *   **Sovereignty:** You run the MCP servers. You own the tools. No cloud vendor decides what your AI can touch.
 
 ### 4. The Body Again: Sandbox-First Execution
@@ -293,11 +293,11 @@ This substrate is Ark-native Rust, with its architecture informed by [OpenFang](
 
 ### 6. The "OMG" Conclusion
 **Ark programs can write, review, and fix themselves.**
-The `sys.ai.ask` intrinsic is not just a wrapper around ChatGPT — it is the gateway to a self-improving codebase. A program that detects a bug, spawns a `CoderAgent` to fix it, routes the patch through a `ReviewerAgent`, and deploys the fix — all within the sandbox — is not science fiction. It is `python -m src.agent`.
+The `sys.ai.ask` intrinsic is not just a wrapper around ChatGPT -- it is the gateway to a self-improving codebase. A program that detects a bug, spawns a `CoderAgent` to fix it, routes the patch through a `ReviewerAgent`, and deploys the fix -- all within the sandbox -- is not science fiction. It is `python -m src.agent`.
 
 ---
 
-## 🔬 BOOK IV¾: THE VERIFIABLE COMPILER (TRUST)
+## BOOK IV¾: THE VERIFIABLE COMPILER (TRUST)
 
 **"The End of 'Trust Me, Bro.' The Beginning of Proof."**
 
@@ -311,7 +311,7 @@ In 2026, every programming language makes promises. Rust promises memory safety.
 ### 2. The Ark Solution: Cryptographic Compilation Receipts
 Ark's **Diagnostic Proof Suite** does what no other language on Earth does: it produces **cryptographic evidence** that the compiler performed every verification step correctly.
 
-Every `ark diagnose` run creates a **ProofBundle** — a Merkle-rooted, HMAC-signed artifact that includes:
+Every `ark diagnose` run creates a **ProofBundle** -- a Merkle-rooted, HMAC-signed artifact that includes:
 *   **Source Hash:** SHA-256 of the original source (proves what went in).
 *   **MAST Root:** Content-addressed hash of the compiled AST (proves what came out).
 *   **Gate Results:** 15 independently scored quality gates (proves what was checked).
@@ -321,16 +321,16 @@ Every `ark diagnose` run creates a **ProofBundle** — a Merkle-rooted, HMAC-sig
 ### 3. Why This Is Revolutionary
 *   **SOC 2 Compliance:** An auditor can mathematically verify that every release passed all compilation checks. No more "show me the CI logs."
 *   **Smart Contract Assurance:** Before deploying a contract that controls $100M, you can present a cryptographic proof that the linear type checker verified zero resource leaks.
-*   **Supply Chain Attestation:** The ProofBundle is a Software Bill of Materials (SBOM) on steroids — it doesn't just list what's in the binary, it proves how it was verified.
+*   **Supply Chain Attestation:** The ProofBundle is a Software Bill of Materials (SBOM) on steroids -- it doesn't just list what's in the binary, it proves how it was verified.
 *   **AI Safety:** When an AI agent writes code, the ProofBundle proves the generated code passed the same verification gates as human-written code.
 
 ### 4. The "OMG" Conclusion
 **Compilation becomes an auditable event.**
-No other language — not Rust, not Haskell, not Lean — ships with built-in, one-command cryptographic compilation verification. Rust can prove memory safety, but it cannot produce a signed receipt of that proof. Ark can.
+No other language -- not Rust, not Haskell, not Lean -- ships with built-in, one-command cryptographic compilation verification. Rust can prove memory safety, but it cannot produce a signed receipt of that proof. Ark can.
 
-This turns every Ark program into a **notarized document**. The compiler is no longer a black box. It is a **witness** — and the ProofBundle is its sworn testimony.
+This turns every Ark program into a **notarized document**. The compiler is no longer a black box. It is a **witness** -- and the ProofBundle is its sworn testimony.
 
-### 5. The Live Proof: Leviathan — Compiling Physical Matter
+### 5. The Live Proof: Leviathan -- Compiling Physical Matter
 
 We didn't just write about this. We **shipped it in a browser**.
 
@@ -339,14 +339,14 @@ We didn't just write about this. We **shipped it in a browser**.
 Today, designing a printable physical object looks like this:
 
 1. An engineer spends days in **SolidWorks or Fusion 360** ($5k–$50k/seat/year) manually modeling geometry.
-2. The model is exported to **ANSYS or Abaqus** ($50k–$200k/year) for finite element analysis — thermal, structural, porosity checks.
+2. The model is exported to **ANSYS or Abaqus** ($50k–$200k/year) for finite element analysis -- thermal, structural, porosity checks.
 3. Constraints fail. The engineer goes back to step 1 and redesigns.
 4. This loop repeats **5–15 times** before the geometry is even sent to a printer.
 5. The printer sometimes rejects it anyway because the aspect ratio violates SLS manufacturing limits.
 
 This is the engineering equivalent of "write code, compile, read the error, redesign." Except each iteration costs days instead of seconds, and a failed titanium print wastes $50,000 in powder.
 
-The global CAD/simulation market is **$20 billion/year**. Most of that money is spent on the *iteration loop* — not the final geometry.
+The global CAD/simulation market is **$20 billion/year**. Most of that money is spent on the *iteration loop* -- not the final geometry.
 
 #### Ark's Thesis: Design by Compilation, Not by Iteration
 
@@ -354,14 +354,14 @@ What if the constraints came *first*, and the geometry was derived?
 
 The [**Leviathan WASM Portal**](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) is a parametric manufacturing compiler written in Ark. It does not model geometry. It **compiles** geometry from a constraint specification:
 
-1. **Z3-verify** 11 thermodynamic and manufacturing constraints — wall thickness ≥ 0.5mm, porosity 30–70%, thermal conductivity within Ti-6Al-4V specification, aspect ratio under the SLS printability limit of 50:1. Any violated constraint **halts compilation before a single vertex is generated.**
-2. **CSG-compile** the only geometry that satisfies the proof — a 100mm titanium cube with up to 972 intersecting cylindrical cooling channels, computed via `manifold-3d` WASM as real boolean algebra (cube minus cylinders). This is not an approximation. It is constructive solid geometry — the same mathematics used in industrial CAD kernels.
-3. **Export a printer-ready GLB** — a watertight, 2-manifold mesh that loads directly into SLS slicer software. No post-processing. No mesh repair. The output IS the manufacturing specification.
-4. **Seal it with a cryptographic proof-of-matter receipt** — SHA-256 hash of the mesh topology, vertex count, and compilation parameters. The receipt proves the geometry was produced by a verified compilation, not hand-modeled.
+1. **Z3-verify** 11 thermodynamic and manufacturing constraints -- wall thickness ≥ 0.5mm, porosity 30–70%, thermal conductivity within Ti-6Al-4V specification, aspect ratio under the SLS printability limit of 50:1. Any violated constraint **halts compilation before a single vertex is generated.**
+2. **CSG-compile** the only geometry that satisfies the proof -- a 100mm titanium cube with up to 972 intersecting cylindrical cooling channels, computed via `manifold-3d` WASM as real boolean algebra (cube minus cylinders). This is not an approximation. It is constructive solid geometry -- the same mathematics used in industrial CAD kernels.
+3. **Export a printer-ready GLB** -- a watertight, 2-manifold mesh that loads directly into SLS slicer software. No post-processing. No mesh repair. The output IS the manufacturing specification.
+4. **Seal it with a cryptographic proof-of-matter receipt** -- SHA-256 hash of the mesh topology, vertex count, and compilation parameters. The receipt proves the geometry was produced by a verified compilation, not hand-modeled.
 
 **This takes ~12 milliseconds. In a browser tab. With zero installation.**
 
-The iteration loop doesn't shrink. It **vanishes**. The compiler cannot produce geometry that violates physics, because the physics are verified constraints, not post-hoc simulations. You don't test the output — you prove the input, and the output is the only possible consequence.
+The iteration loop doesn't shrink. It **vanishes**. The compiler cannot produce geometry that violates physics, because the physics are verified constraints, not post-hoc simulations. You don't test the output -- you prove the input, and the output is the only possible consequence.
 
 #### What This Proves About Ark
 
@@ -369,17 +369,17 @@ No other language does this. Not because they can't run fast enough, but because
 
 - **Rust** proves memory safety. It cannot express "wall thickness ≥ 0.5mm."
 - **Lean** proves theorems. It does not output printer-ready meshes.
-- **Python** can call Z3 and manifold-3d. It cannot guarantee that a constraint violation halts compilation — you can catch the exception and proceed anyway.
+- **Python** can call Z3 and manifold-3d. It cannot guarantee that a constraint violation halts compilation -- you can catch the exception and proceed anyway.
 
 Ark's type system, linear resource tracking, and integrated formal verification make the constraint-to-geometry pipeline **a property of the language**, not a convention of the programmer. The compiler doesn't just check your code. It checks your physics, forges your matter, and signs the receipt.
 
 This is what it looks like when a programming language becomes a **manufacturing tool**.
 
-**→ [Try it now](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | **[Read the source](../apps/leviathan_compiler.ark)** (210 lines of Ark)
+**-> [Try it now](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | **[Read the source](../apps/leviathan_compiler.ark)** (210 lines of Ark)
 
 ---
 
-## 🧪 BOOK IV⅞: THE AUDIT OF REALITY (EPISTEMIC INTEGRITY)
+## BOOK IV⅞: THE AUDIT OF REALITY (EPISTEMIC INTEGRITY)
 
 **"The End of 'The Average Looks Fine.' The Beginning of Structural Truth."**
 
@@ -389,11 +389,11 @@ Every institution on Earth runs on averages. The hospital averages 50 patient vi
 
 But averages **lie by design.** If 39 monitors say 95 and one monitor says 2, the arithmetic mean says 92. The patient looks fine. The kidney is failing. The average hid a dying channel.
 
-This is not a hypothetical. This is the **fundamental failure mode** of every data pipeline ever built. The arithmetic mean is the most dangerous function in computing — because it always returns a number, even when that number is a corpse wearing a suit.
+This is not a hypothetical. This is the **fundamental failure mode** of every data pipeline ever built. The arithmetic mean is the most dangerous function in computing -- because it always returns a number, even when that number is a corpse wearing a suit.
 
 ### 2. The Ark Solution: The GCD Kernel (Built-In Polygraph)
 
-Ark ships with a **built-in mathematical lie detector** — the `gcd` standard library module, implementing the Tier-1 Kernel from Clement Paulus's [Generative Collapse Dynamics](https://doi.org/10.5281/zenodo.18819238) framework.
+Ark ships with a **built-in mathematical lie detector** -- the `gcd` standard library module, implementing the Tier-1 Kernel from Clement Paulus's [Generative Collapse Dynamics](https://doi.org/10.5281/zenodo.18819238) framework.
 
 The kernel compares two numbers:
 * **F (Fidelity):** The arithmetic mean. What the system *claims* is happening.
@@ -413,7 +413,7 @@ gcd.audit_dataset(training_features, weights, 2000)
 // The average never gets the chance to lie.
 ```
 
-And the `Censored` type (∞_rec) is enforced at the **language level**. If a data point is missing, you can't plug in a zero or an average. Any arithmetic on a Censored value raises `CensoredAccessError`. The compiler physically prevents data resurrection. Missing data is **dead** — not "imputed."
+And the `Censored` type (∞_rec) is enforced at the **language level**. If a data point is missing, you can't plug in a zero or an average. Any arithmetic on a Censored value raises `CensoredAccessError`. The compiler physically prevents data resurrection. Missing data is **dead** -- not "imputed."
 
 ### 4. The "OMG" Conclusion
 
@@ -421,15 +421,15 @@ And the `Censored` type (∞_rec) is enforced at the **language level**. If a da
 
 Every other language lets you `try/except` your way past bad data. Python will happily train a neural network on garbage and give you a loss curve that looks great. Ark won't. Ark checks the multiplicative structure of your channels *before* it lets you proceed, and if a single channel is dying while the average looks healthy, it **halts the program.**
 
-This isn't a linter. This isn't a warning. This is a **mathematical veto** — backed by the AM-GM inequality, one of the most ancient and irrefutable bounds in mathematics. You cannot cheat it. You cannot catch the exception. The data must be structurally sound, or the program does not run.
+This isn't a linter. This isn't a warning. This is a **mathematical veto** -- backed by the AM-GM inequality, one of the most ancient and irrefutable bounds in mathematics. You cannot cheat it. You cannot catch the exception. The data must be structurally sound, or the program does not run.
 
-*Linear types prevent double-spending. Formal verification prevents logic errors. The GCD kernel prevents epistemic fraud. Together, they make Ark the most paranoid — and therefore the most trustworthy — language ever built.*
+*Linear types prevent double-spending. Formal verification prevents logic errors. The GCD kernel prevents epistemic fraud. Together, they make Ark the most paranoid -- and therefore the most trustworthy -- language ever built.*
 
 > **Credit:** GCD/UMCP theory by Clement Paulus ([DOI: 10.5281/zenodo.18819238](https://doi.org/10.5281/zenodo.18819238), CC BY 4.0). Ark is the first programming language to engineer this measurement discipline into its type system and runtime.
 
 ---
 
-## 🖥️ BOOK V: THE DEATH OF THE OS (INFRASTRUCTURE)
+## BOOK V: THE DEATH OF THE OS (INFRASTRUCTURE)
 
 **"The End of the Interface. The Beginning of the Monolith."**
 
@@ -457,7 +457,7 @@ The distinction between "My Computer" and "My App" vanishes. Your application *i
 
 ---
 
-## 🎓 BOOK VI: THE NEW ACADEMY (EDUCATION)
+## BOOK VI: THE NEW ACADEMY (EDUCATION)
 
 **"The End of the Credential. The Beginning of Mastery."**
 
@@ -489,7 +489,7 @@ The "Credential" (a piece of paper) is replaced by the "Repository" (Proof of Wo
 
 ---
 
-## 🌌 BOOK VII: THE OMEGA POINT (METAPHYSICS)
+## BOOK VII: THE OMEGA POINT (METAPHYSICS)
 
 **"The Resurrection of the Real."**
 
@@ -520,13 +520,13 @@ We are not writing software. We are knitting the fabric of the next Aeon.
 
 ---
 
-## 🔥 BOOK VIII: THE PROOF OF WORK
+## BOOK VIII: THE PROOF OF WORK
 
 **"Talk is cheap. Show me the compiler."**
 
 Other language projects release a whitepaper, raise $50M, and ship a "Hello World" in 3 years.
 
-Ark shipped a **functioning dual-backend compiler with 40,000+ lines of Rust, 744 passing tests, enums, traits, impl blocks, pattern matching, a blockchain, a governance engine, an AI agent framework, a 26-module Rust-native agent substrate (security, LLM, lifecycle, memory), hand-rolled cryptography, a cryptographic diagnostic proof suite, a browser playground, and a CI pipeline across 3 operating systems — in 11 days.**
+Ark shipped a **functioning dual-backend compiler with 40,000+ lines of Rust, 744 passing tests, enums, traits, impl blocks, pattern matching, a blockchain, a governance engine, an AI agent framework, a 26-module Rust-native agent substrate (security, LLM, lifecycle, memory), hand-rolled cryptography, a cryptographic diagnostic proof suite, a browser playground, and a CI pipeline across 3 operating systems -- in 11 days.**
 
 We don't have a roadmap. We have a **commit history.**
 
@@ -561,7 +561,5 @@ To write Law, you need a Language that is **True**, **Strong**, and **Alive**.
 
 **Welcome to the Ark.**
 
-`[ SYSTEM: ONLINE ]`
-`[ TARGET: INFINITY ]`
 
 </div>
