@@ -55,22 +55,24 @@
 
 ---
 
-## Leviathan: Parametric Manufacturing Demo
+## Leviathan: Parametric Manufacturing Compiler
 
-Ark includes an experimental parametric geometry compiler that outputs printer-ready meshes from code.
+Ark includes a parametric manufacturing compiler that Z3-verifies physical constraints and outputs printer-ready geometry from code.
 
-The [**Leviathan Portal**](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) is a browser demo. Click one button and watch it:
+The Leviathan pipeline ([source: `leviathan_compiler.ark`](apps/leviathan_compiler.ark)) runs in two phases:
 
-1. **Validate** design parameters -- wall thickness, porosity bounds, structural limits -- rejecting invalid inputs before geometry generation.
-2. **CSG-compile** a metamaterial heat sink via `manifold-3d` WASM -- constructive solid geometry: a 100mm cube minus up to 972 intersecting cylindrical channels, computed as boolean algebra.
-3. **Export a GLB** -- a watertight, 2-manifold mesh suitable for 3D printing pipelines.
-4. **Seal it with a proof-of-matter receipt** -- SHA-256 hash of the mesh topology.
+1. **Z3-verify** thermodynamic constraints -- wall thickness, porosity, thermal conductivity, structural integrity. The Ark runtime calls `sys.z3.verify()` which invokes [Microsoft's Z3 SMT solver](https://github.com/Z3Prover/z3) via [`z3_bridge.py`](meta/z3_bridge.py). Any design that violates physics is rejected *before* a single vertex is generated.
+2. **CSG-compile** a metamaterial heat sink via `manifold-3d` -- constructive solid geometry: a 100mm cube minus up to 972 intersecting cylindrical channels, computed as boolean algebra.
+3. **Export a printer-ready GLB** -- a watertight, 2-manifold mesh that loads directly into SLS titanium slicer software.
+4. **Seal it with a cryptographic proof-of-matter receipt** -- SHA-256 hash of the mesh topology, proving the geometry was produced by a verified compilation.
 
-Runtime: ~12ms in a browser tab, zero installation required.
+### Browser Demo vs. Native Runtime
 
-> **Note:** This is a CSG geometry compiler, not a replacement for FEA simulation tools. The constraint checks are parameter validation, not physics simulation.
+The [**Leviathan Portal**](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) is a browser demo that **simulates** the Z3 verification step client-side with JavaScript parameter checks. This is because Z3 is a native C++ library and cannot compile to WASM. The full Z3 verification runs when executing `leviathan_compiler.ark` through the native Ark runtime (`python meta/ark.py run apps/leviathan_compiler.ark`), which calls the real Z3 solver.
 
-**→ [Try it now](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | **[Read the source](apps/leviathan_compiler.ark)** (210 lines of Ark)
+The CSG compilation and GLB export in the browser demo are real -- `manifold-3d` runs natively as WASM.
+
+**--> [Try the browser demo](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | **[Read the source](apps/leviathan_compiler.ark)** (210 lines of Ark)
 
 ---
 
