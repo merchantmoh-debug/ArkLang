@@ -185,7 +185,7 @@ fn json_to_value(v: &serde_json::Value) -> Value {
         serde_json::Value::String(s) => Value::String(s.clone()),
         serde_json::Value::Array(arr) => Value::List(arr.iter().map(json_to_value).collect()),
         serde_json::Value::Object(map) => {
-            let fields: Vec<(String, Value)> = map
+            let fields: std::collections::HashMap<String, Value> = map
                 .iter()
                 .map(|(k, v)| (k.clone(), json_to_value(v)))
                 .collect();
