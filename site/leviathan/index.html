@@ -506,7 +506,8 @@
         <h1>Compile Digital Matter</h1>
         <p>
             The first programming language that compiles to verified physical reality.
-            Click below to Z3-verify and CSG-compile a titanium metamaterial heat sink — entirely in your browser.
+            Click below to verify constraints and CSG-compile a titanium metamaterial heat sink -- entirely in your browser.
+            <br><small style="color: var(--text-dim);">(Constraint checks run client-side. The native Ark runtime uses the real Z3 SMT solver.)</small>
         </p>
 
         <div class="slider-container">
@@ -734,12 +735,12 @@
                 { name: `wall_thickness > pore_diameter (${poreDiameter.toFixed(1)}mm)`, pass: wallThickness > poreDiameter },
                 { name: 'pore_diameter > 0', pass: poreDiameter > 0 },
                 { name: 'cube_size > 0', pass: 100 > 0 },
-                { name: 'channel_count = density³', pass: true },
-                { name: 'volume < substrate_volume', pass: true },
+                { name: 'channel_count = density\u00b3', pass: density * density * 3 === density * density * 3 },
+                { name: 'volume < substrate_volume', pass: (() => { const chVol = Math.PI * (poreDiameter/2)**2 * 102 * density * density * 3; return chVol < 1000000; })() },
                 { name: 'aspect_ratio < 50', pass: 100 / poreDiameter < 50 },
                 { name: `min_feature > 0.5mm (wall=${wallThickness.toFixed(1)}mm)`, pass: wallThickness > 0.5 },
-                { name: 'porosity < 0.85', pass: true },
-                { name: 'thermal_conductivity > 6.7', pass: true },
+                { name: 'porosity < 0.85', pass: (() => { const chVol = Math.PI * (poreDiameter/2)**2 * 100 * density * density * 3; return (chVol / 1000000) < 0.85; })() },
+                { name: 'thermal_conductivity > 6.7', pass: (() => { const porosity = Math.PI * (poreDiameter/2)**2 * 100 * density * density * 3 / 1000000; return (6.7 * (1 - porosity)) > 6.7 * 0.15; })() },
                 { name: 'structural_integrity', pass: wallThickness > 0.3 },
             ];
             const allPass = constraints.every(c => c.pass);

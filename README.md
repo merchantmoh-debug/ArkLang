@@ -14,10 +14,6 @@
 </pre>
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![License: Commercial](https://img.shields.io/badge/License-Commercial-blue.svg)](LICENSE_COMMERCIAL)
-[![CI](https://github.com/merchantmoh-debug/ArkLang/actions/workflows/ci.yml/badge.svg)](https://github.com/merchantmoh-debug/ArkLang/actions/workflows/ci.yml)
-![Core](https://img.shields.io/badge/Core-RUST-red?style=for-the-badge)
-![Parity](https://img.shields.io/badge/Intrinsic_Parity-100%25-green?style=for-the-badge)
 
 </div>
 

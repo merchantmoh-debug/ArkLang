@@ -1,8 +1,0 @@
-func make_struct() {
-    return { pos: 0 }
-}
-
-s := make_struct()
-p := s.pos
-print("Pos is:", p)
-// Should be 0, not "pos"
