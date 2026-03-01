@@ -42,6 +42,10 @@ func crypto_random_bytes(n) { return sys.crypto.random_bytes(n) }
 // Computes the Merkle root hash of a list of hex-encoded leaf hashes.
 func crypto_merkle_root(leaves) { return sys.crypto.merkle_root(leaves) }
 
+func crypto_ed25519_gen() { return sys.crypto.ed25519.gen() }
+func crypto_ed25519_sign(msg, key) { return sys.crypto.ed25519.sign(msg, key) }
+func crypto_ed25519_verify(sig, msg, pubkey) { return sys.crypto.ed25519.verify(sig, msg, pubkey) }
+
 crypto := {
     hash: crypto_hash,
     sha512: crypto_sha512,
@@ -54,8 +58,8 @@ crypto := {
     random_bytes: crypto_random_bytes,
     merkle_root: crypto_merkle_root,
     ed25519: {
-        gen: () => sys.crypto.ed25519.gen(),
-        sign: (msg, key) => sys.crypto.ed25519.sign(msg, key),
-        verify: (sig, msg, pubkey) => sys.crypto.ed25519.verify(sig, msg, pubkey)
+        gen: crypto_ed25519_gen,
+        sign: crypto_ed25519_sign,
+        verify: crypto_ed25519_verify
     }
 }
