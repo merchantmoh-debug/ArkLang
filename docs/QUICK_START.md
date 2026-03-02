@@ -20,7 +20,7 @@ Ark is a Python-based language. To run Ark, you need Python 3.11+.
 3. Verify your setup:
 
    ```bash
-   python meta/ark.py version
+   python3 meta/ark.py version
    ```
 
 ## Hello World
@@ -34,7 +34,7 @@ print("Hello, World!")
 Run it:
 
 ```bash
-python meta/ark.py run hello.ark
+python3 meta/ark.py run hello.ark
 ```
 
 ## Verify Your Code (Diagnostic Proof)
@@ -114,7 +114,7 @@ print(response)
 Run it:
 
 ```bash
-python meta/ark.py run hello_ai.ark
+python3 meta/ark.py run hello_ai.ark
 ```
 
 > Without an API key, AI calls return a graceful fallback message instead of crashing.
@@ -123,10 +123,10 @@ python meta/ark.py run hello_ai.ark
 
 | Command | Description |
 | --- | --- |
-| `python meta/ark.py run <file.ark>` | Execute an Ark program |
-| `python meta/ark.py repl` | Start the interactive REPL |
-| `python meta/ark.py version` | Print the compiler version |
-| `python meta/ark.py compile <file.ark>` | Compile to bytecode |
+| `python3 meta/ark.py run <file.ark>` | Execute an Ark program |
+| `python3 meta/ark.py repl` | Start the interactive REPL |
+| `python3 meta/ark.py version` | Print the compiler version |
+| `python3 meta/ark.py compile <file.ark>` | Compile to bytecode |
 ## Troubleshooting
 
 ### `ModuleNotFoundError: No module named 'lark'`

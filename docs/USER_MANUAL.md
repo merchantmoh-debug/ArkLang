@@ -73,7 +73,7 @@ uv sync                         # ⚡ Recommended -- fast, deterministic
 pip install -r requirements.txt  # Also works
 
 # Verify
-python meta/ark.py version
+python3 meta/ark.py version
 ```
 
 > **Don't have uv?** Install it in one line:
@@ -100,7 +100,7 @@ print("Hello, World!")
 Run it:
 
 ```bash
-python meta/ark.py run hello.ark
+python3 meta/ark.py run hello.ark
 ```
 
 Output:
@@ -1329,13 +1329,13 @@ Ark uses environment variables for security controls. **By default, the runtime 
 ### Example: Enable Networking
 
 ```bash
-ARK_CAPABILITIES=net python meta/ark.py run my_app.ark
+ARK_CAPABILITIES=net python3 meta/ark.py run my_app.ark
 ```
 
 ### Example: Full Permissions (Dangerous)
 
 ```bash
-ARK_CAPABILITIES=* ALLOW_DANGEROUS_LOCAL_EXECUTION=true python meta/ark.py run my_app.ark
+ARK_CAPABILITIES=* ALLOW_DANGEROUS_LOCAL_EXECUTION=true python3 meta/ark.py run my_app.ark
 ```
 
 ---
@@ -1345,20 +1345,20 @@ ARK_CAPABILITIES=* ALLOW_DANGEROUS_LOCAL_EXECUTION=true python meta/ark.py run m
 ### Execute a Script
 
 ```bash
-python meta/ark.py run <file.ark>
+python3 meta/ark.py run <file.ark>
 ```
 
 ### Compile to Bytecode
 
 ```bash
-python meta/ark.py compile <file.ark>
+python3 meta/ark.py compile <file.ark>
 ```
 
 ### Run on the Rust VM
 
 ```bash
 # Compile first
-python meta/ark.py compile hello.ark
+python3 meta/ark.py compile hello.ark
 
 # Then execute the bytecode
 ./core/target/release/ark_loader hello.arkb
@@ -1367,7 +1367,7 @@ python meta/ark.py compile hello.ark
 ### Run the Test Suite
 
 ```bash
-python meta/gauntlet.py
+python3 meta/gauntlet.py
 ```
 
 ---
@@ -1377,7 +1377,7 @@ python meta/gauntlet.py
 Launch the interactive Read-Eval-Print Loop:
 
 ```bash
-python meta/ark.py repl
+python3 meta/ark.py repl
 ```
 
 ```
@@ -1397,7 +1397,7 @@ Hello from REPL!
 Ark includes an interactive step-through debugger (248 LOC):
 
 ```bash
-python meta/ark.py debug <file.ark>
+python3 meta/ark.py debug <file.ark>
 ```
 
 Features:
@@ -1415,10 +1415,10 @@ Ark compiles directly to native WebAssembly (3,865 LOC in `wasm_codegen.rs`):
 
 ```bash
 # Compile Ark source to .wasm
-python meta/ark.py build <file.ark>
+python3 meta/ark.py build <file.ark>
 
 # Run the compiled .wasm via wasmtime
-python meta/ark.py run-wasm <file.wasm>
+python3 meta/ark.py run-wasm <file.wasm>
 ```
 
 ### WASM Features
@@ -1431,7 +1431,7 @@ python meta/ark.py run-wasm <file.wasm>
 
 ```bash
 # Generate WIT interface definition
-python meta/ark.py wit <file.ark>
+python3 meta/ark.py wit <file.ark>
 ```
 
 ---

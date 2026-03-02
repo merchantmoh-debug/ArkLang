@@ -32,7 +32,7 @@ cd ..
 We use a custom test runner called **The Gauntlet**. It runs the full suite of Ark tests.
 
 ```bash
-python meta/gauntlet.py
+python3 meta/gauntlet.py
 ```
 
 **Note:** All tests must pass (Green) before you submit a PR.
@@ -42,7 +42,7 @@ python meta/gauntlet.py
 To interact with the Ark language directly:
 
 ```bash
-python meta/ark.py repl
+python3 meta/ark.py repl
 ```
 
 This launches the interactive Read-Eval-Print Loop where you can type Ark code and see immediate results.

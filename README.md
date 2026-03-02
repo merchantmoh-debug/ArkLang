@@ -30,7 +30,7 @@ print("Hello, World!")
 ```
 
 ```bash
-python meta/ark.py run hello.ark
+python3 meta/ark.py run hello.ark
 ```
 
 > **Also works with Docker:** `docker build -t ark . && docker run -it --rm ark`
@@ -183,7 +183,7 @@ Ark integrates with [Microsoft's Z3 SMT solver](https://github.com/Z3Prover/z3) 
 
 The [**Leviathan Portal**](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/) demonstrates this: it Z3-verifies thermodynamic constraints, then CSG-compiles a titanium metamaterial heat sink using `manifold-3d` WASM -- entirely in the browser.
 
-> The browser demo simulates the Z3 step client-side (Z3 is a native C++ library that cannot compile to WASM). The full Z3 solver runs via the native Ark runtime: `python meta/ark.py run apps/leviathan_compiler.ark`
+> The browser demo simulates the Z3 step client-side (Z3 is a native C++ library that cannot compile to WASM). The full Z3 solver runs via the native Ark runtime: `python3 meta/ark.py run apps/leviathan_compiler.ark`
 
 **[Try the demo](https://merchantmoh-debug.github.io/ArkLang/site/leviathan/)** | **[Read the source](apps/leviathan_compiler.ark)** (210 lines of Ark)
 
