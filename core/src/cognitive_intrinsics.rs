@@ -17,6 +17,7 @@
  *   sys.yggdrasil.* → Forest (Phase 6)
  *   sys.qdma.*      → QdmaStore (Phase 7)
  *   sys.research.*  → ResearchEngine (Phase 8)
+ *   sys.engine.*    → EngineState (Phase 9)
  */
 
 use std::collections::HashMap;
@@ -25,6 +26,7 @@ use std::sync::{Mutex, OnceLock};
 use crate::agent_pipeline::{PipelineStage, SovereignPipeline};
 use crate::csnp::CsnpManager;
 use crate::desktop_ffi;
+use crate::engine::EngineState;
 use crate::ois::{HaiyueSimulation, OisCostType, OisTruthBudget, Trajectory, VelocityPhysics};
 use crate::proprioception::Proprioception;
 use crate::qdma::QdmaStore;
@@ -85,6 +87,12 @@ static RESEARCH_ENGINE: OnceLock<Mutex<ResearchEngine>> = OnceLock::new();
 
 fn get_research_engine() -> &'static Mutex<ResearchEngine> {
     RESEARCH_ENGINE.get_or_init(|| Mutex::new(ResearchEngine::new()))
+}
+
+static ENGINE_STATE: OnceLock<Mutex<EngineState>> = OnceLock::new();
+
+fn get_engine_state() -> &'static Mutex<EngineState> {
+    ENGINE_STATE.get_or_init(|| Mutex::new(EngineState::new()))
 }
 
 // ===========================================================================
@@ -1189,6 +1197,114 @@ pub fn intrinsic_research_stats(args: Vec<Value>) -> Result<Value, RuntimeError>
 }
 
 // ===========================================================================
+// sys.engine.* — Engine & Agent Integration (Phase 9)
+// ===========================================================================
+
+/// `sys.engine.models() -> List[Struct]`
+pub fn intrinsic_engine_models(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let _ = args;
+    let state = get_engine_state()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("Engine lock poisoned: {}", e)))?;
+    let models: Vec<Value> = state
+        .registry
+        .list()
+        .iter()
+        .map(|m| {
+            make_struct(vec![
+                ("key", Value::String(m.key.clone())),
+                ("model_id", Value::String(m.model_id.clone())),
+                ("name", Value::String(m.name.clone())),
+                ("description", Value::String(m.description.clone())),
+                ("tier", Value::String(m.tier.as_str().to_string())),
+                ("params", Value::String(format!("{:.1}B", m.param_count))),
+                ("context_window", Value::Integer(m.context_window as i64)),
+                ("recommended", Value::String(m.recommended.to_string())),
+            ])
+        })
+        .collect();
+    Ok(Value::List(models))
+}
+
+/// `sys.engine.select(key: String) -> String`
+pub fn intrinsic_engine_select(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let key = match args.first() {
+        Some(Value::String(s)) => s.clone(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                args.first().cloned().unwrap_or(Value::Unit),
+            ));
+        }
+    };
+
+    let mut state = get_engine_state()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("Engine lock poisoned: {}", e)))?;
+    match state.select_model(&key) {
+        Some(name) => Ok(Value::String(name)),
+        None => Ok(Value::String(format!("Unknown model key: {}", key))),
+    }
+}
+
+/// `sys.engine.prompt(input: String, context: String) -> List[Struct]`
+pub fn intrinsic_engine_prompt(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let input = match args.first() {
+        Some(Value::String(s)) => s.clone(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                args.first().cloned().unwrap_or(Value::Unit),
+            ));
+        }
+    };
+
+    let context = match args.get(1) {
+        Some(Value::String(s)) if !s.is_empty() => Some(s.as_str()),
+        _ => None,
+    };
+
+    let mut state = get_engine_state()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("Engine lock poisoned: {}", e)))?;
+    let messages = state.build_prompt(&input, context);
+
+    let list: Vec<Value> = messages
+        .iter()
+        .map(|m| {
+            make_struct(vec![
+                ("role", Value::String(m.role.as_str().to_string())),
+                ("content", Value::String(m.content.clone())),
+            ])
+        })
+        .collect();
+    Ok(Value::List(list))
+}
+
+/// `sys.engine.stats() -> Struct`
+pub fn intrinsic_engine_stats(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let _ = args;
+    let state = get_engine_state()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("Engine lock poisoned: {}", e)))?;
+    let s = state.stats();
+
+    Ok(make_struct(vec![
+        ("model_count", Value::Integer(s.model_count as i64)),
+        (
+            "selected_model",
+            Value::String(s.selected_model.unwrap_or_default()),
+        ),
+        ("total_queries", Value::Integer(s.total_queries as i64)),
+        (
+            "temperature",
+            Value::String(format!("{:.2}", s.config_temperature)),
+        ),
+        ("max_tokens", Value::Integer(s.config_max_tokens as i64)),
+    ]))
+}
+
+// ===========================================================================
 // Registry
 // ===========================================================================
 
@@ -1264,6 +1380,12 @@ pub fn resolve_cognitive(name: &str) -> Option<crate::runtime::NativeFn> {
         "sys.research.tools" => Some(intrinsic_research_tools),
         "sys.research.stats" => Some(intrinsic_research_stats),
 
+        // Engine & Agent Integration (Phase 9)
+        "sys.engine.models" => Some(intrinsic_engine_models),
+        "sys.engine.select" => Some(intrinsic_engine_select),
+        "sys.engine.prompt" => Some(intrinsic_engine_prompt),
+        "sys.engine.stats" => Some(intrinsic_engine_stats),
+
         _ => None,
     }
 }
@@ -1314,6 +1436,10 @@ pub fn all_cognitive_names() -> Vec<&'static str> {
         "sys.research.plan",
         "sys.research.tools",
         "sys.research.stats",
+        "sys.engine.models",
+        "sys.engine.select",
+        "sys.engine.prompt",
+        "sys.engine.stats",
     ]
 }
 

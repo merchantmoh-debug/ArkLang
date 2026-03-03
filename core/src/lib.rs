@@ -46,6 +46,7 @@ pub mod crypto;
 pub mod debugger;
 pub mod diagnostic;
 pub mod embedding;
+pub mod engine;
 #[cfg(test)]
 pub mod eval; // Deprecated by VM, enabled for tests
 pub mod ffi;

@@ -1,0 +1,37 @@
+// ==========================================================================
+// Engine & Agent Integration — Standard Library
+// ==========================================================================
+//
+// Model registry, prompt construction, and generation configuration.
+//
+// Port of Remember-Me-AI integrations/engine.py (ModelRegistry).
+//
+// Usage:
+//   import std.engine
+//
+//   let models = engine.models()
+//   engine.select("small")
+//   let prompt = engine.prompt("Hello", "context from memory")
+//   let stats = engine.stats()
+// ==========================================================================
+
+// List all available models. Returns a list of model structs.
+func models() {
+    return sys.engine.models()
+}
+
+// Select a model by key (tiny, small, medium). Returns the model name.
+func select(key) {
+    return sys.engine.select(key)
+}
+
+// Build a prompt with optional context injection.
+// Returns a list of message structs (role, content).
+func prompt(input, context) {
+    return sys.engine.prompt(input, context)
+}
+
+// Get engine statistics.
+func stats() {
+    return sys.engine.stats()
+}
