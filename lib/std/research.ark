@@ -1,0 +1,44 @@
+// ==========================================================================
+// Research & Tools — Standard Library
+// ==========================================================================
+//
+// Intent detection, tool registry, and multi-step research pipeline.
+//
+// Port of Remember-Me-AI integrations/tools.py + agent.py.
+//
+// Core Concepts:
+//   Intent       → Classified user goal (Search, Image, Code, General)
+//   ToolSpec     → Registered tool with parameters
+//   Research     → Multi-step pipeline: detect → plan → (execute externally)
+//
+// Usage:
+//   import std.research
+//
+//   let intents = research.detect("search for quantum computing")
+//   let plan = research.plan("search for data and draw a chart")
+//   let tools = research.tools()
+//   let stats = research.stats()
+// ==========================================================================
+
+// Detect intents from user input text.
+// Returns a list of intent strings (SEARCH, IMAGE, CODE, GENERAL).
+func detect(text) {
+    return sys.research.detect(text)
+}
+
+// Plan a multi-step research pipeline for a query.
+// Returns a struct with intents, steps, and synthesis.
+func plan(query) {
+    return sys.research.plan(query)
+}
+
+// List all registered tools.
+// Returns a list of tool name strings.
+func tools() {
+    return sys.research.tools()
+}
+
+// Get research engine statistics.
+func stats() {
+    return sys.research.stats()
+}

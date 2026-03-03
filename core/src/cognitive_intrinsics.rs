@@ -16,6 +16,7 @@
  *   sys.agent.*    → SovereignPipeline (Phase 3)
  *   sys.yggdrasil.* → Forest (Phase 6)
  *   sys.qdma.*      → QdmaStore (Phase 7)
+ *   sys.research.*  → ResearchEngine (Phase 8)
  */
 
 use std::collections::HashMap;
@@ -27,6 +28,7 @@ use crate::desktop_ffi;
 use crate::ois::{HaiyueSimulation, OisCostType, OisTruthBudget, Trajectory, VelocityPhysics};
 use crate::proprioception::Proprioception;
 use crate::qdma::QdmaStore;
+use crate::research::ResearchEngine;
 use crate::runtime::{RuntimeError, Value};
 use crate::signal_gate::SignalGate;
 use crate::veto_circuit::VetoCircuit;
@@ -77,6 +79,12 @@ static QDMA_STORE: OnceLock<Mutex<QdmaStore>> = OnceLock::new();
 
 fn get_qdma_store() -> &'static Mutex<QdmaStore> {
     QDMA_STORE.get_or_init(|| Mutex::new(QdmaStore::new(384)))
+}
+
+static RESEARCH_ENGINE: OnceLock<Mutex<ResearchEngine>> = OnceLock::new();
+
+fn get_research_engine() -> &'static Mutex<ResearchEngine> {
+    RESEARCH_ENGINE.get_or_init(|| Mutex::new(ResearchEngine::new()))
 }
 
 // ===========================================================================
@@ -1071,6 +1079,116 @@ pub fn intrinsic_qdma_compress(args: Vec<Value>) -> Result<Value, RuntimeError> 
 }
 
 // ===========================================================================
+// sys.research.* — Research & Tools Engine (Phase 8)
+// ===========================================================================
+
+/// `sys.research.detect(text: String) -> List[String]`
+pub fn intrinsic_research_detect(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let text = match args.first() {
+        Some(Value::String(s)) => s.clone(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                args.first().cloned().unwrap_or(Value::Unit),
+            ));
+        }
+    };
+
+    let engine = get_research_engine()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("Research lock poisoned: {}", e)))?;
+    let intents = engine.detector.detect(&text);
+    let list: Vec<Value> = intents
+        .iter()
+        .map(|i| Value::String(i.as_str().to_string()))
+        .collect();
+    Ok(Value::List(list))
+}
+
+/// `sys.research.plan(query: String) -> Struct`
+pub fn intrinsic_research_plan(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let query = match args.first() {
+        Some(Value::String(s)) => s.clone(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "String".to_string(),
+                args.first().cloned().unwrap_or(Value::Unit),
+            ));
+        }
+    };
+
+    let mut engine = get_research_engine()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("Research lock poisoned: {}", e)))?;
+    let result = engine.plan(&query);
+
+    let intents: Vec<Value> = result
+        .intents
+        .iter()
+        .map(|i| Value::String(i.as_str().to_string()))
+        .collect();
+    let steps: Vec<Value> = result
+        .steps
+        .iter()
+        .map(|s| {
+            make_struct(vec![
+                ("step", Value::String(s.step_name.clone())),
+                ("intent", Value::String(s.intent.as_str().to_string())),
+                ("output", Value::String(s.output.clone())),
+                (
+                    "tool",
+                    Value::String(s.tool_used.clone().unwrap_or_default()),
+                ),
+                ("success", Value::String(s.success.to_string())),
+            ])
+        })
+        .collect();
+
+    Ok(make_struct(vec![
+        ("query", Value::String(result.query)),
+        ("intents", Value::List(intents)),
+        ("steps", Value::List(steps)),
+        ("synthesis", Value::String(result.synthesis)),
+    ]))
+}
+
+/// `sys.research.tools() -> List[String]`
+pub fn intrinsic_research_tools(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let _ = args;
+    let engine = get_research_engine()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("Research lock poisoned: {}", e)))?;
+    let names: Vec<Value> = engine
+        .registry
+        .list_names()
+        .iter()
+        .map(|n| Value::String(n.to_string()))
+        .collect();
+    Ok(Value::List(names))
+}
+
+/// `sys.research.stats() -> Struct`
+pub fn intrinsic_research_stats(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let _ = args;
+    let engine = get_research_engine()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("Research lock poisoned: {}", e)))?;
+    let s = engine.stats();
+
+    let tool_names: Vec<Value> = s
+        .tool_names
+        .iter()
+        .map(|n| Value::String(n.clone()))
+        .collect();
+
+    Ok(make_struct(vec![
+        ("total_queries", Value::Integer(s.total_queries as i64)),
+        ("tool_count", Value::Integer(s.tool_count as i64)),
+        ("tools", Value::List(tool_names)),
+    ]))
+}
+
+// ===========================================================================
 // Registry
 // ===========================================================================
 
@@ -1140,6 +1258,12 @@ pub fn resolve_cognitive(name: &str) -> Option<crate::runtime::NativeFn> {
         "sys.qdma.stats" => Some(intrinsic_qdma_stats),
         "sys.qdma.compress" => Some(intrinsic_qdma_compress),
 
+        // Research & Tools Engine (Phase 8)
+        "sys.research.detect" => Some(intrinsic_research_detect),
+        "sys.research.plan" => Some(intrinsic_research_plan),
+        "sys.research.tools" => Some(intrinsic_research_tools),
+        "sys.research.stats" => Some(intrinsic_research_stats),
+
         _ => None,
     }
 }
@@ -1186,6 +1310,10 @@ pub fn all_cognitive_names() -> Vec<&'static str> {
         "sys.qdma.detox",
         "sys.qdma.stats",
         "sys.qdma.compress",
+        "sys.research.detect",
+        "sys.research.plan",
+        "sys.research.tools",
+        "sys.research.stats",
     ]
 }
 
