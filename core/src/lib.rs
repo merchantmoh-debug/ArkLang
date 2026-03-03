@@ -66,6 +66,7 @@ pub mod parser;
 pub mod persistent;
 pub mod proprioception;
 pub mod provider_health;
+pub mod qdma;
 // pub mod repl; // Deprecated interpreter REPL
 #[cfg(test)]
 pub mod bench_intrinsics;

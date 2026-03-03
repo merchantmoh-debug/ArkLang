@@ -1,0 +1,65 @@
+// ==========================================================================
+// QDMA Memory Engine — Standard Library
+// ==========================================================================
+//
+// Quantum Dream Memory Algorithm (core algorithmic subset).
+// In-memory vector store with cosine-similarity search, anomaly detection,
+// and dimensionality reduction via random projections.
+//
+// Port of QDMA v3.0.0 (Remember-Me-AI).
+//
+// Core Concepts:
+//   DreamEntity  → Memory unit with embedding + metadata (xi, score, trit)
+//   DreamSeed    → Compressed cluster of related entities
+//   Hologram     → Query result with confidence and toxicity scoring
+//   DetoxSystem  → Anomaly detection and embedding repair
+//
+// Usage:
+//   import std.qdma
+//
+//   qdma.store({ "id": "mem-1", "embedding": [...], "shards": ["hello world"] })
+//   let results = qdma.query([0.1, 0.2, ...], 5)
+//   let stats = qdma.stats()
+//   let score = qdma.detox([0.1, 0.2, ...])
+// ==========================================================================
+
+// --- Store Operations ---
+
+// Store a DreamEntity. Accepts a struct with id (String),
+// embedding (List[Float]), and shards (List[String]).
+// Returns the entity ID.
+func store(entity) {
+    return sys.qdma.store(entity)
+}
+
+// Query the store with a query embedding.
+// Returns a list of Hologram structs (id, confidence, delta_e, toxic_score).
+func query(embedding, topk) {
+    return sys.qdma.query(embedding, topk)
+}
+
+// --- Analysis ---
+
+// Project an embedding through the internal projection engine.
+// Returns a struct with macro (projected vector) and meta.
+func project(embedding) {
+    return sys.qdma.project(embedding)
+}
+
+// Compute toxicity score for an embedding (0.0 = clean, 1.0 = toxic).
+func detox(embedding) {
+    return sys.qdma.detox(embedding)
+}
+
+// --- Utilities ---
+
+// Get store statistics (entity_count, seed_count, dim, total_stores, total_queries).
+func stats() {
+    return sys.qdma.stats()
+}
+
+// Quantize a list of embeddings to reduce memory footprint.
+// Returns a struct with quantized data and metadata.
+func compress(embeddings) {
+    return sys.qdma.compress(embeddings)
+}

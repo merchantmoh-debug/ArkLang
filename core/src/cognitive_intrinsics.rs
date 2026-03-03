@@ -15,6 +15,7 @@
  *   sys.ois.*      → OisTruthBudget, HaiyueSimulation, VelocityPhysics
  *   sys.agent.*    → SovereignPipeline (Phase 3)
  *   sys.yggdrasil.* → Forest (Phase 6)
+ *   sys.qdma.*      → QdmaStore (Phase 7)
  */
 
 use std::collections::HashMap;
@@ -25,6 +26,7 @@ use crate::csnp::CsnpManager;
 use crate::desktop_ffi;
 use crate::ois::{HaiyueSimulation, OisCostType, OisTruthBudget, Trajectory, VelocityPhysics};
 use crate::proprioception::Proprioception;
+use crate::qdma::QdmaStore;
 use crate::runtime::{RuntimeError, Value};
 use crate::signal_gate::SignalGate;
 use crate::veto_circuit::VetoCircuit;
@@ -69,6 +71,12 @@ static FOREST: OnceLock<Mutex<Forest>> = OnceLock::new();
 
 fn get_forest() -> &'static Mutex<Forest> {
     FOREST.get_or_init(|| Mutex::new(Forest::new(None)))
+}
+
+static QDMA_STORE: OnceLock<Mutex<QdmaStore>> = OnceLock::new();
+
+fn get_qdma_store() -> &'static Mutex<QdmaStore> {
+    QDMA_STORE.get_or_init(|| Mutex::new(QdmaStore::new(384)))
 }
 
 // ===========================================================================
@@ -830,6 +838,239 @@ pub fn intrinsic_yggdrasil_metrics(args: Vec<Value>) -> Result<Value, RuntimeErr
 }
 
 // ===========================================================================
+// sys.qdma.* — QDMA Memory Engine (Phase 7)
+// ===========================================================================
+
+/// `sys.qdma.store(entity: Struct) -> String`
+pub fn intrinsic_qdma_store(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let entity = match args.first() {
+        Some(Value::Struct(map)) => map,
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "Struct".to_string(),
+                args.first().cloned().unwrap_or(Value::Unit),
+            ));
+        }
+    };
+
+    let id = match entity.get("id") {
+        Some(Value::String(s)) => s.clone(),
+        _ => format!(
+            "ent-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ),
+    };
+
+    let embedding: Vec<f64> = match entity.get("embedding") {
+        Some(Value::List(list)) => list
+            .iter()
+            .map(|v| match v {
+                Value::Integer(i) => *i as f64,
+                Value::String(s) => s.parse::<f64>().unwrap_or(0.0),
+                _ => 0.0,
+            })
+            .collect(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "List[Numeric]".to_string(),
+                Value::Unit,
+            ));
+        }
+    };
+
+    let shards: Vec<String> = match entity.get("shards") {
+        Some(Value::List(list)) => list
+            .iter()
+            .filter_map(|v| match v {
+                Value::String(s) => Some(s.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => vec![],
+    };
+
+    let mut store = get_qdma_store()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("QDMA lock poisoned: {}", e)))?;
+    let stored_id = store.store_raw(id, embedding, shards);
+    Ok(Value::String(stored_id))
+}
+
+/// `sys.qdma.query(embedding: List, topk: Int) -> List[Struct]`
+pub fn intrinsic_qdma_query(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let embedding: Vec<f64> = match args.first() {
+        Some(Value::List(list)) => list
+            .iter()
+            .map(|v| match v {
+                Value::Integer(i) => *i as f64,
+                Value::String(s) => s.parse::<f64>().unwrap_or(0.0),
+                _ => 0.0,
+            })
+            .collect(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "List[Numeric]".to_string(),
+                args.first().cloned().unwrap_or(Value::Unit),
+            ));
+        }
+    };
+
+    let topk = match args.get(1) {
+        Some(Value::Integer(k)) => *k as usize,
+        _ => 5,
+    };
+
+    let mut store = get_qdma_store()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("QDMA lock poisoned: {}", e)))?;
+    let results = store.query(&embedding, topk);
+
+    let list: Vec<Value> = results
+        .into_iter()
+        .map(|h| {
+            make_struct(vec![
+                ("id", Value::String(h.id)),
+                ("confidence", Value::String(format!("{:.6}", h.confidence))),
+                ("delta_e", Value::String(format!("{:.6}", h.delta_e))),
+                (
+                    "toxic_score",
+                    Value::String(format!("{:.6}", h.toxic_score)),
+                ),
+            ])
+        })
+        .collect();
+    Ok(Value::List(list))
+}
+
+/// `sys.qdma.project(embedding: List) -> Struct`
+pub fn intrinsic_qdma_project(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let embedding: Vec<f64> = match args.first() {
+        Some(Value::List(list)) => list
+            .iter()
+            .map(|v| match v {
+                Value::Integer(i) => *i as f64,
+                Value::String(s) => s.parse::<f64>().unwrap_or(0.0),
+                _ => 0.0,
+            })
+            .collect(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "List[Numeric]".to_string(),
+                args.first().cloned().unwrap_or(Value::Unit),
+            ));
+        }
+    };
+
+    let mut store = get_qdma_store()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("QDMA lock poisoned: {}", e)))?;
+
+    match store.project(&embedding) {
+        Some((macro_vec, meta)) => {
+            let macro_list: Vec<Value> = macro_vec
+                .iter()
+                .map(|x| Value::String(format!("{:.6}", x)))
+                .collect();
+            Ok(make_struct(vec![
+                ("macro", Value::List(macro_list)),
+                (
+                    "micro_norm",
+                    Value::String(format!("{:.6}", meta.micro_norm)),
+                ),
+                (
+                    "macro_norm",
+                    Value::String(format!("{:.6}", meta.macro_norm)),
+                ),
+            ]))
+        }
+        None => Ok(Value::Unit),
+    }
+}
+
+/// `sys.qdma.detox(embedding: List) -> String`
+pub fn intrinsic_qdma_detox(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let embedding: Vec<f64> = match args.first() {
+        Some(Value::List(list)) => list
+            .iter()
+            .map(|v| match v {
+                Value::Integer(i) => *i as f64,
+                Value::String(s) => s.parse::<f64>().unwrap_or(0.0),
+                _ => 0.0,
+            })
+            .collect(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "List[Numeric]".to_string(),
+                args.first().cloned().unwrap_or(Value::Unit),
+            ));
+        }
+    };
+
+    let score = crate::qdma::DetoxSystem::toxicity_score(&embedding, None);
+    Ok(Value::String(format!("{:.6}", score)))
+}
+
+/// `sys.qdma.stats() -> Struct`
+pub fn intrinsic_qdma_stats(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let _ = args;
+    let store = get_qdma_store()
+        .lock()
+        .map_err(|e| RuntimeError::ResourceError(format!("QDMA lock poisoned: {}", e)))?;
+    let s = store.stats();
+
+    Ok(make_struct(vec![
+        ("entity_count", Value::Integer(s.entity_count as i64)),
+        ("seed_count", Value::Integer(s.seed_count as i64)),
+        ("dim", Value::Integer(s.dim as i64)),
+        ("total_stores", Value::Integer(s.total_stores as i64)),
+        ("total_queries", Value::Integer(s.total_queries as i64)),
+        ("avg_score", Value::String(format!("{:.6}", s.avg_score))),
+    ]))
+}
+
+/// `sys.qdma.compress(embeddings: List[List]) -> Struct`
+pub fn intrinsic_qdma_compress(args: Vec<Value>) -> Result<Value, RuntimeError> {
+    let vecs: Vec<Vec<f64>> = match args.first() {
+        Some(Value::List(outer)) => outer
+            .iter()
+            .map(|v| match v {
+                Value::List(inner) => inner
+                    .iter()
+                    .map(|x| match x {
+                        Value::Integer(i) => *i as f64,
+                        Value::String(s) => s.parse::<f64>().unwrap_or(0.0),
+                        _ => 0.0,
+                    })
+                    .collect(),
+                _ => vec![],
+            })
+            .collect(),
+        _ => {
+            return Err(RuntimeError::TypeMismatch(
+                "List[List[Numeric]]".to_string(),
+                args.first().cloned().unwrap_or(Value::Unit),
+            ));
+        }
+    };
+
+    let (qvecs, meta) = crate::qdma::quantize_list(&vecs, 8);
+    let q_list: Vec<Value> = qvecs
+        .iter()
+        .map(|qv| Value::List(qv.iter().map(|x| Value::Integer(*x as i64)).collect()))
+        .collect();
+
+    Ok(make_struct(vec![
+        ("quantized", Value::List(q_list)),
+        ("min", Value::String(format!("{:.6}", meta.min_val))),
+        ("max", Value::String(format!("{:.6}", meta.max_val))),
+        ("bits", Value::Integer(meta.bits as i64)),
+    ]))
+}
+
+// ===========================================================================
 // Registry
 // ===========================================================================
 
@@ -891,6 +1132,14 @@ pub fn resolve_cognitive(name: &str) -> Option<crate::runtime::NativeFn> {
         "sys.yggdrasil.collective_intelligence" => Some(intrinsic_yggdrasil_ask),
         "sys.yggdrasil.metrics" => Some(intrinsic_yggdrasil_metrics),
 
+        // QDMA Memory Engine (Phase 7)
+        "sys.qdma.store" => Some(intrinsic_qdma_store),
+        "sys.qdma.query" => Some(intrinsic_qdma_query),
+        "sys.qdma.project" => Some(intrinsic_qdma_project),
+        "sys.qdma.detox" => Some(intrinsic_qdma_detox),
+        "sys.qdma.stats" => Some(intrinsic_qdma_stats),
+        "sys.qdma.compress" => Some(intrinsic_qdma_compress),
+
         _ => None,
     }
 }
@@ -931,6 +1180,12 @@ pub fn all_cognitive_names() -> Vec<&'static str> {
         "sys.yggdrasil.evolve",
         "sys.yggdrasil.collective_intelligence",
         "sys.yggdrasil.metrics",
+        "sys.qdma.store",
+        "sys.qdma.query",
+        "sys.qdma.project",
+        "sys.qdma.detox",
+        "sys.qdma.stats",
+        "sys.qdma.compress",
     ]
 }
 
