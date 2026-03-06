@@ -120,6 +120,22 @@ func subtract_entropy(substrate) {
     script := script + "    f.write(struct.pack('<II',len(gj),0x4E4F534A)); f.write(gj)\n"
     script := script + "    f.write(struct.pack('<II',len(tb),0x004E4942)); f.write(tb)\n"
     script := script + "print('[ARK-FFI] Exported: Ark_Leviathan_Core.glb')\n"
+    // STL export (binary) — printer-ready, no textures/scenes
+    script := script + "\n# ── STL Export (Binary) ──\n"
+    script := script + "stl_path = 'Ark_Leviathan_Core.stl'\n"
+    script := script + "header = b'Ark Sovereign Compiler v112 - Leviathan Core' + b'\\x00' * (80 - len(b'Ark Sovereign Compiler v112 - Leviathan Core'))\n"
+    script := script + "num_triangles = len(faces)\n"
+    script := script + "with open(stl_path, 'wb') as sf:\n"
+    script := script + "    sf.write(header)\n"
+    script := script + "    sf.write(struct.pack('<I', num_triangles))\n"
+    script := script + "    for i in range(num_triangles):\n"
+    script := script + "        tri_v = [verts[faces[i, j]] for j in range(3)]\n"
+    script := script + "        normal = fn[i]\n"
+    script := script + "        sf.write(struct.pack('<3f', *normal))\n"
+    script := script + "        for v in tri_v:\n"
+    script := script + "            sf.write(struct.pack('<3f', *v))\n"
+    script := script + "        sf.write(struct.pack('<H', 0))\n"
+    script := script + "print(f'[ARK-FFI] Exported: {stl_path} ({num_triangles:,} triangles)')\n"
     script := script + "print('[ARK-FFI] TITANIUM LOCK.')\n"
 
     // Return transformed matter -- substrate consumed

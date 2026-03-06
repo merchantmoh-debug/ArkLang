@@ -76,10 +76,13 @@ config_dev.json
 agent_memory.json
 parsed_config.*
 proof_of_matter.json
+proof_of_matter_*.json
+blitz_manifest.json
 verification_screenshot.png
 verify_frontend.py
 verify_ui.py
-ark_hardware_compiler.py
+ark_hardware_*.py
+*.stl
 
 # Debug apps
 apps/compiler/debug_*

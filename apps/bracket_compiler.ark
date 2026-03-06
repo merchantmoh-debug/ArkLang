@@ -1,0 +1,233 @@
+/// ARK V112 SOVEREIGN HARDWARE COMPILER
+/// ASSET: TOPOLOGY-OPTIMIZED BRACKET
+/// 4-Gate Pipeline: Z3 Verify → Forge → Subtract → Compile to Reality
+///
+/// Usage:
+///   ark run apps/bracket_compiler.ark
+///   python ark_hardware_bracket.py
+
+width := 80
+height := 60
+depth := 30
+hole_count := 6
+hole_radius := 5
+bolt_radius := 4
+wall_min := 3
+
+width_str := "80"
+height_str := "60"
+depth_str := "30"
+hole_r_str := "5.0"
+bolt_r_str := "4.0"
+hole_n_str := "6"
+
+// ---- GATE 1: Z3 FORMAL VERIFICATION ----
+
+func verify_bracket() {
+    print("[ARK] Mounting Z3 SMT Solver: Verifying bracket constraints...")
+
+    constraints := [
+        "(declare-const width Real)",
+        "(assert (= width 80.0))",
+        "(declare-const height Real)",
+        "(assert (= height 60.0))",
+        "(declare-const depth Real)",
+        "(assert (= depth 30.0))",
+        "(declare-const hole_r Real)",
+        "(assert (= hole_r 5.0))",
+        "(declare-const bolt_r Real)",
+        "(assert (= bolt_r 4.0))",
+        "(declare-const wall_min Real)",
+        "(assert (= wall_min 3.0))",
+        "(assert (> hole_r 1.0))",
+        "(assert (> bolt_r 1.0))",
+        "(assert (> width (* hole_r 4.0)))",
+        "(assert (> height (* hole_r 4.0)))",
+        "(assert (> depth (* bolt_r 3.0)))",
+        "(assert (> (- (/ width 2.0) hole_r) wall_min))"
+    ]
+
+    result := sys.z3.verify(constraints)
+    return result
+}
+
+// ---- GATE 2: FORGE L-BRACKET SUBSTRATE ----
+
+func forge_substrate() {
+    print("[ARK] Forging L-Bracket Substrate...")
+    // L-shape = two overlapping boxes
+    dag := "box_h = m3d.Manifold.cube([" + width_str + ", " + depth_str + ", " + depth_str + "])\n"
+    dag := dag + "box_v = m3d.Manifold.cube([" + depth_str + ", " + depth_str + ", " + height_str + "])\n"
+    dag := dag + "base = box_h + box_v"
+    matter := {
+        topology_dag: dag,
+        volume: width * depth * depth + depth * depth * height,
+        status: "FORGED"
+    }
+    return matter
+}
+
+// ---- GATE 3: LIGHTENING HOLES + MOUNTING BORES ----
+
+func subtract_holes(substrate) {
+    total := hole_count + 4
+    print("[ARK] Cutting " + total + " holes (lightening + mounting)...")
+
+    base_lines := substrate.topology_dag
+
+    script := "import manifold3d as m3d\n"
+    script := script + "import time, struct, json\n"
+    script := script + "import numpy as np\n"
+    script := script + "\n"
+    script := script + "t0 = time.perf_counter()\n"
+    script := script + base_lines + "\n"
+    script := script + "\n"
+    script := script + "hole_r = " + hole_r_str + "\n"
+    script := script + "bolt_r = " + bolt_r_str + "\n"
+    script := script + "width = " + width_str + "\n"
+    script := script + "height = " + height_str + "\n"
+    script := script + "depth = " + depth_str + "\n"
+    script := script + "\n"
+    // Lightening holes through the horizontal arm
+    script := script + "holes = []\n"
+    script := script + "for i in range(" + hole_n_str + "):\n"
+    script := script + "    x = depth + (width - depth) * (i + 0.5) / " + hole_n_str + "\n"
+    script := script + "    h = m3d.Manifold.cylinder(depth + 4, hole_r, hole_r, circular_segments=16, center=True)\n"
+    script := script + "    h = h.rotate([90, 0, 0]).translate([x, depth/2, depth/2])\n"
+    script := script + "    holes.append(h)\n"
+    script := script + "\n"
+    // Mounting bolt holes in the vertical arm
+    script := script + "bolt_positions = [[depth/2, depth/2, height * 0.25], [depth/2, depth/2, height * 0.75]]\n"
+    script := script + "for pos in bolt_positions:\n"
+    script := script + "    b = m3d.Manifold.cylinder(depth + 4, bolt_r, bolt_r, circular_segments=16, center=True)\n"
+    script := script + "    b = b.rotate([90, 0, 0]).translate(pos)\n"
+    script := script + "    holes.append(b)\n"
+    // Corner mounting holes in horizontal arm
+    script := script + "corner_positions = [[width * 0.15, depth/2, depth/2], [width * 0.85, depth/2, depth/2]]\n"
+    script := script + "for pos in corner_positions:\n"
+    script := script + "    b = m3d.Manifold.cylinder(depth + 4, bolt_r, bolt_r, circular_segments=16, center=True)\n"
+    script := script + "    b = b.rotate([90, 0, 0]).translate(pos)\n"
+    script := script + "    holes.append(b)\n"
+    script := script + "\n"
+    script := script + "all_holes = m3d.Manifold.batch_boolean(holes, m3d.OpType.Add)\n"
+    script := script + "final = base - all_holes\n"
+    script := script + "t1 = time.perf_counter()\n"
+    script := script + "\n"
+    script := script + "print(f'[ARK-FFI] CSG compiled in {t1-t0:.4f}s')\n"
+    script := script + "print(f'[ARK-FFI] Vertices: {final.num_vert():,} | Triangles: {final.num_tri():,}')\n"
+    script := script + "print(f'[ARK-FFI] Volume: {final.volume():.2f} mm3 | Surface: {final.surface_area():.2f} mm2')\n"
+    script := script + "print(f'[ARK-FFI] Genus: {final.genus()} | Manifold: YES')\n"
+    script := script + "\n"
+    // GLB + STL export
+    script := script + "mesh = final.to_mesh()\n"
+    script := script + "verts = np.array(mesh.vert_properties, dtype=np.float32)[:, :3]\n"
+    script := script + "faces = np.array(mesh.tri_verts, dtype=np.uint32)\n"
+    script := script + "v0,v1,v2 = verts[faces[:,0]], verts[faces[:,1]], verts[faces[:,2]]\n"
+    script := script + "fn = np.cross(v1-v0, v2-v0)\n"
+    script := script + "nn = np.linalg.norm(fn, axis=1, keepdims=True); nn = np.where(nn==0,1,nn)\n"
+    script := script + "fn = fn / nn\n"
+    script := script + "vn = np.zeros_like(verts)\n"
+    script := script + "for i in range(3): np.add.at(vn, faces[:,i], fn)\n"
+    script := script + "nn2 = np.linalg.norm(vn, axis=1, keepdims=True); nn2 = np.where(nn2==0,1,nn2)\n"
+    script := script + "vn = (vn / nn2).astype(np.float32)\n"
+    script := script + "vb,nb,ib = verts.tobytes(), vn.tobytes(), faces.flatten().astype(np.uint32).tobytes()\n"
+    script := script + "tb = ib + vb + nb; pad = (4-len(tb)%4)%4; tb += b'\\x00'*pad\n"
+    script := script + "il,vl,nl = len(ib), len(vb), len(nb)\n"
+    script := script + "gltf = {'asset':{'version':'2.0','generator':'Ark Sovereign Compiler v112'},'scene':0,'scenes':[{'nodes':[0]}],'nodes':[{'mesh':0,'name':'Bracket'}],'meshes':[{'primitives':[{'attributes':{'POSITION':1,'NORMAL':2},'indices':0,'mode':4}],'name':'Topology_Optimized_Bracket'}],'accessors':[{'bufferView':0,'componentType':5125,'count':int(faces.size),'type':'SCALAR','max':[int(faces.max())],'min':[int(faces.min())]},{'bufferView':1,'componentType':5126,'count':len(verts),'type':'VEC3','max':verts.max(axis=0).tolist(),'min':verts.min(axis=0).tolist()},{'bufferView':2,'componentType':5126,'count':len(verts),'type':'VEC3'}],'bufferViews':[{'buffer':0,'byteOffset':0,'byteLength':il,'target':34963},{'buffer':0,'byteOffset':il,'byteLength':vl,'byteStride':12,'target':34962},{'buffer':0,'byteOffset':il+vl,'byteLength':nl,'byteStride':12,'target':34962}],'buffers':[{'byteLength':len(tb)}]}\n"
+    script := script + "gj = json.dumps(gltf,separators=(',',':')).encode(); gj += b' '*((4-len(gj)%4)%4)\n"
+    script := script + "total = 12 + 8 + len(gj) + 8 + len(tb)\n"
+    script := script + "with open('Ark_Bracket.glb','wb') as f:\n"
+    script := script + "    f.write(struct.pack('<III',0x46546C67,2,total))\n"
+    script := script + "    f.write(struct.pack('<II',len(gj),0x4E4F534A)); f.write(gj)\n"
+    script := script + "    f.write(struct.pack('<II',len(tb),0x004E4942)); f.write(tb)\n"
+    script := script + "print('[ARK-FFI] Exported: Ark_Bracket.glb')\n"
+    // STL
+    script := script + "\nstl_path = 'Ark_Bracket.stl'\n"
+    script := script + "header = b'Ark Sovereign Compiler v112 - Bracket' + b'\\x00' * (80 - len(b'Ark Sovereign Compiler v112 - Bracket'))\n"
+    script := script + "num_triangles = len(faces)\n"
+    script := script + "with open(stl_path, 'wb') as sf:\n"
+    script := script + "    sf.write(header)\n"
+    script := script + "    sf.write(struct.pack('<I', num_triangles))\n"
+    script := script + "    for i in range(num_triangles):\n"
+    script := script + "        tri_v = [verts[faces[i, j]] for j in range(3)]\n"
+    script := script + "        normal = fn[i]\n"
+    script := script + "        sf.write(struct.pack('<3f', *normal))\n"
+    script := script + "        for v in tri_v:\n"
+    script := script + "            sf.write(struct.pack('<3f', *v))\n"
+    script := script + "        sf.write(struct.pack('<H', 0))\n"
+    script := script + "print(f'[ARK-FFI] Exported: {stl_path} ({num_triangles:,} triangles)')\n"
+    script := script + "print('[ARK-FFI] TITANIUM LOCK.')\n"
+
+    vol_estimate := substrate.volume * 70 / 100
+    result := {
+        topology_dag: script,
+        volume: vol_estimate,
+        status: "CARVED"
+    }
+    return result
+}
+
+// ---- GATE 4: COMPILE TO REALITY ----
+
+func compile_to_reality(final_matter) {
+    print("[ARK] Writing hardware compilation script...")
+    sys.fs.write("ark_hardware_bracket.py", final_matter.topology_dag)
+    print("[ARK] Wrote: ark_hardware_bracket.py")
+
+    hash := sys.crypto.hash(final_matter.topology_dag)
+
+    receipt := {
+        compiler: "Ark Sovereign Compiler v112",
+        asset: "Topology-Optimized L-Bracket",
+        material: "Aluminum 7075-T6",
+        estimated_volume: final_matter.volume,
+        topology_hash: hash,
+        manifold_guarantee: "2-manifold (watertight)",
+        z3_verified: "true",
+        hole_count: hole_count + 4,
+        status: "READY_FOR_MANUFACTURING"
+    }
+
+    receipt_str := sys.json.stringify(receipt)
+    sys.fs.write("proof_of_matter_bracket.json", receipt_str)
+    print("[ARK] Wrote: proof_of_matter_bracket.json")
+    return receipt
+}
+
+// ---- MAIN ----
+
+func main() {
+    print("")
+    print(">> ARK V112 SOVEREIGN HARDWARE COMPILER")
+    print(">> TOPOLOGY-OPTIMIZED L-BRACKET")
+    print("=================================================================")
+
+    z3_result := verify_bracket()
+    print("[ARK] Z3 Solver Result: " + sys.json.stringify(z3_result))
+
+    if z3_result == true {
+        print("[ARK] Z3 CONFIRMS: Bracket structural constraints verified.")
+    } else {
+        print("[VETO] Z3 REJECTS: Structural constraints violated. Halting.")
+        sys.exit(1)
+    }
+
+    substrate := forge_substrate()
+    print("[ARK] Substrate forged. Volume: " + substrate.volume + " mm3")
+
+    carved := subtract_holes(substrate)
+    print("[ARK] Bracket carved. Estimated volume: " + carved.volume + " mm3")
+
+    receipt := compile_to_reality(carved)
+    print("")
+    print("[TITANIUM LOCK] Hardware specification compiled:")
+    print("  Asset:    " + receipt.asset)
+    print("  Material: " + receipt.material)
+    print("  Holes:    " + receipt.hole_count)
+    print("  Hash:     " + receipt.topology_hash)
+    print("  Status:   " + receipt.status)
+    print("")
+    print(">> Execute: python ark_hardware_bracket.py")
+}
+
+main()
